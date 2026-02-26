@@ -1,31 +1,67 @@
-name: hello_app
+name: Wallceaft
 description: "A new Flutter project."
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.10.4
+  sdk: '>=3.10.4 <4.0.0'
 
 dependencies:
   flutter:
     sdk: flutter
+  crop_your_image: ^2.0.0
 
-  flutter_dotenv: ^5.2.0
-  image_picker: ^1.1.2
+  # 🔍 ระบบค้นหาและ Dropdown
+  dropdown_search: ^6.0.1 
+
+  # 🌐 การเชื่อมต่อและฐานข้อมูล
   http: ^1.2.2
+  flutter_dotenv: ^5.2.0
+  supabase_flutter: ^2.0.0 
+  shared_preferences: ^2.2.2 
+
+  # 📸 รูปภาพและการจัดการไฟล์
+  image_picker: ^1.1.2
   image: ^4.3.0
-  crypto: ^3.0.3
   flutter_image_compress: ^2.3.0
-  geolocator: ^14.0.2
-  supabase_flutter: ^2.0.0
+  path_provider: ^2.1.5
   path: ^1.9.1
+  crypto: ^3.0.3
+
+  # 📍 พิกัดและตำแหน่ง (เพิ่ม 2 ตัวนี้เข้ามาให้แล้ว)
+  geolocator: ^14.0.2
+  device_info_plus: ^11.1.1
+  url_launcher: ^6.2.6
+
+  # 🎙️ ระบบเสียงและ AI
+  speech_to_text: ^7.0.0
+  flutter_tts: ^4.0.2
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^6.0.0
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+  image_cropper: ^8.0.0
+  flutter_native_splash: ^2.4.0
 
+# 📦 การตั้งค่าไอคอนแอป
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/app_icon.png"
+
+# 🎨 การตั้งค่า Assets
 flutter:
   uses-material-design: true
   assets:
     - .env
+    - assets/icon/app_icon.png 
+
+# ==========================================
+# ✅ 2. ตั้งค่าหน้าจอโหลด (Splash Screen) ตรงนี้
+# ==========================================
+flutter_native_splash:
+  color: "#0F0F11"  # สีเทาเข้ม (Theme เดียวกับแอป)
+  fullscreen: true
