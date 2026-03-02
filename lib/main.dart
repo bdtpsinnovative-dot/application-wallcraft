@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // ✅ 1. เพิ่ม Import ตัวนี้ครับ
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 
@@ -7,8 +8,18 @@ import 'screens/home/home_screen.dart';
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kLimeGreen = Color(0xFFD2E862);
 
-void main() {
+// ✅ 2. เปลี่ยน main เป็น async เพื่อให้โหลด .env ทัน
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  try {
+    // ✅ 3. โหลดไฟล์ .env มาเตรียมไว้ในหน่วยความจำ
+    await dotenv.load(fileName: ".env");
+    print("✅ Load .env success: ${dotenv.env['BASE_URL']}");
+  } catch (e) {
+    print("❌ Error loading .env file: $e");
+  }
+
   runApp(const MyApp());
 }
 
@@ -26,7 +37,6 @@ class MyApp extends StatelessWidget {
         dialogBackgroundColor: const Color(0xFF1C1C1E),
         colorScheme: const ColorScheme.dark(
           primary: kLimeGreen,
-          background: kDarkBg,
           surface: Color(0xFF1C1C1E),
           onPrimary: Colors.black,
         ),
@@ -56,9 +66,6 @@ class _CheckAuthState extends State<CheckAuth> {
   }
 
   Future<void> _checkLoginStatus() async {
-    // ❌ เอา Delay ออกครับ ให้โหลดเร็วที่สุดเท่าที่จะทำได้
-    // await Future.delayed(const Duration(milliseconds: 2500)); 
-
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
 
@@ -86,10 +93,8 @@ class _CheckAuthState extends State<CheckAuth> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: kDarkBg, // พื้นหลังสีดำ Theme
+      backgroundColor: kDarkBg,
       body: Center(
-        // ✅ แสดงแค่ตัวโหลดธรรมดา สีเขียว (เพื่อให้รู้ว่าแอปไม่ค้าง)
-        // ถ้าต้องการจอดำสนิทจริงๆ ให้ลบบรรทัด CircularProgressIndicator ออกครับ
         child: CircularProgressIndicator(color: kLimeGreen),
       ),
     );

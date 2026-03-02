@@ -1,6 +1,6 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart'; // 👈 นำเข้า url_launcher
+import 'package:url_launcher/url_launcher.dart'; 
 import '../../services/api_service.dart';
 import '../../constants.dart';
 import 'dart:convert';
@@ -35,20 +35,25 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
     });
   }
 
-  // ✨ ฟังก์ชันเปิด Google Maps (อัปเกรด URL ให้ปักหมุดตรงพิกัดเป๊ะๆ)
+  // --- จุดที่แก้ไขครับพี่ ---
   Future<void> _openMap(double lat, double lng) async {
+    // ใช้รูปแบบ URL มาตรฐานของ Google Maps ที่รับค่าพิกัด
     final url = Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng');
     
     try {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+      // สั่งให้เปิดผ่านแอปภายนอก (Google Maps หรือ Browser)
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        throw Exception('Could not launch maps');
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('ไม่สามารถเปิดแผนที่ได้ (กรุณาตรวจสอบแอป Google Maps)'), backgroundColor: Colors.redAccent)
+          const SnackBar(content: Text('ไม่สามารถเปิดแผนที่ได้'), backgroundColor: Colors.redAccent)
         );
       }
     }
   }
+  // -----------------------
 
   Future<void> _refreshData() async {
     setState(() => _isRefreshing = true);
@@ -91,7 +96,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('โหลดข้อมูลใหม่ไม่สำเร็จ: $e'), backgroundColor: Colors.redAccent));
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('โหลดข้อมูลใหม่ไม่สำเร็จ'), backgroundColor: Colors.redAccent));
       }
     } finally {
       if (mounted) setState(() => _isRefreshing = false);
@@ -290,7 +295,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
     final turnkeyName = specificProject['turnkey_th_name'] ?? '-';
     final inhouseName = specificProject['inhouse_designer_name'] ?? '-';
 
-    // 🌟 ดึงข้อมูล Audit Log
     final auditLog = orderData['audit_log'];
     double? lat;
     double? lng;
@@ -373,7 +377,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                       _buildDetailRow("Area (พื้นที่)", "$areaSqm sq.m."), 
                       _buildDetailRow("Owner (เจ้าของโครงการ)", ownerName),
 
-                      // 🌍 ส่วนแสดงตำแหน่งและอุปกรณ์ (Audit Log) - UI ใหม่ ไฉไลกว่าเดิม
                       if (lat != null && lng != null) ...[
                         const SizedBox(height: 12),
                         const Divider(color: Colors.white12),
@@ -391,7 +394,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                         if (deviceName != null && deviceName.trim().isNotEmpty)
                           _buildDetailRow("อุปกรณ์ที่บันทึกข้อมูล", deviceName),
                         
-                        // ✨ ปุ่มกดเปิดแผนที่ (UI ใหม่ สวยๆ อลังการ + แก้ปัญหา Overflow แล้ว!)
                         Container(
                           decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(16),
@@ -412,7 +414,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                                 padding: const EdgeInsets.all(16),
                                 child: Row(
                                   children: [
-                                    // กล่องไอคอนแผนที่
                                     Container(
                                       padding: const EdgeInsets.all(12),
                                       decoration: BoxDecoration(
@@ -424,7 +425,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                                     ),
                                     const SizedBox(width: 16),
                                     
-                                    // ข้อมูลพิกัด
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -435,7 +435,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                                             children: [
                                               Icon(Icons.gps_fixed_rounded, size: 12, color: Colors.grey[400]),
                                               const SizedBox(width: 4),
-                                              // 🌟 Expanded ตัวนี้แหละครับที่กันไม่ให้ตัวหนังสือทะลุจอ!
                                               Expanded(
                                                 child: Text(
                                                   "${lat.toStringAsFixed(5)}, ${lng.toStringAsFixed(5)}", 
@@ -450,7 +449,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                                       ),
                                     ),
                                     
-                                    // ไอคอนลูกศรชี้ไปข้างนอก
                                     Container(
                                       padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), shape: BoxShape.circle),

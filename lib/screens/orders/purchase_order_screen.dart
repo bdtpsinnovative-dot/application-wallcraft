@@ -1,15 +1,15 @@
 ﻿// lib/screens/orders/purchase_order_screen.dart
 import 'dart:convert';
 import 'dart:ui';
-import 'dart:io'; // 👈 สำคัญ! เอาไว้เช็คระบบ Android/iOS
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dropdown_search/dropdown_search.dart'; 
-import 'package:geolocator/geolocator.dart'; // 👈 ดึงพิกัด
-import 'package:device_info_plus/device_info_plus.dart'; // 👈 ดึงสเปคเครื่อง
-import 'dart:async'; // 👈 เพิ่มตัวนี้ไว้บนสุดครับ
+import 'package:geolocator/geolocator.dart'; 
+import 'package:device_info_plus/device_info_plus.dart'; 
+import 'dart:async'; 
 import '../../constants.dart';
 import '../../services/api_service.dart';
 import 'order_history_screen.dart';
@@ -545,18 +545,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     );
   }
 
- void _showAddProjectDialog() {
+void _showAddProjectDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AddProjectDialog(
         allProjects: _projects, 
+        // ✅ เพิ่ม onSelect เข้าไปเพื่อให้ครบตามที่ Widget ต้องการ
         onSelect: (selectedProject) {
           setState(() {
-            if (!_selectedProjects.any((p) => p['id'] == selectedProject['id'])) {
-              _selectedProjects.add(selectedProject);
+            // โค้ดสำหรับเพิ่มโปรเจกต์ที่เลือกเข้าไปในรายการ (ปรับแก้ได้ตามโครงสร้างข้อมูลจริง)
+            if (!_selectedProjects.contains(selectedProject)) {
+              _selectedProjects = List.from(_selectedProjects)..add(selectedProject);
             }
           });
-          Navigator.pop(context); 
         },
         onSaveNew: (name) async {
           return await _createNewProject(name);
@@ -564,4 +565,4 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       ),
     );
   }
-}
+} // ✅ อย่าลืมเติมปีกกาปิดตัวนี้! มันคือตัวปิดของ class _PurchaseOrderScreenState
