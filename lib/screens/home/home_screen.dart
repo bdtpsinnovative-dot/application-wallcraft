@@ -6,16 +6,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../products/price_check_screen.dart';
 import '../../constants.dart';
 import '../../services/api_service.dart';
 import '../pool_project/pool_project_screen.dart';
 import '../auth/login_screen.dart';
 import '../orders/purchase_order_screen.dart';
-import '../image_ai/ai_image_search_screen.dart';
 import '../voice_chat_sceenai/ai_chat_hub_screen.dart';
 import '../settings/profile_screen.dart';
 import '../orders/order_history_screen.dart';
+// 🌟 แก้ไข Import ให้ตรงกับชื่อไฟล์ในเครื่องพี่ชาย และลบอันที่ซ้ำออกครับ
+import '../image_ai/ai_image_search_screen.dart'; 
 
 // 🎨 Palette สี (ตาม Reference รูป)
 const Color kDarkBg = Color(0xFF0F0F11); 
@@ -338,19 +340,20 @@ class _HomeDashboardState extends State<_HomeDashboard> with SingleTickerProvide
                               3, 'AI Search', 'ค้นหารูปด้วยAI', 
                               Icons.image_search_rounded, 
                               Colors.cyanAccent, 
-                              () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiImageSearchScreen()))
+                              // 🌟 เอาคำว่า const ออกไปแล้วครับ
+                              () => Navigator.push(context, MaterialPageRoute(builder: (_) => AiSearchScreen()))
                             ),
                             _buildGlassMenuCard(
-  4, 'Pool Project', 'โปรเจกต์ทั้งหมด', // แก้ Subtitle ให้น่าอ่านขึ้น
-  Icons.workspaces_rounded, 
-  Colors.indigoAccent, 
-  () {
-    Navigator.push(
-      context, 
-      MaterialPageRoute(builder: (context) => const PoolProjectScreen())
-    );
-  }
-),
+                              4, 'Pool Project', 'โปรเจกต์ทั้งหมด', 
+                              Icons.workspaces_rounded, 
+                              Colors.indigoAccent, 
+                              () {
+                                Navigator.push(
+                                  context, 
+                                  MaterialPageRoute(builder: (context) => const PoolProjectScreen())
+                                );
+                              }
+                            ),
                             _buildGlassMenuCard(
                               5, 'เช็คการขนส่ง', 'เร็วๆนี้', 
                               Icons.local_shipping_rounded, 
@@ -369,18 +372,28 @@ class _HomeDashboardState extends State<_HomeDashboard> with SingleTickerProvide
     ); 
   }
 
+  // 🌟 ส่วนที่แก้ไขเรื่องชื่อยาวไม่ให้ดันรูปครับ
   Widget _buildMinimalHeader() {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Good Morning,', style: TextStyle(color: Colors.grey[400], fontSize: 14)),
-            const SizedBox(height: 6),
-            Text(_displayName, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
-          ],
+        // ใช้ Expanded เพื่อบังคับให้ข้อความมีขอบเขตจำกัด ไม่ให้ไปผลักรูปกระเด็น
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Good Morning,', style: TextStyle(color: Colors.grey[400], fontSize: 14)),
+              const SizedBox(height: 6),
+              Text(
+                _displayName, 
+                style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold),
+                maxLines: 1, // บังคับมี 1 บรรทัด
+                overflow: TextOverflow.ellipsis, // ถ้าชื่อยาวเกินจอ ให้เปลี่ยนเป็น ...
+              ),
+            ],
+          ),
         ),
+        const SizedBox(width: 16), // เว้นระยะห่างระหว่างชื่อกับรูป
         Container(
           width: 50, height: 50,
           decoration: BoxDecoration(

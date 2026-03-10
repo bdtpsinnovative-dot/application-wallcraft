@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 const Color kCardDark = Color(0xFF1C1C1E);
 const Color kPrimaryColor = Color(0xFFFFFFFF);
 const Color kDarkBg = Color(0xFF000000);
+const Color kLimeGreen = Color(0xFFD2E862); // 🌟 สีเขียวต้นแบบของพี่
 
 class AddProjectDialog extends StatefulWidget {
-  final List<dynamic> allProjects; // รับโครงการทั้งหมดมาจากหน้าหลัก
-  final Function(dynamic) onSelect; // เมื่อเลือกโครงการที่มีอยู่
-  final Future<bool> Function(String) onSaveNew; // เมื่อจะสร้างโครงการใหม่
+  final List<dynamic> allProjects;
+  final Function(dynamic) onSelect;
+  final Future<bool> Function(String) onSaveNew;
 
   const AddProjectDialog({
     super.key,
@@ -22,21 +23,27 @@ class AddProjectDialog extends StatefulWidget {
 }
 
 class _AddProjectDialogState extends State<AddProjectDialog> {
-  final TextEditingController _searchCtrl = TextEditingController();
-  List<dynamic> _filteredProjects = [];
+  final TextEditingController _nameCtrl = TextEditingController();
+  List<dynamic> _suggestedProjects = [];
   bool isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    _filteredProjects = widget.allProjects; // เริ่มต้นให้เห็นทั้งหมด
+    // 🌟 เริ่มต้นไม่ต้องโชว์อะไรเลย พี่จะได้ไม่รำคาญรูปตึก
+    _suggestedProjects = []; 
   }
 
-  void _filterProjects(String query) {
+  void _onSearchChanged(String query) {
     setState(() {
-      _filteredProjects = widget.allProjects
-          .where((p) => p['name'].toString().toLowerCase().contains(query.toLowerCase()))
-          .toList();
+      if (query.isEmpty) {
+        _suggestedProjects = [];
+      } else {
+        // 🔍 จะโชว์รายชื่อก็ต่อเมื่อพิมพ์แล้วมีชื่อที่ "คล้ายกัน" เท่านั้น
+        _suggestedProjects = widget.allProjects
+            .where((p) => p['name'].toString().toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      }
     });
   }
 
@@ -44,78 +51,86 @@ class _AddProjectDialogState extends State<AddProjectDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: kCardDark,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(24),
-        side: BorderSide(color: Colors.white.withOpacity(0.1)),
-      ),
-      title: const Text("Select Project", 
-        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.white)
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      title: const Text("เพิ่มโครงการใหม่", 
+        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.white)
       ),
       content: SizedBox(
-        width: double.maxFinite,
+        width: MediaQuery.of(context).size.width * 0.8,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // 🔍 ช่องค้นหา / พิมพ์ชื่อใหม่
+            // 📝 ช่องกรอกชื่อโครงการ (จุดประสงค์หลักของพี่)
             TextField(
-              controller: _searchCtrl,
-              onChanged: _filterProjects,
+              controller: _nameCtrl,
+              onChanged: _onSearchChanged,
+              autofocus: true, // เปิดมาให้พิมพ์ได้เลย
               style: const TextStyle(color: Colors.white),
               decoration: InputDecoration(
-                hintText: "Search or enter new project...",
+                hintText: "พิมพ์ชื่อโครงการที่ต้องการเพิ่ม...",
                 hintStyle: TextStyle(color: Colors.grey[600]),
-                prefixIcon: const Icon(Icons.search, color: kPrimaryColor),
+                prefixIcon: const Icon(Icons.edit_note_rounded, color: kLimeGreen),
                 filled: true,
                 fillColor: kDarkBg,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(0.1))),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: kLimeGreen, width: 1.5)),
               ),
             ),
-            const SizedBox(height: 10),
             
-            // 📜 รายการผลลัพธ์
-            ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: 250), // จำกัดความสูง List
-              child: _filteredProjects.isEmpty 
-                ? _buildAddNewState() // ถ้าหาไม่เจอ ให้โชว์ปุ่มสร้างใหม่
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: _filteredProjects.length,
-                    itemBuilder: (ctx, i) {
-                      final proj = _filteredProjects[i];
-                      return ListTile(
-                        leading: const Icon(Icons.apartment, color: Colors.white70),
-                        title: Text(proj['name'] ?? '', style: const TextStyle(color: Colors.white)),
-                        onTap: () => widget.onSelect(proj), // เลือกโครงการนี้
-                      );
-                    },
-                  ),
-            ),
+            // 📜 รายชื่อโครงการที่มีอยู่แล้ว (ถ้าพิมพ์แล้วชื่อซ้ำ จะขึ้นมาเตือนตรงนี้)
+            if (_suggestedProjects.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text("  โครงการที่มีชื่อใกล้เคียงกัน:", style: TextStyle(color: Colors.grey, fontSize: 12)),
+              ),
+              const SizedBox(height: 5),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 150),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: _suggestedProjects.length,
+                  itemBuilder: (ctx, i) {
+                    final proj = _suggestedProjects[i];
+                    return ListTile(
+                      dense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+                      leading: const Icon(Icons.history_rounded, color: Colors.white38, size: 18),
+                      title: Text(proj['name'] ?? '', style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                      trailing: const Text("เลือกใช้", style: TextStyle(color: kLimeGreen, fontSize: 12)),
+                      onTap: () => widget.onSelect(proj), // ถ้าขี้เกียจเพิ่มใหม่ ก็จิ้มอันเดิมได้
+                    );
+                  },
+                ),
+              ),
+            ],
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildAddNewState() {
-    return Column(
-      children: [
-        const SizedBox(height: 20),
-        const Text("No project found", style: TextStyle(color: Colors.grey)),
-        const SizedBox(height: 10),
-        ElevatedButton.icon(
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54)),
+        ),
+        // 🚀 ปุ่มบันทึกอันใหญ่ๆ กลางจอ
+        ElevatedButton(
           onPressed: isSaving ? null : () async {
-            if (_searchCtrl.text.trim().isEmpty) return;
+            if (_nameCtrl.text.trim().isEmpty) return;
             setState(() => isSaving = true);
-            bool success = await widget.onSaveNew(_searchCtrl.text.trim());
+            bool success = await widget.onSaveNew(_nameCtrl.text.trim());
             if (success && mounted) Navigator.pop(context);
             if (!success && mounted) setState(() => isSaving = false);
           },
-          icon: isSaving 
-            ? const SizedBox(width: 15, height: 15, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.add, color: Colors.black),
-          label: const Text("Create as new project", style: TextStyle(color: Colors.black)),
-          style: ElevatedButton.styleFrom(backgroundColor: kPrimaryColor),
-        )
+          style: ElevatedButton.styleFrom(
+            backgroundColor: kLimeGreen,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+          ),
+          child: isSaving 
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+            : const Text("บันทึกโครงการ", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        ),
       ],
     );
   }

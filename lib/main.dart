@@ -1,23 +1,22 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart'; // ✅ 1. เพิ่ม Import ตัวนี้ครับ
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+// ❌ ลบ import supabase_flutter ออก เพราะเราไม่ได้ใช้มันแล้ว
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 
-// ✅ สี Theme
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kLimeGreen = Color(0xFFD2E862);
 
-// ✅ 2. เปลี่ยน main เป็น async เพื่อให้โหลด .env ทัน
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   try {
-    // ✅ 3. โหลดไฟล์ .env มาเตรียมไว้ในหน่วยความจำ
     await dotenv.load(fileName: ".env");
     print("✅ Load .env success: ${dotenv.env['BASE_URL']}");
+    // ❌ เอา Supabase.initialize ออกทั้งหมด
   } catch (e) {
-    print("❌ Error loading .env file: $e");
+    print("❌ Error initializing: $e");
   }
 
   runApp(const MyApp());
@@ -30,7 +29,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'POS FoodScan',
+      title: 'Wallcraft', //
       theme: ThemeData(
         scaffoldBackgroundColor: kDarkBg,
         canvasColor: kDarkBg,

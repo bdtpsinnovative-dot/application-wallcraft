@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:flutter_tts/flutter_tts.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http; // ยังคง import ไว้ใช้สำหรับ Type Response
-import 'package:shared_preferences/shared_preferences.dart'; // ✅ 1. เพิ่ม SharedPrefs
+import 'dart:async'; 
+import 'package:shared_preferences/shared_preferences.dart'; 
 import 'dart:math' as math;
 import '../../../../constants.dart';
-import '../../../../services/api_service.dart'; // ✅ 2. เพิ่ม ApiService
+import '../../../../services/api_service.dart'; 
 
 class VoiceSessionPage extends StatefulWidget {
   const VoiceSessionPage({super.key});
@@ -25,12 +25,16 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
   bool _isThinking = false;
   bool _showTextLog = false;
   
+  // ✅ ตัวแปรเก็บรหัสประจำเครื่อง
+  String _currentUserId = "";
+
   // สถานะไมค์
   String _micStatus = "พร้อมคุย"; 
   String _currentWords = ""; 
   String _aiResponseText = "แตะไมค์เพื่อเริ่มคุยได้เลยครับ"; 
 
   final List<String> _chatHistory = [];
+  Timer? _silenceTimer; 
 
   @override
   void initState() {
@@ -43,26 +47,44 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
       duration: const Duration(milliseconds: 2000),
     )..repeat();
 
+    _initUserId(); // ✅ เรียกใช้ฟังก์ชันสร้าง/ดึง ID ประจำเครื่อง
     _initSpeech();
     _initTts();
   }
 
   @override
   void dispose() {
+    _silenceTimer?.cancel();
     _animationController.dispose();
     _speech.cancel();
     _flutterTts.stop();
     super.dispose();
   }
 
-  // ✅ 1. ตั้งค่าไมค์
+  // ✅ ฟังก์ชันใหม่: จัดการสร้างและจำ User ID ไว้ในเครื่อง
+  Future<void> _initUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    String? savedId = prefs.getString('user_id');
+
+    // ถ้าไม่มีรหัส หรือเป็นคำว่า guest เฉยๆ ให้สร้างใหม่ให้ไม่ซ้ำกัน
+    if (savedId == null || savedId == 'guest') {
+      savedId = 'guest_${DateTime.now().millisecondsSinceEpoch}_${math.Random().nextInt(10000)}';
+      await prefs.setString('user_id', savedId);
+    }
+    
+    setState(() {
+      _currentUserId = savedId!;
+    });
+    debugPrint("🟢 ใช้งาน User ID: $_currentUserId");
+  }
+
   void _initSpeech() async {
     try {
       bool available = await _speech.initialize(
         onStatus: (val) {
           if (val == 'done' || val == 'notListening') {
              if (!_isThinking && _isListening && mounted) {
-                // ถ้ายังกดฟังอยู่แต่ระบบตัด ให้ restart หรือแจ้งเตือนได้
+                // จัดการผ่าน Timer แทน
              }
           }
         },
@@ -78,11 +100,10 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
       
       if (mounted) setState(() {});
     } catch (e) {
-      print("Init Error: $e");
+      debugPrint("Init Error: $e");
     }
   }
 
-  // ✅ 2. ตั้งค่าเสียงพูด (TTS)
   void _initTts() async {
     await _flutterTts.setLanguage("th-TH");
     await _flutterTts.setPitch(0.7); 
@@ -99,7 +120,7 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
         }
       }
     } catch (e) {
-      print("หาเสียงผู้ชายไม่เจอ ใช้เสียง default แทน");
+      debugPrint("หาเสียงผู้ชายไม่เจอ ใช้เสียง default แทน");
     }
 
     _flutterTts.setStartHandler(() {
@@ -119,9 +140,8 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
     });
   }
 
-  // ✅ ฟังก์ชันใหม่: สำหรับกดหยุด AI พูดกลางคัน
   void _stopAIVoice() async {
-    await _flutterTts.stop(); // สั่งหยุด TTS
+    await _flutterTts.stop(); 
     if (mounted) {
       setState(() {
         _isSpeaking = false;
@@ -130,9 +150,9 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
     }
   }
 
-  // ✅ 3. ฟังก์ชันเริ่มฟัง (กดทีเดียว)
   void _startListening() async {
     if (_isSpeaking) await _flutterTts.stop();
+    _silenceTimer?.cancel(); 
 
     setState(() {
       _isListening = true;
@@ -145,16 +165,24 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
         setState(() {
           _currentWords = val.recognizedWords;
         });
+
+        _silenceTimer?.cancel();
+        _silenceTimer = Timer(const Duration(milliseconds: 2500), () {
+          if (_isListening) {
+            _stopListeningAndSend();
+          }
+        });
       },
       localeId: 'th_TH', 
       cancelOnError: false,
       partialResults: true,
       listenMode: stt.ListenMode.dictation,
+      pauseFor: const Duration(seconds: 5), 
     );
   }
 
-  // ✅ 4. ฟังก์ชันหยุดและส่ง (กดอีกที)
   void _stopListeningAndSend() async {
+    _silenceTimer?.cancel();
     await _speech.stop();
     setState(() => _isListening = false);
 
@@ -171,19 +199,13 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
       _micStatus = "กำลังคิด...";
     });
 
-    String promptToSend = _buildPromptWithHistory(userMessage);
-
     try {
-      // ✅ 1. ดึง UserID
-      final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id') ?? 'guest';
-
-      // ✅ 2. ใช้ ApiService.post แทน http.post
+      // ✅ ส่งไปแค่ ID ประจำเครื่อง และ คำถามล่าสุด ไม่ต้องต่อ String ประวัติแล้ว
       final response = await ApiService.post(
         AppConfig.chatUrl, 
         body: jsonEncode({
-          "userId": userId, // ส่ง userId ไปด้วย
-          "message": promptToSend
+          "userId": _currentUserId, // ✅ ใช้ ID ประจำเครื่องที่เราสร้างไว้
+          "message": userMessage    // ✅ ส่งคำถามเพียวๆ
         }),
       );
 
@@ -212,17 +234,11 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
         _isThinking = false;
         _micStatus = "Connect Error";
       });
-      print("API Error: $e");
+      debugPrint("API Error: $e");
     }
   }
 
-  String _buildPromptWithHistory(String newQuestion) {
-    if (_chatHistory.isEmpty) return newQuestion;
-    // ตัดประวัติให้เหลือแค่ 3 คู่ล่าสุดเพื่อไม่ให้ Token ยาวเกินไป
-    int start = (_chatHistory.length > 6) ? _chatHistory.length - 6 : 0;
-    String historyText = _chatHistory.sublist(start).join("\n");
-    return "ประวัติการคุย:\n$historyText\n\nคำถามล่าสุด: $newQuestion";
-  }
+  // ✅ ลบฟังก์ชัน _buildPromptWithHistory ออกไปเลย เพราะไม่ได้ใช้แล้วครับ
 
   @override
   Widget build(BuildContext context) {
@@ -269,7 +285,7 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
                    Padding(
                      padding: const EdgeInsets.symmetric(horizontal: 20),
                      child: Text(
-                       "$_currentWords", 
+                       _currentWords.isEmpty ? "กำลังฟัง..." : "$_currentWords", 
                        textAlign: TextAlign.center,
                        style: const TextStyle(color: Colors.greenAccent, fontSize: 16),
                        maxLines: 2,
@@ -279,7 +295,6 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
                    
                 const SizedBox(height: 10),
 
-                // ✅ ปุ่มหยุดเสียง AI
                 AnimatedOpacity(
                   opacity: _isSpeaking ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 300),
@@ -412,9 +427,9 @@ class _VoiceSessionPageState extends State<VoiceSessionPage> with TickerProvider
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Text(
-        _aiResponseText,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white, fontSize: 18),
+        _chatHistory.join('\n\n'), // ✅ เปลี่ยนให้แสดงประวัติแชททั้งหมดในหน้า Log ได้ถูกต้อง
+        textAlign: TextAlign.left,
+        style: const TextStyle(color: Colors.white, fontSize: 16),
       ),
     );
   }

@@ -23,6 +23,7 @@ const Color kDarkBg = Color(0xFF000000);
 const Color kGlowPurple = Color(0xFF111111); 
 const Color kCardDark = Color(0xFF1C1C1E); 
 const Color kPrimaryColor = Color(0xFFFFFFFF); 
+const Color kLimeGreen = Color(0xFFD2E862); 
 
 class PurchaseOrderScreen extends StatefulWidget {
   const PurchaseOrderScreen({super.key});
@@ -37,7 +38,9 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   bool _startAnimation = false;
 
   String? _selectedCustomerType;
-  String? _selectedCompany; 
+  // 🌟 เก็บเป็น Map เพื่อจำชื่อบริษัท
+  Map<String, dynamic>? _selectedCompany; 
+  bool _isTypeManuallySelected = false; 
   
   final _nameCtrl = TextEditingController();
   final _contactCtrl = TextEditingController(); 
@@ -76,16 +79,17 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   }
 
   Future<List<dynamic>> _getCompanies(String filter) async {
-    if (_selectedCustomerType == null) return [];
-    final url = Uri.parse('${AppConfig.baseUrl}/companies?type_id=$_selectedCustomerType&q=$filter');
+    String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
+    if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
+       urlStr += '&type_id=$_selectedCustomerType';
+    }
+    final url = Uri.parse(urlStr);
     try {
       final response = await ApiService.get(url);
       if (response.statusCode == 200) {
         return jsonDecode(response.body); 
       }
-    } catch (e) {
-      debugPrint('Error: $e');
-    }
+    } catch (e) { debugPrint('Error: $e'); }
     return []; 
   }
 
@@ -110,7 +114,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     return false; 
   }
 
-  // 😈 Helper แจ้งเตือนเรื่อง GPS
   void _showSimpleDialog(String title, String msg) {
     showDialog(
       context: context,
@@ -128,19 +131,14 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     );
   }
 
-  // 😈 ฟังก์ชันสายตรวจ: สแกนหาพิกัดที่แม่นยำที่สุด (Radar Algorithm)
   Future<Map<String, dynamic>?> _getAuditData() async {
     bool serviceEnabled;
     LocationPermission permission;
-
-    // 1. เช็คว่าเปิดสวิตช์ GPS ในเครื่องหรือยัง?
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       if (mounted) _showSimpleDialog("กรุณาเปิด GPS", "คุณต้องเปิดใช้งานตำแหน่งที่ตั้ง (Location) ก่อนทำการบันทึกข้อมูลครับ");
       return null;
     }
-
-    // 2. เช็คสิทธิ์ (Permission)
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
@@ -149,96 +147,49 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         return null;
       }
     }
-
     if (permission == LocationPermission.deniedForever) {
       if (mounted) _showSimpleDialog("สิทธิ์ถูกปิดกั้นถาวร", "กรุณาเข้าไปเปิดสิทธิ์ตำแหน่ง (Location) ในหน้าตั้งค่าของเครื่องครับ");
       return null;
     }
-
-    // 3. 🎯 เริ่มกระบวนการ "เปิดเรดาร์สแกนหาพิกัดที่ดีที่สุด"
     Position? bestPosition;
     StreamSubscription<Position>? positionStream;
-    
     try {
-      // เปิดสตรีมดึงพิกัดรัวๆ แบบความแม่นยำสูงสุด (Best)
       positionStream = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.best, // บังคับใช้ชิป GPS ทำงานเต็มกำลัง
-          distanceFilter: 0,
-        ),
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 0),
       ).listen((Position position) {
-        // อัปเดตพิกัดที่ดีที่สุด (ยิ่งค่า accuracy น้อย ยิ่งแม่นยำ)
         if (bestPosition == null || position.accuracy < bestPosition!.accuracy) {
           bestPosition = position;
         }
       });
-
-      // หน่วงเวลาให้เรดาร์ทำงาน 5 วินาที (แบ่งเช็คทุกๆ 0.1 วินาที)
       for (int i = 0; i < 50; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
-        
-        // ⚡️ ทางลัด: ถ้าเจอพิกัดที่ความคลาดเคลื่อน <= 15 เมตร (โคตรแม่น) ให้เบรกเลย ไม่ต้องรอครบ 5 วิ
-        if (bestPosition != null && bestPosition!.accuracy <= 15.0) {
-          break; 
-        }
+        if (bestPosition != null && bestPosition!.accuracy <= 15.0) break; 
       }
-
-      // ปิดสตรีมเรดาร์เมื่อเสร็จสิ้น
       await positionStream.cancel();
-
-      // ถ้าดึงไม่ได้เลยจริงๆ ให้ใช้ท่าไม้ตายดึงครั้งเดียวเผื่อฟลุ๊ค
-      bestPosition ??= await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-        timeLimit: const Duration(seconds: 3)
-      );
-
-      // 🚨 เช็คคนโกง: ตรวจจับแอปจำลองพิกัด (Fake GPS)
+      bestPosition ??= await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 3));
       if (bestPosition!.isMocked) {
         if (mounted) _showSimpleDialog("ตรวจพบการทุจริต", "กรุณาปิดแอปจำลองตำแหน่ง (Fake GPS) ก่อนบันทึกข้อมูลครับ");
-        return null; // บล็อกไม่ให้บันทึก
+        return null; 
       }
-
-      // 🚨 เช็คคุณภาพพิกัด: ถ้าคลาดเคลื่อนเกิน 150 เมตร (มักจะเกิดตอนอยู่ในตึกทึบ)
       if (bestPosition!.accuracy > 150.0) {
         if (mounted) _showSimpleDialog("สัญญาณ GPS อ่อนมาก", "ความแม่นยำต่ำเกินไป กรุณาเดินออกไปใกล้หน้าต่างหรือที่โล่งเพื่อบันทึกครับ");
-        return null; // บล็อกให้ไปหาที่โล่งๆ ก่อน
+        return null; 
       }
-
-      // 4. ดึงข้อมูลเครื่องมือถือ
       DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
       Map<String, dynamic> deviceData = {};
-
       if (Platform.isAndroid) {
         AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-        deviceData = {
-          "os": "Android",
-          "brand": androidInfo.brand,
-          "model": androidInfo.model,
-          "version": androidInfo.version.release
-        };
+        deviceData = {"os": "Android", "brand": androidInfo.brand, "model": androidInfo.model, "version": androidInfo.version.release};
       } else if (Platform.isIOS) {
         IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-        deviceData = {
-          "os": "iOS",
-          "brand": "Apple",
-          "model": iosInfo.utsname.machine,
-          "version": iosInfo.systemVersion
-        };
+        deviceData = {"os": "iOS", "brand": "Apple", "model": iosInfo.utsname.machine, "version": iosInfo.systemVersion};
       }
-
       return {
-        "location": {
-          "lat": bestPosition!.latitude,
-          "lng": bestPosition!.longitude,
-          "accuracy": bestPosition!.accuracy, // เก็บความแม่นยำลงฐานข้อมูลให้พี่ดูด้วย
-          "captured_at": DateTime.now().toIso8601String()
-        },
+        "location": {"lat": bestPosition!.latitude, "lng": bestPosition!.longitude, "accuracy": bestPosition!.accuracy, "captured_at": DateTime.now().toIso8601String()},
         "device": deviceData
       };
-
     } catch (e) {
       if (positionStream != null) await positionStream.cancel();
-      debugPrint("Audit Log Error: $e");
       if (mounted) _showSimpleDialog("เกิดข้อผิดพลาด", "ไม่สามารถดึงตำแหน่งได้ กรุณาลองใหม่อีกครั้ง");
       return null;
     }
@@ -249,12 +200,10 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     if (!_formKey.currentState!.validate()) return;
     
     setState(() => _isLoading = true);
-
-    // 🚨 1. เรียกสายตรวจทำงาน! ถ้าไม่ให้พิกัด จะหยุดทำรายการทันที
     final auditData = await _getAuditData();
     if (auditData == null) {
       setState(() => _isLoading = false);
-      return; // 🛑 เด้งออก ไม่ยิง API
+      return; 
     }
 
     try {
@@ -268,13 +217,11 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         for (var f in item.itemImages) {
            itemImagesBase64.add(base64Encode(await f.readAsBytes()));
         }
-        
         List<Map<String, dynamic>> projectUsages = [];
         for (var projectId in item.selectedProjectIds) {
            String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
            projectUsages.add({'project_id': projectId, 'area_sqm': areaText});
         }
-
         itemsPayload.add({
           'product_category_id': item.categoryId,
           'interest_level': item.interestLevel,
@@ -290,23 +237,17 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           'token': token,
           'user_id': userId,
           'customer_type_id': _selectedCustomerType, 
-          'company_id': _selectedCompany, 
+          'company_id': _selectedCompany?['id'].toString(), 
           'customer_name': _nameCtrl.text,
           'phone': _contactCtrl.text,
           'items': itemsPayload,
-          'audit_log': auditData, // 📦 ส่งข้อมูลสายตรวจแนบไปด้วย!
+          'audit_log': auditData, 
         }),
       );
       
       if (response.statusCode == 200 || response.statusCode == 201) { 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Row(children: [Icon(Icons.check_circle, color: kCardDark), SizedBox(width: 8), Text('บันทึกข้อมูลสำเร็จ', style: TextStyle(color: kCardDark, fontWeight: FontWeight.bold))]), 
-              backgroundColor: kPrimaryColor
-            )
-          );
-          
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ'), backgroundColor: Colors.green));
           setState(() {
               _nameCtrl.clear();
               _contactCtrl.clear();
@@ -314,30 +255,138 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
               _selectedCompany = null;      
               _selectedProjects = [];       
               _orderItems = [ProductItem()]; 
+              _isTypeManuallySelected = false;
           });
         }
-      } else { 
-        throw "เกิดข้อผิดพลาดในการบันทึกข้อมูล"; 
-      }
+      } else { throw "เกิดข้อผิดพลาดในการบันทึกข้อมูล"; }
     } catch (e) { 
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error_outline_rounded, color: Colors.white), 
-                const SizedBox(width: 8), 
-                Expanded(child: Text(e.toString(), style: const TextStyle(color: Colors.white)))
-              ]
-            ), 
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          )
-        ); 
-      }
-    } finally { 
-      if(mounted) setState(() => _isLoading = false); 
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent)); 
+    } finally { if(mounted) setState(() => _isLoading = false); }
+  }
+
+  // 🚀 ฟังก์ชันบันทึกบริษัทใหม่
+  Future<void> _addNewCompany(String name, String? typeId) async {
+    final response = await ApiService.post(
+      Uri.parse('${AppConfig.baseUrl}/companies'), 
+      body: jsonEncode({'name': name, 'customer_type_id': typeId}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final newComp = jsonDecode(response.body);
+      setState(() {
+        _selectedCompany = newComp; 
+        if (typeId != null) _selectedCustomerType = typeId;
+      });
+      _companyDropdownKey.currentState?.changeSelectedItem(newComp);
     }
+  }
+
+  // 🚀 ฟังก์ชันบันทึกประเภทลูกค้าใหม่
+  Future<void> _addNewCustomerType(String name) async {
+    final response = await ApiService.post(
+      Uri.parse('${AppConfig.baseUrl}/customer_types'), 
+      body: jsonEncode({'name': name}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final newType = jsonDecode(response.body);
+      setState(() {
+        _customerTypes.add(newType); 
+        _selectedCustomerType = newType['id'].toString(); 
+      });
+    }
+  }
+
+  // Helper สำหรับหน้าต่าง Dialog
+  InputDecoration _dialogInputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint, 
+      hintStyle: TextStyle(color: Colors.grey[400]),
+      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: kLimeGreen)),
+    );
+  }
+
+  // 🌟🌟🌟 ฟังก์ชันแสดง Dialog กลางจอ (เพิ่มบริษัท) 🌟🌟🌟
+  void _showAddCompanyDialog() {
+    String? tempTypeId = _selectedCustomerType; 
+    final companyNameCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDiaState) => AlertDialog(
+          backgroundColor: kCardDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("เพิ่มบริษัทใหม่", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // 🔽 ช่องเลือกประเภทลูกค้าใน Dialog
+              DropdownButtonFormField<String>(
+                value: tempTypeId,
+                decoration: _dialogInputDecoration("เลือกประเภทลูกค้า (ไม่บังคับ)"),
+                dropdownColor: kCardDark,
+                style: const TextStyle(color: Colors.white),
+                items: _customerTypes.map((item) => DropdownMenuItem<String>(
+                  value: item['id'].toString(), 
+                  child: Text(item['name'], style: const TextStyle(color: Colors.white)),
+                )).toList(),
+                onChanged: (val) => setDiaState(() => tempTypeId = val),
+              ),
+              const SizedBox(height: 16),
+              
+              // 📝 ช่องกรอกชื่อบริษัทใน Dialog
+              TextField(
+                controller: companyNameCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: _dialogInputDecoration("ชื่อบริษัท *"),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54))),
+            TextButton(
+              onPressed: () {
+                if (companyNameCtrl.text.isNotEmpty) {
+                  _addNewCompany(companyNameCtrl.text, tempTypeId); 
+                  Navigator.pop(ctx);
+                }
+              },
+              child: const Text("บันทึก", style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // 🌟🌟🌟 ฟังก์ชันแสดง Dialog กลางจอ (เพิ่มประเภทลูกค้า) 🌟🌟🌟
+  void _showAddCustomerTypeDialog() {
+    final typeNameCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kCardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("เพิ่มประเภทลูกค้าใหม่", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: typeNameCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: _dialogInputDecoration("ชื่อประเภทลูกค้า *"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () {
+              if (typeNameCtrl.text.isNotEmpty) {
+                _addNewCustomerType(typeNameCtrl.text);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text("บันทึก", style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -362,8 +411,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                             key: _formKey,
                             child: Column(
                               children: [
-                                
-                                // 🌟 ส่วนของการ์ดข้อมูลลูกค้า
                                 _buildAnimatedCard(
                                   index: 0,
                                   child: CustomerInfoCard(
@@ -371,26 +418,33 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                     selectedCustomerType: _selectedCustomerType,
                                     companyDropdownKey: _companyDropdownKey,
                                     getCompanies: _getCompanies,
-                                    selectedCompany: _selectedCompany,
+                                    selectedCompany: _selectedCompany, // 🌟 ส่งข้อมูลเป็น Map
                                     nameCtrl: _nameCtrl,
                                     contactCtrl: _contactCtrl,
+                                    onAddCustomerType: _showAddCustomerTypeDialog, // 🌟 เรียก Dialog
+                                    onAddCompany: _showAddCompanyDialog, // 🌟 เรียก Dialog
                                     onCustomerTypeChanged: (val) {
                                       setState(() {
                                         _selectedCustomerType = val;
                                         _selectedCompany = null;
                                         _companyDropdownKey.currentState?.clear();
+                                        _isTypeManuallySelected = true; 
                                       });
                                     },
                                     onCompanyChanged: (val) {
                                       setState(() {
-                                        _selectedCompany = val; 
+                                        if (val != null) {
+                                          _selectedCompany = val; 
+                                          if (val['customer_type_id'] != null) {
+                                            _selectedCustomerType = val['customer_type_id'].toString();
+                                            _isTypeManuallySelected = false; 
+                                          }
+                                        } else { _selectedCompany = null; }
                                       });
                                     },
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-
-                                // 🌟 การ์ดโครงการ
                                 _buildAnimatedCard(
                                   index: 1,
                                   child: ProjectSelectCard(
@@ -404,8 +458,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                   ),
                                 ),
                                 const SizedBox(height: 20),
-
-                                // 🌟 การ์ดสินค้า
                                 _buildAnimatedCard(
                                   index: 2,
                                   child: _buildSectionCard(
@@ -417,10 +469,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                         shrinkWrap: true,
                                         physics: const NeverScrollableScrollPhysics(),
                                         itemCount: _orderItems.length,
-                                        separatorBuilder: (_, __) => Padding(
-                                          padding: const EdgeInsets.symmetric(vertical: 20),
-                                          child: Divider(color: Colors.white.withOpacity(0.1)),
-                                        ),
+                                        separatorBuilder: (_, __) => Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Divider(color: Colors.white.withOpacity(0.1))),
                                         itemBuilder: (ctx, index) => ProductItemCard(
                                           index: index,
                                           item: _orderItems[index],
@@ -430,53 +479,12 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                         ),
                                       ),
                                       const SizedBox(height: 24),
-                                      Material(
-                                        color: Colors.transparent,
-                                        child: InkWell(
-                                          onTap: () {
-                                            FocusScope.of(context).unfocus(); 
-                                            setState(() => _orderItems.add(ProductItem()));
-                                          },
-                                          borderRadius: BorderRadius.circular(16),
-                                          child: Container(
-                                            width: double.infinity,
-                                            padding: const EdgeInsets.symmetric(vertical: 16),
-                                            decoration: BoxDecoration(
-                                              border: Border.all(color: kPrimaryColor.withOpacity(0.5), width: 1.5),
-                                              borderRadius: BorderRadius.circular(16),
-                                              color: kPrimaryColor.withOpacity(0.05),
-                                            ),
-                                            child: const Row(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Icon(Icons.add_circle_rounded, color: kPrimaryColor),
-                                                SizedBox(width: 8),
-                                                Text("เพิ่มรายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: kPrimaryColor)),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
+                                      _buildAddItemButton(),
                                     ],
                                   ),
                                 ),
                                 const SizedBox(height: 40),
-
-                                // 🎬 ปุ่ม Submit
-                                _buildAnimatedCard(
-                                  index: 3,
-                                  child: ElevatedButton(
-                                    onPressed: _submitOrder,
-                                    style: ElevatedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 18),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                      backgroundColor: kPrimaryColor, 
-                                    ),
-                                    child: const Center(
-                                      child: Text("บันทึก", style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
-                                    ),
-                                  ),
-                                ),
+                                _buildSubmitButton(),
                                 const SizedBox(height: 60),
                               ],
                             ),
@@ -492,7 +500,54 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     );
   }
 
-  // ✨ Helpers
+  // --- Widgets ---
+  Widget _buildAddItemButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          FocusScope.of(context).unfocus(); 
+          setState(() => _orderItems.add(ProductItem()));
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: kPrimaryColor.withOpacity(0.5), width: 1.5),
+            borderRadius: BorderRadius.circular(16),
+            color: kPrimaryColor.withOpacity(0.05),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_rounded, color: kPrimaryColor),
+              SizedBox(width: 8),
+              Text("เพิ่มรายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: kPrimaryColor)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return _buildAnimatedCard(
+      index: 3,
+      child: ElevatedButton(
+        onPressed: _submitOrder,
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: kPrimaryColor, 
+        ),
+        child: const Center(
+          child: Text("บันทึก", style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
+        ),
+      ),
+    );
+  }
+
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
@@ -545,24 +600,20 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     );
   }
 
-void _showAddProjectDialog() {
+  void _showAddProjectDialog() {
     showDialog(
       context: context,
       builder: (ctx) => AddProjectDialog(
         allProjects: _projects, 
-        // ✅ เพิ่ม onSelect เข้าไปเพื่อให้ครบตามที่ Widget ต้องการ
         onSelect: (selectedProject) {
           setState(() {
-            // โค้ดสำหรับเพิ่มโปรเจกต์ที่เลือกเข้าไปในรายการ (ปรับแก้ได้ตามโครงสร้างข้อมูลจริง)
             if (!_selectedProjects.contains(selectedProject)) {
               _selectedProjects = List.from(_selectedProjects)..add(selectedProject);
             }
           });
         },
-        onSaveNew: (name) async {
-          return await _createNewProject(name);
-        },
+        onSaveNew: (name) async { return await _createNewProject(name); },
       ),
     );
   }
-} // ✅ อย่าลืมเติมปีกกาปิดตัวนี้! มันคือตัวปิดของ class _PurchaseOrderScreenState
+}

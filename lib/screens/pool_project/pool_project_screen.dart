@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../constants.dart';
 import '../../services/api_service.dart';
-import 'pool_project_detail_screen.dart'; 
+
+import 'components/pool_order_card.dart'; 
+import 'components/pool_filter_sheet.dart'; 
 
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kGlowPurple = Color(0xFF4A3080);
@@ -22,310 +24,288 @@ class PoolProjectScreen extends StatefulWidget {
 }
 
 class _PoolProjectScreenState extends State<PoolProjectScreen> {
-  List<dynamic> _allSubProjects = [];
+  List<Map<String, dynamic>> _groupedOrders = [];
+  List<Map<String, dynamic>> _displayedOrders = [];
+  
   bool _isLoading = true;
+  bool _isLoadingMore = false; 
   String? _errorMessage;
+
+  int _currentPage = 1;
+  final int _limit = 50;
+  int _totalItems = 0; 
+  String _selectedScope = 'all'; 
 
   List<String> _selectedCategories = [];
   List<String> _availableCategories = [];
-
   List<String> _selectedSaleNames = [];
   List<String> _availableSaleNames = [];
-
   List<String> _selectedAreaRanges = [];
-  final List<String> _areaRanges = [
-    'น้อยกว่า 50 sq.m.',
-    '50 - 200 sq.m.',
-    '201 - 500 sq.m.',
-    'มากกว่า 500 sq.m.'
-  ];
+  List<String> _selectedProjectTypes = [];
+  List<String> _availableProjectTypes = [];
+
+  String _searchQuery = '';
+  String _selectedDateRange = ''; 
+  
+  final List<String> _dateRanges = ['7 วันล่าสุด', '14 วันล่าสุด', '30 วันล่าสุด'];
+  final List<String> _areaRanges = ['น้อยกว่า 50 sq.m.', '50 - 200 sq.m.', '201 - 500 sq.m.', 'มากกว่า 500 sq.m.'];
 
   @override
   void initState() {
     super.initState();
-    _fetchProjects();
+    _fetchProjects(isRefresh: true);
+  }
+  // 🌟 เพิ่มฟังก์ชันนี้เข้าไปใน _PoolProjectScreenState
+ // 🌟 แก้ฟังก์ชันนี้ใหม่ทั้งหมด ป้องกันแอปเด้ง
+  Future<void> _handleToggleImportant(String projectId, bool currentStatus, String orderId) async {
+    try {
+      // 1. แปลงข้อมูลให้เป็น JSON Text ชัวร์ๆ ป้องกัน API Error
+      final String bodyData = jsonEncode({
+        'order_id': orderId,
+        'order_item_project_id': projectId,
+        'is_important': !currentStatus,
+      });
+
+      final url = Uri.parse('${AppConfig.baseUrl}/poolprojects'); 
+      
+      // ส่งข้อมูลด้วย body ที่เป็น jsonString
+      final response = await ApiService.patch(url, body: bodyData);
+
+      if (response.statusCode == 200) {
+        // 2. 🌟 สำคัญมาก: ต้องใช้ isRefresh: true ไม่งั้นข้อมูลจะเบิ้ลจนแอปค้าง!
+        _fetchProjects(isRefresh: true); 
+        
+        if (!currentStatus) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('ติดดาวโครงการนี้แล้ว ✨'),
+              backgroundColor: kPremiumGold,
+              duration: Duration(seconds: 1),
+            ),
+          );
+        }
+      } else {
+        throw Exception('อัปเดตสถานะไม่สำเร็จ (Status: ${response.statusCode})');
+      }
+    } catch (e) {
+      print('Toggle Error: $e'); // ปริ้นลง Console ไว้ดูเผื่อผิดพลาด
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('แก้ของคนอื่นไม่ได้')),
+      );
+    }
   }
 
-  Future<void> _fetchProjects() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _fetchProjects({bool isRefresh = false}) async {
+    if (isRefresh) {
+      setState(() { _isLoading = true; _currentPage = 1; _errorMessage = null; });
+    } else {
+      setState(() => _isLoadingMore = true);
+    }
 
     try {
-      final url = Uri.parse('${AppConfig.baseUrl}/poolprojects?page=1&limit=50');
+      final url = Uri.parse('${AppConfig.baseUrl}/poolprojects?page=$_currentPage&limit=$_limit&scope=$_selectedScope');
       final response = await ApiService.get(url).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final result = jsonDecode(response.body);
-        final List<dynamic> rawData = result is List ? result : (result['data'] ?? []);
+        final List<dynamic> rawData = result['data'] ?? [];
+        final int totalCount = result['total'] ?? 0; 
 
-        List<dynamic> tempProjects = [];
-        Set<String> tempCategories = {}; 
-        Set<String> tempSaleNames = {};
+        Map<String, Map<String, dynamic>> ordersMap = isRefresh 
+            ? {} 
+            : Map.fromEntries(_groupedOrders.map((e) => MapEntry(e['order_data']['id'], e)));
+        
+        Set<String> tempCategories = isRefresh ? {} : Set.from(_availableCategories); 
+        Set<String> tempSaleNames = isRefresh ? {} : Set.from(_availableSaleNames);
+        Set<String> tempProjectTypes = isRefresh ? {} : Set.from(_availableProjectTypes);
 
         for (var item in rawData) {
-          final oip = item['order_item_projects'];
-          final categoryName = item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า';
-          final saleName = item['orders']?['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์';
+          final orderInfo = item['orders'];
+          if (orderInfo == null) continue;
 
-          if (oip != null && oip is List && oip.isNotEmpty) {
-            for (var projectRelation in oip) {
-              var newItem = Map<String, dynamic>.from(item);
-              newItem['display_project_name'] = projectRelation['projects']?['project_name'] ?? 'ไม่ได้ระบุชื่อ';
-              newItem['specific_project_data'] = projectRelation;
-              tempProjects.add(newItem);
-              
-              tempCategories.add(categoryName);
-              tempSaleNames.add(saleName);
+          String orderId = orderInfo['id'];
+          tempCategories.add(item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า');
+          tempSaleNames.add(orderInfo['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์');
+
+          if (item['order_item_projects'] != null) {
+            for (var p in item['order_item_projects']) {
+              final ptName = p['project_types']?['name'];
+              if (ptName != null && ptName.toString().trim().isNotEmpty) {
+                tempProjectTypes.add(ptName.toString());
+              }
             }
-          } else {
-            var newItem = Map<String, dynamic>.from(item);
-            newItem['display_project_name'] = 'ไม่ได้ระบุโครงการ';
-            newItem['specific_project_data'] = {};
-            tempProjects.add(newItem);
-            
-            tempCategories.add(categoryName);
-            tempSaleNames.add(saleName);
           }
+
+          if (!ordersMap.containsKey(orderId)) {
+            ordersMap[orderId] = { 'order_data': orderInfo, 'order_items': <dynamic>[] };
+          }
+          ordersMap[orderId]!['order_items'].add(item);
         }
 
         setState(() {
-          _allSubProjects = tempProjects;
+          _totalItems = totalCount;
+          _groupedOrders = ordersMap.values.toList();
           _availableCategories = tempCategories.toList();
           _availableSaleNames = tempSaleNames.toList();
+          _availableProjectTypes = tempProjectTypes.toList();
           
           _selectedCategories.removeWhere((item) => !_availableCategories.contains(item));
           _selectedSaleNames.removeWhere((item) => !_availableSaleNames.contains(item));
+          _selectedProjectTypes.removeWhere((item) => !_availableProjectTypes.contains(item));
           
+          _applyFilters(); 
           _isLoading = false;
+          _isLoadingMore = false;
         });
       } else {
         throw Exception('Failed to load projects');
       }
     } on SocketException {
-      setState(() => _errorMessage = "ไม่มีการเชื่อมต่ออินเทอร์เน็ต");
+      setState(() { _errorMessage = "ไม่มีการเชื่อมต่ออินเทอร์เน็ต"; _isLoading = false; _isLoadingMore = false; });
     } on TimeoutException {
-      setState(() => _errorMessage = "เซิร์ฟเวอร์ตอบสนองช้าเกินไป");
+      setState(() { _errorMessage = "เซิร์ฟเวอร์ตอบสนองช้าเกินไป"; _isLoading = false; _isLoadingMore = false; });
     } catch (e) {
-      setState(() => _errorMessage = "เกิดข้อผิดพลาดในการโหลดข้อมูล");
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+      setState(() { _errorMessage = "เกิดข้อผิดพลาดในการโหลดข้อมูล"; _isLoading = false; _isLoadingMore = false; });
     }
   }
 
-  void _showFilterSheet() {
-    List<String> tempCategories = List.from(_selectedCategories);
-    List<String> tempSaleNames = List.from(_selectedSaleNames);
-    List<String> tempAreaRanges = List.from(_selectedAreaRanges);
+  void _applyFilters() {
+    if (_searchQuery.isEmpty && _selectedCategories.isEmpty && _selectedSaleNames.isEmpty && _selectedAreaRanges.isEmpty && _selectedProjectTypes.isEmpty && _selectedDateRange.isEmpty) { 
+      setState(() => _displayedOrders = List.from(_groupedOrders));
+      return;
+    }
 
+    setState(() {
+      _displayedOrders = _groupedOrders.where((orderGroup) {
+        final orderData = orderGroup['order_data'];
+        final List<dynamic> items = orderGroup['order_items'];
+
+        bool passSearch = true;
+        if (_searchQuery.isNotEmpty) {
+          final query = _searchQuery.toLowerCase();
+          passSearch = (orderData['customer_name'] ?? '').toString().toLowerCase().contains(query) || 
+                       (orderData['companies']?['name'] ?? '').toString().toLowerCase().contains(query) ||
+                       items.any((item) => (item['order_item_projects'] ?? []).any((p) => (p['project_name'] ?? '').toString().toLowerCase().contains(query)));
+        }
+
+        bool passSale = _selectedSaleNames.isEmpty || _selectedSaleNames.contains(orderData['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์');
+
+        bool passDate = true;
+        if (_selectedDateRange.isNotEmpty && orderData['created_at'] != null) {
+          try {
+            final orderDate = DateTime.parse(orderData['created_at']).toLocal();
+            final now = DateTime.now();
+            final differenceInDays = now.difference(orderDate).inDays;
+
+            if (_selectedDateRange == '7 วันล่าสุด' && differenceInDays > 7) passDate = false;
+            else if (_selectedDateRange == '14 วันล่าสุด' && differenceInDays > 14) passDate = false;
+            else if (_selectedDateRange == '30 วันล่าสุด' && differenceInDays > 30) passDate = false;
+          } catch (e) { passDate = false; }
+        }
+
+        bool passItems = true;
+        if (_selectedCategories.isNotEmpty || _selectedAreaRanges.isNotEmpty || _selectedProjectTypes.isNotEmpty) {
+          bool hasMatchingItem = false;
+          for (var item in items) {
+            final cat = item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า';
+            bool matchCat = _selectedCategories.isEmpty || _selectedCategories.contains(cat);
+            bool matchArea = _selectedAreaRanges.isEmpty;
+            bool matchType = _selectedProjectTypes.isEmpty; 
+            
+            if ((!matchArea || !matchType) && item['order_item_projects'] != null) {
+              for(var p in item['order_item_projects']) {
+                 if (!matchArea) {
+                   final areaStr = p['area_sqm']?.toString() ?? '0';
+                   final area = double.tryParse(areaStr) ?? 0;
+                   for (String range in _selectedAreaRanges) {
+                      if (range == 'น้อยกว่า 50 sq.m.' && area < 50) matchArea = true;
+                      else if (range == '50 - 200 sq.m.' && area >= 50 && area <= 200) matchArea = true;
+                      else if (range == '201 - 500 sq.m.' && area > 200 && area <= 500) matchArea = true;
+                      else if (range == 'มากกว่า 500 sq.m.' && area > 500) matchArea = true;
+                   }
+                 }
+                 if (!matchType) {
+                   final ptName = p['project_types']?['name'];
+                   if (ptName != null && _selectedProjectTypes.contains(ptName.toString())) matchType = true;
+                 }
+                 if(matchArea && matchType) break; 
+              }
+            }
+            if (matchCat && matchArea && matchType) { hasMatchingItem = true; break; }
+          }
+          passItems = hasMatchingItem;
+        }
+        return passSearch && passSale && passDate && passItems; 
+      }).toList();
+    });
+  }
+
+  void _showFilterSheet() {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.75, 
-              padding: const EdgeInsets.only(top: 16),
-              decoration: const BoxDecoration(
-                color: kCardDark,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              child: Column(
-                children: [
-                  Center(child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)))),
-                  const SizedBox(height: 16),
-                  const Text("ตัวกรองโครงการ", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                  const Divider(color: Colors.white12, height: 30),
-                  
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.info_outline_rounded, size: 14, color: Colors.grey),
-                              const SizedBox(width: 6),
-                              
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          _buildFilterSection(
-                            title: "ประเภทสินค้า (Product)",
-                            options: _availableCategories,
-                            selectedOptions: tempCategories,
-                            onSelect: (val) {
-                              setModalState(() {
-                                if (tempCategories.contains(val)) tempCategories.remove(val);
-                                else tempCategories.add(val);
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          _buildFilterSection(
-                            title: "ชื่อเซลล์ (Salesperson)",
-                            options: _availableSaleNames,
-                            selectedOptions: tempSaleNames,
-                            onSelect: (val) {
-                              setModalState(() {
-                                if (tempSaleNames.contains(val)) tempSaleNames.remove(val);
-                                else tempSaleNames.add(val);
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          _buildFilterSection(
-                            title: "ขนาดพื้นที่ (Area Sq.m.)",
-                            options: _areaRanges,
-                            selectedOptions: tempAreaRanges,
-                            onSelect: (val) {
-                              setModalState(() {
-                                if (tempAreaRanges.contains(val)) tempAreaRanges.remove(val);
-                                else tempAreaRanges.add(val);
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 40),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: const BoxDecoration(
-                      color: kDarkBg,
-                      border: Border(top: BorderSide(color: Colors.white12)),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          // ✨ เปลี่ยนเป็นปุ่มแบบมีไอคอนถังขยะ
-                          child: OutlinedButton.icon(
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              side: BorderSide(color: Colors.grey[700]!),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () {
-                              setModalState(() {
-                                tempCategories.clear();
-                                tempSaleNames.clear();
-                                tempAreaRanges.clear();
-                              });
-                            },
-                            icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70, size: 18),
-                            label: const Text("ล้างทั้งหมด", style: TextStyle(color: Colors.white70)),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              backgroundColor: kNeonPurple,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _selectedCategories = List.from(tempCategories);
-                                _selectedSaleNames = List.from(tempSaleNames);
-                                _selectedAreaRanges = List.from(tempAreaRanges);
-                              });
-                              Navigator.pop(context);
-                            },
-                            child: const Text("นำไปใช้", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-        );
-      },
+      builder: (context) => PoolFilterSheet(
+        initialSearchQuery: _searchQuery,
+        initialDateRange: _selectedDateRange,
+        availableCategories: _availableCategories,
+        selectedCategories: _selectedCategories,
+        availableSaleNames: _availableSaleNames,
+        selectedSaleNames: _selectedSaleNames,
+        areaRanges: _areaRanges,
+        selectedAreaRanges: _selectedAreaRanges,
+        dateRanges: _dateRanges,
+        availableProjectTypes: _availableProjectTypes,
+        selectedProjectTypes: _selectedProjectTypes,
+        onApply: (newFilters) {
+          setState(() {
+            _selectedCategories = newFilters['categories'];
+            _selectedSaleNames = newFilters['saleNames'];
+            _selectedAreaRanges = newFilters['areaRanges'];
+            _selectedProjectTypes = newFilters['projectTypes'];
+            _selectedDateRange = newFilters['dateRange'];
+            _searchQuery = newFilters['searchQuery'];
+            _applyFilters();
+          });
+        },
+      ),
     );
   }
 
-  Widget _buildFilterSection({required String title, required List<String> options, required List<String> selectedOptions, required Function(String) onSelect}) {
-    if (options.isEmpty) return const SizedBox(); 
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(color: kPremiumGold, fontSize: 14, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        Wrap(
-          spacing: 10, runSpacing: 10,
-          children: options.map((option) {
-            final isSelected = selectedOptions.contains(option);
-            return InkWell(
-              onTap: () => onSelect(option),
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: isSelected ? kNeonPurple.withOpacity(0.2) : Colors.transparent,
-                  border: Border.all(color: isSelected ? kNeonPurple : Colors.white24),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isSelected) ...[
-                      const Icon(Icons.check_circle_rounded, size: 14, color: kNeonPurple),
-                      const SizedBox(width: 4),
-                    ],
-                    Text(
-                      option,
-                      style: TextStyle(
-                        color: isSelected ? kNeonPurple : Colors.white70,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 13
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
+  Widget _buildScopeTab(String title, String scopeValue, IconData icon) {
+    bool isSelected = _selectedScope == scopeValue;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          if (_selectedScope != scopeValue) {
+            setState(() => _selectedScope = scopeValue);
+            _fetchProjects(isRefresh: true); 
+          }
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? kNeonPurple.withOpacity(0.15) : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? kNeonPurple : Colors.transparent, width: 1)
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 16, color: isSelected ? kNeonPurple : Colors.grey[500]),
+              const SizedBox(width: 6),
+              Text(title, style: TextStyle(color: isSelected ? kNeonPurple : Colors.grey[500], fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+            ],
+          ),
         ),
-      ],
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    bool hasActiveFilter = _selectedCategories.isNotEmpty || _selectedSaleNames.isNotEmpty || _selectedAreaRanges.isNotEmpty;
-
-    final displayProjects = _allSubProjects.where((item) {
-      final cat = item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า';
-      final sale = item['orders']?['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์';
-      final areaStr = item['specific_project_data']?['area_sqm']?.toString() ?? '0';
-      final area = double.tryParse(areaStr) ?? 0;
-
-      bool passCat = _selectedCategories.isEmpty || _selectedCategories.contains(cat);
-      bool passSale = _selectedSaleNames.isEmpty || _selectedSaleNames.contains(sale);
-      
-      bool passArea = _selectedAreaRanges.isEmpty;
-      if (!passArea) {
-        for (String range in _selectedAreaRanges) {
-          if (range == 'น้อยกว่า 50 sq.m.' && area < 50) passArea = true;
-          else if (range == '50 - 200 sq.m.' && area >= 50 && area <= 200) passArea = true;
-          else if (range == '201 - 500 sq.m.' && area > 200 && area <= 500) passArea = true;
-          else if (range == 'มากกว่า 500 sq.m.' && area > 500) passArea = true;
-        }
-      }
-
-      return passCat && passSale && passArea;
-    }).toList();
+    bool hasActiveFilter = _selectedCategories.isNotEmpty || _selectedSaleNames.isNotEmpty || _selectedAreaRanges.isNotEmpty || _selectedProjectTypes.isNotEmpty || _selectedDateRange.isNotEmpty || _searchQuery.isNotEmpty;
+    bool hasMoreData = _groupedOrders.length < _totalItems;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
@@ -346,21 +326,14 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
               slivers: [
                 SliverAppBar(
                   backgroundColor: kDarkBg.withOpacity(0.9),
-                  expandedHeight: 70,
-                  toolbarHeight: 70,
-                  pinned: true,
-                  elevation: 4,
-                  centerTitle: true,
-                  title: const Text(
-                    "Pool Projects",
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 20, letterSpacing: 1.2),
-                  ),
+                  expandedHeight: 70, toolbarHeight: 70, pinned: true, elevation: 4, centerTitle: true,
+                  title: const Text("Pool Orders", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
                   leading: IconButton(
                     icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
                     onPressed: () => Navigator.pop(context),
                   ),
                   actions: [
-                    Stack(
+                     Stack(
                       alignment: Alignment.center,
                       children: [
                         IconButton(
@@ -369,59 +342,92 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
                             color: hasActiveFilter ? kPremiumGold : Colors.white, 
                             size: 26,
                           ),
-                          tooltip: "ตัวกรอง",
+                          tooltip: "ค้นหา & ตัวกรอง",
                           onPressed: _showFilterSheet,
                         ),
                         if (hasActiveFilter)
-                          Positioned(
-                            top: 12, right: 12,
-                            child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)),
-                          )
+                          Positioned(top: 12, right: 12, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)))
                       ],
                     ),
-                    const SizedBox(width: 8),
+                    IconButton(
+                      icon: const Icon(Icons.refresh_rounded, color: Colors.white),
+                      onPressed: () {
+                         setState(() {
+                            _selectedCategories.clear();
+                            _selectedSaleNames.clear();
+                            _selectedAreaRanges.clear();
+                            _selectedProjectTypes.clear();
+                            _selectedDateRange = ''; 
+                            _searchQuery = '';
+                         });
+                         _fetchProjects(isRefresh: true);
+                      },
+                    ),
                   ],
                 ),
                 
-                if (hasActiveFilter && !_isLoading)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
+                      child: Row(
+                        children: [
+                          _buildScopeTab('ทั้งหมด', 'all', Icons.public_rounded),
+                          _buildScopeTab('ทีมของฉัน', 'team', Icons.groups_rounded),
+                          _buildScopeTab('ของฉัน', 'mine', Icons.person_rounded),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
+                if (!_isLoading)
                   SliverToBoxAdapter(
                     child: Padding(
-                      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 12, top: 10),
+                      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 12, top: 4),
                       child: Row(
                         children: [
                           const Icon(Icons.info_outline_rounded, color: kPremiumGold, size: 16),
                           const SizedBox(width: 6),
-                          Text("พบ ${displayProjects.length} รายการ จากตัวกรอง", style: const TextStyle(color: kPremiumGold, fontSize: 13, fontWeight: FontWeight.w500)),
-                          const Spacer(),
-                          InkWell(
-                            onTap: () {
-                              setState(() {
-                                _selectedCategories.clear();
-                                _selectedSaleNames.clear();
-                                _selectedAreaRanges.clear();
-                              });
-                            },
-                            // ✨ ใส่ไอคอนถังขยะตรงข้อความแจ้งเตือนด้วย
-                            child: Row(
-                              children: [
-                                const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 20),
-                                const SizedBox(width: 4),
-                                
-                              ],
-                            ),
-                          )
+                          Expanded(
+                            child: Text(
+                              hasActiveFilter ? "พบ ${_displayedOrders.length} รายการ (จากตัวกรอง)" : "กำลังแสดง ${_groupedOrders.length} จาก $_totalItems บิล",
+                              style: const TextStyle(color: kPremiumGold, fontSize: 13, fontWeight: FontWeight.w500)
+                            )
+                          ),
+                          if (hasActiveFilter)
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _selectedCategories.clear();
+                                  _selectedSaleNames.clear();
+                                  _selectedAreaRanges.clear();
+                                  _selectedProjectTypes.clear();
+                                  _selectedDateRange = ''; 
+                                  _searchQuery = '';
+                                  _applyFilters();
+                                });
+                              },
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.close_rounded, color: Colors.redAccent, size: 18),
+                                  SizedBox(width: 4),
+                                  Text("ล้าง", style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold))
+                                ],
+                              ),
+                            )
                         ],
                       ),
                     ),
-                  )
-                else
-                  const SliverToBoxAdapter(child: SizedBox(height: 10)),
+                  ),
 
                 if (_isLoading)
                   const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: kNeonPurple)))
                 else if (_errorMessage != null)
                   SliverFillRemaining(child: _buildErrorState())
-                else if (displayProjects.isEmpty)
+                else if (_displayedOrders.isEmpty)
                   SliverFillRemaining(
                     child: Center(
                       child: Column(
@@ -429,10 +435,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
                         children: [
                           Icon(Icons.search_off_rounded, size: 60, color: Colors.grey[700]),
                           const SizedBox(height: 16),
-                          Text(
-                            hasActiveFilter ? "ไม่พบโปรเจกต์ที่ตรงกับตัวกรอง" : "ยังไม่มีโปรเจกต์ในระบบ", 
-                            style: const TextStyle(color: Colors.white54, fontSize: 16)
-                          ),
+                          Text(hasActiveFilter ? "ไม่พบออเดอร์ที่ค้นหา" : "ยังไม่มีออเดอร์ในหมวดหมู่นี้", style: const TextStyle(color: Colors.white54, fontSize: 16)),
                         ],
                       )
                     )
@@ -443,148 +446,51 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
                     sliver: SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          return _buildProjectCard(context, displayProjects[index]);
+                          if (index == _displayedOrders.length) {
+                            if (!hasMoreData || hasActiveFilter) return const SizedBox(); 
+                            
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 20, bottom: 40),
+                              child: Center(
+                                child: _isLoadingMore 
+                                  ? const CircularProgressIndicator(color: kNeonPurple)
+                                  : OutlinedButton.icon(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: kNeonPurple, 
+                                        side: BorderSide(color: kNeonPurple.withOpacity(0.5)),
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
+                                      ),
+                                      onPressed: () {
+                                        setState(() => _currentPage++); 
+                                        _fetchProjects(isRefresh: false); 
+                                      },
+                                      icon: const Icon(Icons.download_rounded, size: 20),
+                                      label: Text("โหลดข้อมูลเพิ่ม (${_totalItems - _groupedOrders.length} บิลที่เหลือ)")
+                                    ),
+                              ),
+                            );
+                          }
+                          // ค้นหาบรรทัดนี้ในโค้ดเดิมของพี่:
+return PoolOrderCard(
+  groupedOrder: _displayedOrders[index],
+  onRefresh: () => _fetchProjects(isRefresh: true),
+  
+  // 🌟 เพิ่มบรรทัดด้านล่างนี้เข้าไปครับ:
+  onToggleImportant: (projectId, currentStatus) {
+    // ดึง orderId จากข้อมูลใน List มาส่งต่อ
+    final orderId = _displayedOrders[index]['order_data']['id'].toString();
+    _handleToggleImportant(projectId, currentStatus, orderId);
+  },
+);
                         },
-                        childCount: displayProjects.length,
+                        childCount: _displayedOrders.length + (hasMoreData && !hasActiveFilter ? 1 : 0),
                       ),
                     ),
                   ),
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProjectCard(BuildContext context, dynamic item) {
-    final orderData = item['orders'] ?? {};
-    final specificProject = item['specific_project_data'] ?? {}; 
-    
-    String projectName = item['display_project_name'] ?? 'ไม่มีชื่อโครงการ';
-    final companyName = orderData['companies']?['name'] ?? '';
-    final productName = item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า';
-    final saleName = orderData['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์'; 
-    final areaSqm = specificProject['area_sqm'] ?? 0;
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: kCardDark,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => PoolProjectDetailScreen(itemData: item)),
-            ).then((_) => _fetchProjects()); 
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Container(
-                  width: 48, height: 48,
-                  decoration: BoxDecoration(
-                    color: kNeonPurple.withOpacity(0.15), 
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: kNeonPurple.withOpacity(0.3))
-                  ),
-                  child: const Icon(Icons.apartment_rounded, color: kNeonPurple, size: 24), 
-                ),
-                const SizedBox(width: 16),
-                
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        "โครงการ $projectName",
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, height: 1.2),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: kPremiumGold.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              productName,
-                              style: const TextStyle(color: kPremiumGold, fontSize: 10, fontWeight: FontWeight.bold),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.aspect_ratio_rounded, color: Colors.white70, size: 12),
-                                const SizedBox(width: 4),
-                                Text(
-                                  "$areaSqm sq.m.", 
-                                  style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      Row(
-                        children: [
-                          const Icon(Icons.badge_rounded, size: 12, color: kPremiumGold),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              "เซลล์: $saleName", 
-                              style: const TextStyle(color: kPremiumGold, fontSize: 12, fontWeight: FontWeight.w500),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-
-                      Row(
-                        children: [
-                          Icon(Icons.business_center_rounded, size: 12, color: Colors.grey[500]),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              companyName.isNotEmpty && companyName != '-' ? companyName : 'ไม่ระบุชื่อบริษัท', 
-                              style: TextStyle(color: Colors.grey[400], fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(left: 8.0),
-                  child: Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 16),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
@@ -597,15 +503,11 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
         children: [
           const Icon(Icons.cloud_off_rounded, color: Colors.redAccent, size: 60),
           const SizedBox(height: 16),
-          Text(_errorMessage!, style: const TextStyle(color: Colors.white70, fontSize: 16), textAlign: TextAlign.center),
+          Text(_errorMessage ?? "เกิดข้อผิดพลาด", style: const TextStyle(color: Colors.white70, fontSize: 16), textAlign: TextAlign.center),
           const SizedBox(height: 20),
           ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: kNeonPurple,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-            ),
-            onPressed: _fetchProjects, 
+            style: ElevatedButton.styleFrom(backgroundColor: kNeonPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            onPressed: () => _fetchProjects(isRefresh: true), 
             icon: const Icon(Icons.refresh_rounded, size: 20),
             label: const Text("ลองใหม่")
           )

@@ -272,7 +272,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           ElevatedButton.icon(
             onPressed: _onRefresh, 
             icon: const Icon(Icons.refresh_rounded, size: 20),
-            label: const Text('ลองใหมีกครั้ง', style: TextStyle(fontWeight: FontWeight.bold)),
+            label: const Text('ลองใหม่อีกครั้ง', style: TextStyle(fontWeight: FontWeight.bold)),
             style: ElevatedButton.styleFrom(
               backgroundColor: kPremiumGold,
               foregroundColor: Colors.black,
@@ -408,7 +408,7 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 👤 ข้อมูลลูกค้า
+              // 👤 ข้อมูลลูกค้า (✅ แก้กลับให้ถูกต้องแล้ว)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -481,7 +481,8 @@ class _OrderHistoryScreenState extends State<OrderHistoryScreen> {
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
-                                            proj['projects']?['project_name'] ?? 'ไม่ระบุโครงการย่อย',
+                                            // ✅ ใส่โค้ดโปรเจกต์ตรงนี้ถึงจะถูกที่ครับ!
+                                            "${proj['project_name'] ?? 'ไม่ระบุโครงการย่อย'} (${proj['area_sqm'] ?? 0} ตร.ม.)",
                                             style: TextStyle(color: Colors.grey[400], fontSize: 12),
                                           ),
                                         ),
