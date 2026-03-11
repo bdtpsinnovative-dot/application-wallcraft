@@ -8,6 +8,7 @@ const Color kNeonPurple = Color(0xFFB52BFF);
 class PoolFilterSheet extends StatefulWidget {
   final String initialSearchQuery;
   final String initialDateRange;
+  final bool initialIsImportant; // 🌟 เพิ่ม Parameter ตัวนี้
   final List<String> availableCategories;
   final List<String> selectedCategories;
   final List<String> availableSaleNames;
@@ -23,6 +24,7 @@ class PoolFilterSheet extends StatefulWidget {
     super.key,
     required this.initialSearchQuery,
     required this.initialDateRange,
+    required this.initialIsImportant, // 🌟 รับค่าเริ่มต้น
     required this.availableCategories,
     required this.selectedCategories,
     required this.availableSaleNames,
@@ -42,6 +44,7 @@ class PoolFilterSheet extends StatefulWidget {
 class _PoolFilterSheetState extends State<PoolFilterSheet> {
   late TextEditingController searchCtrl;
   late String tempDateRange;
+  late bool tempIsImportant; // 🌟 เก็บสถานะสวิตช์
   late List<String> tempCategories;
   late List<String> tempSaleNames;
   late List<String> tempAreaRanges;
@@ -52,6 +55,7 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
     super.initState();
     searchCtrl = TextEditingController(text: widget.initialSearchQuery);
     tempDateRange = widget.initialDateRange;
+    tempIsImportant = widget.initialIsImportant; // 🌟 กำหนดค่าเริ่มต้น
     tempCategories = List.from(widget.selectedCategories);
     tempSaleNames = List.from(widget.selectedSaleNames);
     tempAreaRanges = List.from(widget.selectedAreaRanges);
@@ -105,6 +109,50 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: kNeonPurple)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // 🌟 ส่วนที่เพิ่มเข้ามา: สวิตช์เปิด/ปิด ดูเฉพาะตัวที่ติดดาว
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: tempIsImportant ? kPremiumGold.withOpacity(0.1) : Colors.white.withOpacity(0.03),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: tempIsImportant ? kPremiumGold.withOpacity(0.5) : Colors.transparent),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              tempIsImportant ? Icons.star_rounded : Icons.star_border_rounded,
+                              color: tempIsImportant ? kPremiumGold : Colors.white54,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              "แสดงเฉพาะรายการสำคัญ",
+                              style: TextStyle(
+                                color: tempIsImportant ? kPremiumGold : Colors.white,
+                                fontWeight: tempIsImportant ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 15,
+                              ),
+                            ),
+                          ],
+                        ),
+                        Switch(
+                          value: tempIsImportant,
+                          activeColor: kPremiumGold,
+                          inactiveTrackColor: Colors.black26,
+                          onChanged: (val) {
+                            setState(() {
+                              tempIsImportant = val;
+                            });
+                          },
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -202,6 +250,7 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
                         tempProjectTypes.clear(); 
                         tempDateRange = ''; 
                         searchCtrl.clear();
+                        tempIsImportant = false; // 🌟 เคลียร์ค่าดาวด้วย
                       });
                     },
                     icon: const Icon(Icons.delete_outline_rounded, color: Colors.white70, size: 18),
@@ -225,6 +274,7 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
                         'projectTypes': tempProjectTypes,
                         'dateRange': tempDateRange,
                         'searchQuery': searchCtrl.text.trim(),
+                        'isImportant': tempIsImportant, // 🌟 ส่งค่ากลับไปหน้าหลัก
                       });
                       Navigator.pop(context);
                     },

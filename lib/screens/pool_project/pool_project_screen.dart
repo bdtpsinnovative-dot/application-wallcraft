@@ -46,6 +46,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
 
   String _searchQuery = '';
   String _selectedDateRange = ''; 
+  bool _selectedIsImportant = false; // 🌟 เพิ่มสถานะกรองดาว
   
   final List<String> _dateRanges = ['7 วันล่าสุด', '14 วันล่าสุด', '30 วันล่าสุด'];
   final List<String> _areaRanges = ['น้อยกว่า 50 sq.m.', '50 - 200 sq.m.', '201 - 500 sq.m.', 'มากกว่า 500 sq.m.'];
@@ -55,11 +56,10 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
     super.initState();
     _fetchProjects(isRefresh: true);
   }
-  // 🌟 เพิ่มฟังก์ชันนี้เข้าไปใน _PoolProjectScreenState
- // 🌟 แก้ฟังก์ชันนี้ใหม่ทั้งหมด ป้องกันแอปเด้ง
+
+  // 🌟 ฟังก์ชันจัดการกดดาว
   Future<void> _handleToggleImportant(String projectId, bool currentStatus, String orderId) async {
     try {
-      // 1. แปลงข้อมูลให้เป็น JSON Text ชัวร์ๆ ป้องกัน API Error
       final String bodyData = jsonEncode({
         'order_id': orderId,
         'order_item_project_id': projectId,
@@ -67,12 +67,10 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
       });
 
       final url = Uri.parse('${AppConfig.baseUrl}/poolprojects'); 
-      
-      // ส่งข้อมูลด้วย body ที่เป็น jsonString
       final response = await ApiService.patch(url, body: bodyData);
 
       if (response.statusCode == 200) {
-        // 2. 🌟 สำคัญมาก: ต้องใช้ isRefresh: true ไม่งั้นข้อมูลจะเบิ้ลจนแอปค้าง!
+        // ต้องเป็น true เพื่อให้ UI และ List ดึงสถานะใหม่มาแสดง
         _fetchProjects(isRefresh: true); 
         
         if (!currentStatus) {
@@ -88,9 +86,9 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
         throw Exception('อัปเดตสถานะไม่สำเร็จ (Status: ${response.statusCode})');
       }
     } catch (e) {
-      print('Toggle Error: $e'); // ปริ้นลง Console ไว้ดูเผื่อผิดพลาด
+      print('Toggle Error: $e'); 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('แก้ของคนอื่นไม่ได้')),
+        const SnackBar(content: Text('ไม่สามารถอัปเดตสถานะได้')),
       );
     }
   }
@@ -113,7 +111,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
 
         Map<String, Map<String, dynamic>> ordersMap = isRefresh 
             ? {} 
-            : Map.fromEntries(_groupedOrders.map((e) => MapEntry(e['order_data']['id'], e)));
+            : Map.fromEntries(_groupedOrders.map((e) => MapEntry(e['order_data']['id'].toString(), e)));
         
         Set<String> tempCategories = isRefresh ? {} : Set.from(_availableCategories); 
         Set<String> tempSaleNames = isRefresh ? {} : Set.from(_availableSaleNames);
@@ -123,7 +121,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
           final orderInfo = item['orders'];
           if (orderInfo == null) continue;
 
-          String orderId = orderInfo['id'];
+          String orderId = orderInfo['id'].toString();
           tempCategories.add(item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า');
           tempSaleNames.add(orderInfo['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์');
 
@@ -170,7 +168,10 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
   }
 
   void _applyFilters() {
-    if (_searchQuery.isEmpty && _selectedCategories.isEmpty && _selectedSaleNames.isEmpty && _selectedAreaRanges.isEmpty && _selectedProjectTypes.isEmpty && _selectedDateRange.isEmpty) { 
+    // 🌟 เช็คว่ามีการกรองดาวด้วยไหม
+    if (_searchQuery.isEmpty && _selectedCategories.isEmpty && _selectedSaleNames.isEmpty && 
+        _selectedAreaRanges.isEmpty && _selectedProjectTypes.isEmpty && _selectedDateRange.isEmpty && 
+        !_selectedIsImportant) { 
       setState(() => _displayedOrders = List.from(_groupedOrders));
       return;
     }
@@ -235,7 +236,17 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
           }
           passItems = hasMatchingItem;
         }
-        return passSearch && passSale && passDate && passItems; 
+
+        // 🌟 ตรวจสอบว่าต้องเป็นรายการติดดาวหรือไม่
+        bool passImportant = true;
+        if (_selectedIsImportant) {
+          passImportant = items.any((item) => 
+            (item['order_item_projects'] ?? []).any((p) => p['is_important'] == true)
+          );
+        }
+
+        // 🌟 เพิ่ม passImportant เข้าไปเช็คเงื่อนไข
+        return passSearch && passSale && passDate && passItems && passImportant; 
       }).toList();
     });
   }
@@ -248,6 +259,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
       builder: (context) => PoolFilterSheet(
         initialSearchQuery: _searchQuery,
         initialDateRange: _selectedDateRange,
+        initialIsImportant: _selectedIsImportant, // 🌟 ส่งค่าดาวให้ Sheet
         availableCategories: _availableCategories,
         selectedCategories: _selectedCategories,
         availableSaleNames: _availableSaleNames,
@@ -265,6 +277,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
             _selectedProjectTypes = newFilters['projectTypes'];
             _selectedDateRange = newFilters['dateRange'];
             _searchQuery = newFilters['searchQuery'];
+            _selectedIsImportant = newFilters['isImportant'] ?? false; // 🌟 รับค่าดาวกลับมา
             _applyFilters();
           });
         },
@@ -304,7 +317,8 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
 
   @override
   Widget build(BuildContext context) {
-    bool hasActiveFilter = _selectedCategories.isNotEmpty || _selectedSaleNames.isNotEmpty || _selectedAreaRanges.isNotEmpty || _selectedProjectTypes.isNotEmpty || _selectedDateRange.isNotEmpty || _searchQuery.isNotEmpty;
+    // 🌟 อัปเดต hasActiveFilter ให้รับรู้การกรองดาว
+    bool hasActiveFilter = _selectedCategories.isNotEmpty || _selectedSaleNames.isNotEmpty || _selectedAreaRanges.isNotEmpty || _selectedProjectTypes.isNotEmpty || _selectedDateRange.isNotEmpty || _searchQuery.isNotEmpty || _selectedIsImportant;
     bool hasMoreData = _groupedOrders.length < _totalItems;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
@@ -359,6 +373,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
                             _selectedProjectTypes.clear();
                             _selectedDateRange = ''; 
                             _searchQuery = '';
+                            _selectedIsImportant = false; // 🌟 เคลียร์ค่าดาวตอน Refresh
                          });
                          _fetchProjects(isRefresh: true);
                       },
@@ -407,6 +422,7 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
                                   _selectedProjectTypes.clear();
                                   _selectedDateRange = ''; 
                                   _searchQuery = '';
+                                  _selectedIsImportant = false; // 🌟 เคลียร์ค่าดาวด้วย
                                   _applyFilters();
                                 });
                               },
@@ -471,18 +487,17 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
                               ),
                             );
                           }
-                          // ค้นหาบรรทัดนี้ในโค้ดเดิมของพี่:
-return PoolOrderCard(
-  groupedOrder: _displayedOrders[index],
-  onRefresh: () => _fetchProjects(isRefresh: true),
-  
-  // 🌟 เพิ่มบรรทัดด้านล่างนี้เข้าไปครับ:
-  onToggleImportant: (projectId, currentStatus) {
-    // ดึง orderId จากข้อมูลใน List มาส่งต่อ
-    final orderId = _displayedOrders[index]['order_data']['id'].toString();
-    _handleToggleImportant(projectId, currentStatus, orderId);
-  },
-);
+                          
+                          // 🌟 คลีนโค้ดตรงนี้ให้เรียบร้อยแล้ว
+                          return PoolOrderCard(
+                            groupedOrder: _displayedOrders[index],
+                            onRefresh: () => _fetchProjects(isRefresh: true),
+                            onToggleImportant: (projectId, currentStatus) {
+                              final orderId = _displayedOrders[index]['order_data']['id'].toString();
+                              _handleToggleImportant(projectId, currentStatus, orderId);
+                            },
+                          );
+                          
                         },
                         childCount: _displayedOrders.length + (hasMoreData && !hasActiveFilter ? 1 : 0),
                       ),

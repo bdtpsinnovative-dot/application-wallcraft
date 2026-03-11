@@ -30,7 +30,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
   
   final Set<String> _expandedProjectIds = {};
   List<Map<String, dynamic>> _dynamicCategories = [];
-  List<Map<String, dynamic>> _projectTypes = []; // 🌟 เพิ่มบรรทัดนี้
+  List<Map<String, dynamic>> _projectTypes = []; 
 
   @override
   void initState() {
@@ -39,7 +39,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
     items = widget.groupedOrderData['order_items'] ?? [];
     
     _fetchCategories();
-    _fetchProjectTypes(); // 🌟 เรียกใช้ตรงนี้
+    _fetchProjectTypes(); 
   }
 
   Future<void> _fetchCategories() async {
@@ -66,11 +66,9 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
 
   Future<void> _fetchProjectTypes() async {
     try {
-      // 🌟 แก้จาก '${AppConfig.baseUrl}/v1/project-types' 
-      // 🌟 เป็นแบบข้างล่างนี้ครับ
       final url = Uri.parse('${AppConfig.baseUrl}/project-types'); 
       
-      debugPrint("Fetching from: $url"); // รอบนี้ url จะสวยงาม ไม่ซ้อนแล้ว
+      debugPrint("Fetching from: $url");
       
       final response = await ApiService.get(url);
       if (response.statusCode == 200) {
@@ -99,7 +97,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
     }
   }
 
-  // 🌟 ฟังก์ชันเปิดดูรูปภาพแบบเต็มจอ (ซูมได้)
   void _showFullScreenImage(String imageUrl) {
     showDialog(
       context: context,
@@ -148,7 +145,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
           "project_name": updatedData['project_name'],
           "area_sqm": updatedData['area_sqm'],
           "product_category_id": updatedData['product_category_id'],
-          "project_type_id": updatedData['project_type_id'], // 🌟 ส่งค่า project_type_id ไปบันทึก
+          "project_type_id": updatedData['project_type_id'], 
           "account_developer": updatedData['account_developer'],
           "contact_developer": updatedData['contact_developer'],
           "account_architecture": updatedData['account_architecture'],
@@ -169,7 +166,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                 if (p['id'] == projectId) {
                   p['project_name'] = updatedData['project_name'];
                   p['area_sqm'] = updatedData['area_sqm']; 
-                  p['project_type_id'] = updatedData['project_type_id']; // 🌟 อัปเดตค่า local
+                  p['project_type_id'] = updatedData['project_type_id']; 
                   p['account_developer'] = updatedData['account_developer'];
                   p['contact_developer'] = updatedData['contact_developer'];
                   p['account_architecture'] = updatedData['account_architecture'];
@@ -205,7 +202,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
 
   Future<void> _saveOrderInfo(String newCustomerName, String newPhone) async {
     try {
@@ -255,8 +251,20 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
       dateStr = "${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year + 543}";
     }
 
+    // 🌟 ดึงข้อมูล Note
+    String orderNote = '-';
+    List<String> allNotes = [];
+    for (var item in items) {
+      if (item['note'] != null && item['note'].toString().trim().isNotEmpty) {
+        allNotes.add(item['note'].toString().trim());
+      }
+    }
+    if (allNotes.isNotEmpty) {
+      orderNote = allNotes.toSet().join('\n\n'); // 🌟 เปลี่ยนการเชื่อมให้เว้นบรรทัด 1 ครั้งให้ดูสวยขึ้น
+    }
+
     List<Widget> projectCards = [];
-    List<String> allImages = []; // 🌟 ตัวแปรเก็บรูปภาพทั้งหมด
+    List<String> allImages = [];
 
     for (var item in items) {
       final categoryName = item['product_categories']?['name'] ?? 'ไม่ระบุหมวดหมู่';
@@ -266,7 +274,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
         projectCards.add(_buildProjectCard(p, categoryName));
       }
 
-      // 🌟 ดึงข้อมูลรูปภาพจากคอลัมน์ images (รองรับทั้ง List และ Stringified JSON)
       if (item['images'] != null) {
         if (item['images'] is List) {
           allImages.addAll((item['images'] as List).map((e) => e.toString()).toList());
@@ -352,7 +359,10 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                       _buildInfoRow("Sale Name", saleName),
                       _buildInfoRow("Date", dateStr),
 
-                      if (lat != null && lng != null) ...[
+                      // 🌟 เปลี่ยนมาใช้ฟังก์ชันที่สร้างขึ้นมาใหม่สำหรับ Note โดยเฉพาะ
+                      _buildNoteBox("Note", orderNote), 
+
+                      if (lat != null && lng != null) ...[ 
                         const SizedBox(height: 16), const Divider(color: Colors.white12), const SizedBox(height: 16),
                         Row(children: const [Icon(Icons.security_rounded, color: kNeonPurple, size: 16), SizedBox(width: 6), Text("ความปลอดภัย (Audit Log)", style: TextStyle(color: kNeonPurple, fontWeight: FontWeight.bold, fontSize: 13))]),
                         const SizedBox(height: 16),
@@ -389,7 +399,6 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                 else
                   ...projectCards,
 
-                // 🌟 ส่วนแสดงรูปภาพ (เพิ่มใหม่ด้านล่างสุด)
                 if (allImages.isNotEmpty) ...[
                   const SizedBox(height: 30),
                   Row(
@@ -403,13 +412,13 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                   ),
                   const SizedBox(height: 16),
                   SizedBox(
-                    height: 120, // ความสูงของกรอบรูปภาพแนวนอน
+                    height: 120, 
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
                       itemCount: allImages.length,
                       itemBuilder: (context, index) {
                         return GestureDetector(
-                          onTap: () => _showFullScreenImage(allImages[index]), // 🌟 แตะเพื่อดูรูปเต็มจอ
+                          onTap: () => _showFullScreenImage(allImages[index]), 
                           child: Container(
                             margin: const EdgeInsets.only(right: 12),
                             width: 120,
@@ -447,6 +456,44 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
         children: [
           SizedBox(width: 100, child: Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 13))),
           Expanded(child: Text(value, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w500))),
+        ],
+      ),
+    );
+  }
+
+  // 🌟 ฟังก์ชันจัดการ Note ฉบับปรับปรุง ให้กล่องข้อความกางเต็มจอ ไม่เหลือที่ว่างฝั่งซ้าย
+  Widget _buildNoteBox(String title, String note) {
+    if (note == '-' || note.trim().isEmpty) {
+      return _buildInfoRow(title, "-");
+    }
+    
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column( // 🌟 เปลี่ยนจาก Row เป็น Column เพื่อให้อยู่บน-ล่าง
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. หัวข้อ (คำว่า Note)
+          Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+          const SizedBox(height: 8), // เว้นระยะห่างนิดนึง
+          
+          // 2. กล่องข้อความ (กางเต็มความกว้าง)
+          Container(
+            width: double.infinity, // 🌟 บังคับให้กล่องกว้างเต็มพื้นที่
+            padding: const EdgeInsets.all(16), 
+            decoration: BoxDecoration(
+              color: kNeonPurple.withOpacity(0.08), 
+              borderRadius: BorderRadius.circular(12), 
+              border: Border.all(color: kNeonPurple.withOpacity(0.3)), 
+            ),
+            child: Text(
+              note,
+              style: const TextStyle(
+                color: Colors.white, 
+                fontSize: 14, 
+                height: 1.6, 
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -500,7 +547,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                               builder: (context) => EditProjectDialog(
                                 projectData: pData, 
                                 categories: _dynamicCategories, 
-                                projectTypes: _projectTypes, // 🌟 ส่ง _projectTypes ลงไปที่ Dialog 
+                                projectTypes: _projectTypes, 
                                 onSave: (updatedData) => _saveData(pId, updatedData)
                               )
                             );
@@ -538,7 +585,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                     builder: (context) => EditProjectDialog(
                       projectData: pData, 
                       categories: _dynamicCategories, 
-                      projectTypes: _projectTypes, // 🌟 ส่ง _projectTypes ลงไปที่ Dialog
+                      projectTypes: _projectTypes, 
                       onSave: (updatedData) => _saveData(pId, updatedData)
                     )
                   );
