@@ -1,509 +1,357 @@
+// lib/screens/orders/purchase_order_screen.dart
 import 'dart:convert';
-import 'dart:async';
-import 'dart:io';
 import 'dart:ui';
+import 'dart:io'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dropdown_search/dropdown_search.dart'; 
+import 'package:geolocator/geolocator.dart'; 
+import 'package:device_info_plus/device_info_plus.dart'; 
+import 'dart:async'; 
 import '../../constants.dart';
 import '../../services/api_service.dart';
+import 'order_history_screen.dart';
 
-import 'components/pool_order_card.dart'; 
-import 'components/pool_filter_sheet.dart'; 
+import 'components/product_item_card.dart';
+import 'components/add_project_dialog.dart'; 
+import 'components/customer_info_card.dart'; 
+import 'components/project_select_card.dart'; 
 
-const Color kDarkBg = Color(0xFF0F0F11);
-const Color kGlowPurple = Color(0xFF4A3080);
-const Color kCardDark = Color(0xFF1C1C1E);
-const Color kPremiumGold = Color(0xFFFFC107); 
-const Color kNeonPurple = Color(0xFFB52BFF);
+const Color kDarkBg = Color(0xFF000000); 
+const Color kGlowPurple = Color(0xFF111111); 
+const Color kCardDark = Color(0xFF1C1C1E); 
+const Color kPrimaryColor = Color(0xFFFFFFFF); 
+const Color kLimeGreen = Color(0xFFD2E862); 
 
-class PoolProjectScreen extends StatefulWidget {
-  const PoolProjectScreen({super.key});
+class PurchaseOrderScreen extends StatefulWidget {
+  const PurchaseOrderScreen({super.key});
 
   @override
-  State<PoolProjectScreen> createState() => _PoolProjectScreenState();
+  State<PurchaseOrderScreen> createState() => _PurchaseOrderScreenState();
 }
 
-class _PoolProjectScreenState extends State<PoolProjectScreen> {
-  List<Map<String, dynamic>> _groupedOrders = [];
-  List<Map<String, dynamic>> _displayedOrders = [];
+class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerProviderStateMixin {
+  final _formKey = GlobalKey<FormState>();
+  final _companyDropdownKey = GlobalKey<DropdownSearchState<dynamic>>();
+  bool _startAnimation = false;
+
+  String? _selectedCustomerType;
+  // 🌟 เก็บเป็น Map เพื่อจำชื่อบริษัท
+  Map<String, dynamic>? _selectedCompany; 
+  bool _isTypeManuallySelected = false; 
   
+  final _nameCtrl = TextEditingController();
+  final _contactCtrl = TextEditingController(); 
+  
+  List<dynamic> _selectedProjects = []; 
+  List<ProductItem> _orderItems = [ProductItem()];
+  
+  List<dynamic> _customerTypes = [];
+  List<dynamic> _productCategories = [];
+  List<dynamic> _projects = [];
   bool _isLoading = true;
-  bool _isLoadingMore = false; 
-  String? _errorMessage;
-
-  int _currentPage = 1;
-  final int _limit = 50;
-  int _totalItems = 0; 
-  String _selectedScope = 'all'; 
-
-  List<String> _selectedCategories = [];
-  List<String> _availableCategories = [];
-  List<String> _selectedSaleNames = [];
-  List<String> _availableSaleNames = [];
-  List<String> _selectedAreaRanges = [];
-  List<String> _selectedProjectTypes = [];
-  List<String> _availableProjectTypes = [];
-
-  String _searchQuery = '';
-  String _selectedDateRange = ''; 
-  bool _selectedIsImportant = false; // 🌟 เพิ่มสถานะกรองดาว
-  
-  final List<String> _dateRanges = ['7 วันล่าสุด', '14 วันล่าสุด', '30 วันล่าสุด'];
-  final List<String> _areaRanges = ['น้อยกว่า 50 sq.m.', '50 - 200 sq.m.', '201 - 500 sq.m.', 'มากกว่า 500 sq.m.'];
 
   @override
   void initState() {
     super.initState();
-    _fetchProjects(isRefresh: true);
-  }
-
-  // 🌟 ฟังก์ชันจัดการกดดาว
-  Future<void> _handleToggleImportant(String projectId, bool currentStatus, String orderId) async {
-    try {
-      final String bodyData = jsonEncode({
-        'order_id': orderId,
-        'order_item_project_id': projectId,
-        'is_important': !currentStatus,
-      });
-
-      final url = Uri.parse('${AppConfig.baseUrl}/poolprojects'); 
-      final response = await ApiService.patch(url, body: bodyData);
-
-      if (response.statusCode == 200) {
-        // ต้องเป็น true เพื่อให้ UI และ List ดึงสถานะใหม่มาแสดง
-        _fetchProjects(isRefresh: true); 
-        
-        if (!currentStatus) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('ติดดาวโครงการนี้แล้ว ✨'),
-              backgroundColor: kPremiumGold,
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
-      } else {
-        throw Exception('อัปเดตสถานะไม่สำเร็จ (Status: ${response.statusCode})');
-      }
-    } catch (e) {
-      print('Toggle Error: $e'); 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ไม่สามารถอัปเดตสถานะได้')),
-      );
-    }
-  }
-
-  Future<void> _fetchProjects({bool isRefresh = false}) async {
-    if (isRefresh) {
-      setState(() { _isLoading = true; _currentPage = 1; _errorMessage = null; });
-    } else {
-      setState(() => _isLoadingMore = true);
-    }
-
-    try {
-      final url = Uri.parse('${AppConfig.baseUrl}/poolprojects?page=$_currentPage&limit=$_limit&scope=$_selectedScope');
-      final response = await ApiService.get(url).timeout(const Duration(seconds: 15));
-
-      if (response.statusCode == 200) {
-        final result = jsonDecode(response.body);
-        final List<dynamic> rawData = result['data'] ?? [];
-        final int totalCount = result['total'] ?? 0; 
-
-        Map<String, Map<String, dynamic>> ordersMap = isRefresh 
-            ? {} 
-            : Map.fromEntries(_groupedOrders.map((e) => MapEntry(e['order_data']['id'].toString(), e)));
-        
-        Set<String> tempCategories = isRefresh ? {} : Set.from(_availableCategories); 
-        Set<String> tempSaleNames = isRefresh ? {} : Set.from(_availableSaleNames);
-        Set<String> tempProjectTypes = isRefresh ? {} : Set.from(_availableProjectTypes);
-
-        for (var item in rawData) {
-          final orderInfo = item['orders'];
-          if (orderInfo == null) continue;
-
-          String orderId = orderInfo['id'].toString();
-          tempCategories.add(item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า');
-          tempSaleNames.add(orderInfo['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์');
-
-          if (item['order_item_projects'] != null) {
-            for (var p in item['order_item_projects']) {
-              final ptName = p['project_types']?['name'];
-              if (ptName != null && ptName.toString().trim().isNotEmpty) {
-                tempProjectTypes.add(ptName.toString());
-              }
-            }
-          }
-
-          if (!ordersMap.containsKey(orderId)) {
-            ordersMap[orderId] = { 'order_data': orderInfo, 'order_items': <dynamic>[] };
-          }
-          ordersMap[orderId]!['order_items'].add(item);
-        }
-
-        setState(() {
-          _totalItems = totalCount;
-          _groupedOrders = ordersMap.values.toList();
-          _availableCategories = tempCategories.toList();
-          _availableSaleNames = tempSaleNames.toList();
-          _availableProjectTypes = tempProjectTypes.toList();
-          
-          _selectedCategories.removeWhere((item) => !_availableCategories.contains(item));
-          _selectedSaleNames.removeWhere((item) => !_availableSaleNames.contains(item));
-          _selectedProjectTypes.removeWhere((item) => !_availableProjectTypes.contains(item));
-          
-          _applyFilters(); 
-          _isLoading = false;
-          _isLoadingMore = false;
-        });
-      } else {
-        throw Exception('Failed to load projects');
-      }
-    } on SocketException {
-      setState(() { _errorMessage = "ไม่มีการเชื่อมต่ออินเทอร์เน็ต"; _isLoading = false; _isLoadingMore = false; });
-    } on TimeoutException {
-      setState(() { _errorMessage = "เซิร์ฟเวอร์ตอบสนองช้าเกินไป"; _isLoading = false; _isLoadingMore = false; });
-    } catch (e) {
-      setState(() { _errorMessage = "เกิดข้อผิดพลาดในการโหลดข้อมูล"; _isLoading = false; _isLoadingMore = false; });
-    }
-  }
-
-  void _applyFilters() {
-    // 🌟 เช็คว่ามีการกรองดาวด้วยไหม
-    if (_searchQuery.isEmpty && _selectedCategories.isEmpty && _selectedSaleNames.isEmpty && 
-        _selectedAreaRanges.isEmpty && _selectedProjectTypes.isEmpty && _selectedDateRange.isEmpty && 
-        !_selectedIsImportant) { 
-      setState(() => _displayedOrders = List.from(_groupedOrders));
-      return;
-    }
-
-    setState(() {
-      _displayedOrders = _groupedOrders.where((orderGroup) {
-        final orderData = orderGroup['order_data'];
-        final List<dynamic> items = orderGroup['order_items'];
-
-        bool passSearch = true;
-        if (_searchQuery.isNotEmpty) {
-          final query = _searchQuery.toLowerCase();
-          passSearch = (orderData['customer_name'] ?? '').toString().toLowerCase().contains(query) || 
-                       (orderData['companies']?['name'] ?? '').toString().toLowerCase().contains(query) ||
-                       items.any((item) => (item['order_item_projects'] ?? []).any((p) => (p['project_name'] ?? '').toString().toLowerCase().contains(query)));
-        }
-
-        bool passSale = _selectedSaleNames.isEmpty || _selectedSaleNames.contains(orderData['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์');
-
-        bool passDate = true;
-        if (_selectedDateRange.isNotEmpty && orderData['created_at'] != null) {
-          try {
-            final orderDate = DateTime.parse(orderData['created_at']).toLocal();
-            final now = DateTime.now();
-            final differenceInDays = now.difference(orderDate).inDays;
-
-            if (_selectedDateRange == '7 วันล่าสุด' && differenceInDays > 7) passDate = false;
-            else if (_selectedDateRange == '14 วันล่าสุด' && differenceInDays > 14) passDate = false;
-            else if (_selectedDateRange == '30 วันล่าสุด' && differenceInDays > 30) passDate = false;
-          } catch (e) { passDate = false; }
-        }
-
-        bool passItems = true;
-        if (_selectedCategories.isNotEmpty || _selectedAreaRanges.isNotEmpty || _selectedProjectTypes.isNotEmpty) {
-          bool hasMatchingItem = false;
-          for (var item in items) {
-            final cat = item['product_categories']?['name'] ?? 'ไม่ระบุสินค้า';
-            bool matchCat = _selectedCategories.isEmpty || _selectedCategories.contains(cat);
-            bool matchArea = _selectedAreaRanges.isEmpty;
-            bool matchType = _selectedProjectTypes.isEmpty; 
-            
-            if ((!matchArea || !matchType) && item['order_item_projects'] != null) {
-              for(var p in item['order_item_projects']) {
-                 if (!matchArea) {
-                   final areaStr = p['area_sqm']?.toString() ?? '0';
-                   final area = double.tryParse(areaStr) ?? 0;
-                   for (String range in _selectedAreaRanges) {
-                      if (range == 'น้อยกว่า 50 sq.m.' && area < 50) matchArea = true;
-                      else if (range == '50 - 200 sq.m.' && area >= 50 && area <= 200) matchArea = true;
-                      else if (range == '201 - 500 sq.m.' && area > 200 && area <= 500) matchArea = true;
-                      else if (range == 'มากกว่า 500 sq.m.' && area > 500) matchArea = true;
-                   }
-                 }
-                 if (!matchType) {
-                   final ptName = p['project_types']?['name'];
-                   if (ptName != null && _selectedProjectTypes.contains(ptName.toString())) matchType = true;
-                 }
-                 if(matchArea && matchType) break; 
-              }
-            }
-            if (matchCat && matchArea && matchType) { hasMatchingItem = true; break; }
-          }
-          passItems = hasMatchingItem;
-        }
-
-        // 🌟 ตรวจสอบว่าต้องเป็นรายการติดดาวหรือไม่
-        bool passImportant = true;
-        if (_selectedIsImportant) {
-          passImportant = items.any((item) => 
-            (item['order_item_projects'] ?? []).any((p) => p['is_important'] == true)
-          );
-        }
-
-        // 🌟 เพิ่ม passImportant เข้าไปเช็คเงื่อนไข
-        return passSearch && passSale && passDate && passItems && passImportant; 
-      }).toList();
+    _fetchDropdownData();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _startAnimation = true);
     });
   }
 
-  void _showFilterSheet() {
-    showModalBottomSheet(
+  Future<void> _fetchDropdownData() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/orders');
+    try {
+      final response = await ApiService.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        setState(() {
+          _customerTypes = data['customer_types'] ?? [];
+          _productCategories = data['product_categories'] ?? [];
+          _projects = data['projects'] ?? [];
+          _isLoading = false;
+        });
+      }
+    } catch (e) { setState(() => _isLoading = false); }
+  }
+
+  Future<List<dynamic>> _getCompanies(String filter) async {
+    String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
+    if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
+       urlStr += '&type_id=$_selectedCustomerType';
+    }
+    final url = Uri.parse(urlStr);
+    try {
+      final response = await ApiService.get(url);
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body); 
+      }
+    } catch (e) { debugPrint('Error: $e'); }
+    return []; 
+  }
+
+  Future<bool> _createNewProject(String projectName) async {
+    final url = Uri.parse('${AppConfig.baseUrl}/projects');
+    try {
+      final response = await ApiService.post(
+        url,
+        body: jsonEncode({'project_name': projectName}),
+      );
+      if (response.statusCode == 200) {
+        final newProject = jsonDecode(response.body);
+        setState(() {
+          _projects.add(newProject);
+          _selectedProjects = List.from(_selectedProjects)..add(newProject);
+        });
+        return true; 
+      }
+    } catch (e) { 
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); 
+    }
+    return false; 
+  }
+
+  void _showSimpleDialog(String title, String msg) {
+    showDialog(
       context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) => PoolFilterSheet(
-        initialSearchQuery: _searchQuery,
-        initialDateRange: _selectedDateRange,
-        initialIsImportant: _selectedIsImportant, // 🌟 ส่งค่าดาวให้ Sheet
-        availableCategories: _availableCategories,
-        selectedCategories: _selectedCategories,
-        availableSaleNames: _availableSaleNames,
-        selectedSaleNames: _selectedSaleNames,
-        areaRanges: _areaRanges,
-        selectedAreaRanges: _selectedAreaRanges,
-        dateRanges: _dateRanges,
-        availableProjectTypes: _availableProjectTypes,
-        selectedProjectTypes: _selectedProjectTypes,
-        onApply: (newFilters) {
-          setState(() {
-            _selectedCategories = newFilters['categories'];
-            _selectedSaleNames = newFilters['saleNames'];
-            _selectedAreaRanges = newFilters['areaRanges'];
-            _selectedProjectTypes = newFilters['projectTypes'];
-            _selectedDateRange = newFilters['dateRange'];
-            _searchQuery = newFilters['searchQuery'];
-            _selectedIsImportant = newFilters['isImportant'] ?? false; // 🌟 รับค่าดาวกลับมา
-            _applyFilters();
-          });
-        },
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kCardDark,
+        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: Text(msg, style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx), 
+            child: const Text("ตกลง", style: TextStyle(color: kPrimaryColor))
+          )
+        ],
       ),
     );
   }
 
-  Widget _buildScopeTab(String title, String scopeValue, IconData icon) {
-    bool isSelected = _selectedScope == scopeValue;
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          if (_selectedScope != scopeValue) {
-            setState(() => _selectedScope = scopeValue);
-            _fetchProjects(isRefresh: true); 
-          }
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? kNeonPurple.withOpacity(0.15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: isSelected ? kNeonPurple : Colors.transparent, width: 1)
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
+  Future<Map<String, dynamic>?> _getAuditData() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      if (mounted) _showSimpleDialog("กรุณาเปิด GPS", "คุณต้องเปิดใช้งานตำแหน่งที่ตั้ง (Location) ก่อนทำการบันทึกข้อมูลครับ");
+      return null;
+    }
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        if (mounted) _showSimpleDialog("สิทธิ์ถูกปฏิเสธ", "แอปต้องการสิทธิ์เข้าถึงตำแหน่งเพื่อยืนยันจุดที่บันทึกข้อมูลครับ");
+        return null;
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      if (mounted) _showSimpleDialog("สิทธิ์ถูกปิดกั้นถาวร", "กรุณาเข้าไปเปิดสิทธิ์ตำแหน่ง (Location) ในหน้าตั้งค่าของเครื่องครับ");
+      return null;
+    }
+    Position? bestPosition;
+    StreamSubscription<Position>? positionStream;
+    try {
+      positionStream = Geolocator.getPositionStream(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 0),
+      ).listen((Position position) {
+        if (bestPosition == null || position.accuracy < bestPosition!.accuracy) {
+          bestPosition = position;
+        }
+      });
+      for (int i = 0; i < 50; i++) {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (bestPosition != null && bestPosition!.accuracy <= 15.0) break; 
+      }
+      await positionStream.cancel();
+      bestPosition ??= await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 3));
+      if (bestPosition!.isMocked) {
+        if (mounted) _showSimpleDialog("ตรวจพบการทุจริต", "กรุณาปิดแอปจำลองตำแหน่ง (Fake GPS) ก่อนบันทึกข้อมูลครับ");
+        return null; 
+      }
+      if (bestPosition!.accuracy > 150.0) {
+        if (mounted) _showSimpleDialog("สัญญาณ GPS อ่อนมาก", "ความแม่นยำต่ำเกินไป กรุณาเดินออกไปใกล้หน้าต่างหรือที่โล่งเพื่อบันทึกครับ");
+        return null; 
+      }
+      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      Map<String, dynamic> deviceData = {};
+      if (Platform.isAndroid) {
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        deviceData = {"os": "Android", "brand": androidInfo.brand, "model": androidInfo.model, "version": androidInfo.version.release};
+      } else if (Platform.isIOS) {
+        IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+        deviceData = {"os": "iOS", "brand": "Apple", "model": iosInfo.utsname.machine, "version": iosInfo.systemVersion};
+      }
+      return {
+        "location": {"lat": bestPosition!.latitude, "lng": bestPosition!.longitude, "accuracy": bestPosition!.accuracy, "captured_at": DateTime.now().toIso8601String()},
+        "device": deviceData
+      };
+    } catch (e) {
+      if (positionStream != null) await positionStream.cancel();
+      if (mounted) _showSimpleDialog("เกิดข้อผิดพลาด", "ไม่สามารถดึงตำแหน่งได้ กรุณาลองใหม่อีกครั้ง");
+      return null;
+    }
+  }
+
+  Future<void> _submitOrder() async {
+    FocusScope.of(context).unfocus(); 
+    if (!_formKey.currentState!.validate()) return;
+    
+    setState(() => _isLoading = true);
+    final auditData = await _getAuditData();
+    if (auditData == null) {
+      setState(() => _isLoading = false);
+      return; 
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      final userId = prefs.getString('user_id'); 
+      
+      List<Map<String, dynamic>> itemsPayload = [];
+      for (var item in _orderItems) {
+        List<String> itemImagesBase64 = [];
+        for (var f in item.itemImages) {
+           itemImagesBase64.add(base64Encode(await f.readAsBytes()));
+        }
+        List<Map<String, dynamic>> projectUsages = [];
+        for (var projectId in item.selectedProjectIds) {
+           String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
+           projectUsages.add({'project_id': projectId, 'area_sqm': areaText});
+        }
+        itemsPayload.add({
+          'product_category_id': item.categoryId,
+          'interest_level': item.interestLevel,
+          'note': item.noteCtrl.text,
+          'project_usage': projectUsages,
+          'images': itemImagesBase64,
+        });
+      }
+
+      final response = await ApiService.post(
+        Uri.parse('${AppConfig.baseUrl}/orders'),
+        body: jsonEncode({
+          'token': token,
+          'user_id': userId,
+          'customer_type_id': _selectedCustomerType, 
+          'company_id': _selectedCompany?['id'].toString(), 
+          'customer_name': _nameCtrl.text,
+          'phone': _contactCtrl.text,
+          'items': itemsPayload,
+          'audit_log': auditData, 
+        }),
+      );
+      
+      if (response.statusCode == 200 || response.statusCode == 201) { 
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ'), backgroundColor: Colors.green));
+          setState(() {
+              _nameCtrl.clear();
+              _contactCtrl.clear();
+              _selectedCustomerType = null; 
+              _selectedCompany = null;      
+              _selectedProjects = [];       
+              _orderItems = [ProductItem()]; 
+              _isTypeManuallySelected = false;
+          });
+        }
+      } else { throw "เกิดข้อผิดพลาดในการบันทึกข้อมูล"; }
+    } catch (e) { 
+      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent)); 
+    } finally { if(mounted) setState(() => _isLoading = false); }
+  }
+
+  // 🚀 ฟังก์ชันบันทึกบริษัทใหม่
+  Future<void> _addNewCompany(String name, String? typeId) async {
+    final response = await ApiService.post(
+      Uri.parse('${AppConfig.baseUrl}/companies'), 
+      body: jsonEncode({'name': name, 'customer_type_id': typeId}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final newComp = jsonDecode(response.body);
+      setState(() {
+        _selectedCompany = newComp; 
+        if (typeId != null) _selectedCustomerType = typeId;
+      });
+      _companyDropdownKey.currentState?.changeSelectedItem(newComp);
+    }
+  }
+
+  // 🚀 ฟังก์ชันบันทึกประเภทลูกค้าใหม่
+  Future<void> _addNewCustomerType(String name) async {
+    final response = await ApiService.post(
+      Uri.parse('${AppConfig.baseUrl}/customer_types'), 
+      body: jsonEncode({'name': name}),
+    );
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final newType = jsonDecode(response.body);
+      setState(() {
+        _customerTypes.add(newType); 
+        _selectedCustomerType = newType['id'].toString(); 
+      });
+    }
+  }
+
+  // Helper สำหรับหน้าต่าง Dialog
+  InputDecoration _dialogInputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint, 
+      hintStyle: TextStyle(color: Colors.grey[400]),
+      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: kLimeGreen)),
+    );
+  }
+
+  // 🌟🌟🌟 ฟังก์ชันแสดง Dialog กลางจอ (เพิ่มบริษัท) 🌟🌟🌟
+  void _showAddCompanyDialog() {
+    String? tempTypeId = _selectedCustomerType; 
+    final companyNameCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDiaState) => AlertDialog(
+          backgroundColor: kCardDark,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text("เพิ่มบริษัทใหม่", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, size: 16, color: isSelected ? kNeonPurple : Colors.grey[500]),
-              const SizedBox(width: 6),
-              Text(title, style: TextStyle(color: isSelected ? kNeonPurple : Colors.grey[500], fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
+              // 🔽 ช่องเลือกประเภทลูกค้าใน Dialog
+              DropdownButtonFormField<String>(
+                value: tempTypeId,
+                decoration: _dialogInputDecoration("เลือกประเภทลูกค้า (ไม่บังคับ)"),
+                dropdownColor: kCardDark,
+                style: const TextStyle(color: Colors.white),
+                items: _customerTypes.map((item) => DropdownMenuItem<String>(
+                  value: item['id'].toString(), 
+                  child: Text(item['name'], style: const TextStyle(color: Colors.white)),
+                )).toList(),
+                onChanged: (val) => setDiaState(() => tempTypeId = val),
+              ),
+              const SizedBox(height: 16),
+              
+              // 📝 ช่องกรอกชื่อบริษัทใน Dialog
+              TextField(
+                controller: companyNameCtrl,
+                style: const TextStyle(color: Colors.white),
+                decoration: _dialogInputDecoration("ชื่อบริษัท *"),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // 🌟 อัปเดต hasActiveFilter ให้รับรู้การกรองดาว
-    bool hasActiveFilter = _selectedCategories.isNotEmpty || _selectedSaleNames.isNotEmpty || _selectedAreaRanges.isNotEmpty || _selectedProjectTypes.isNotEmpty || _selectedDateRange.isNotEmpty || _searchQuery.isNotEmpty || _selectedIsImportant;
-    bool hasMoreData = _groupedOrders.length < _totalItems;
-
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
-      child: Scaffold(
-        backgroundColor: kDarkBg,
-        body: Stack(
-          children: [
-            Positioned(
-              top: -50, right: -50,
-              child: Container(
-                width: 300, height: 300,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: kGlowPurple.withOpacity(0.2)),
-                child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80), child: Container(color: Colors.transparent)),
-              ),
-            ),
-            CustomScrollView(
-              physics: const BouncingScrollPhysics(),
-              slivers: [
-                SliverAppBar(
-                  backgroundColor: kDarkBg.withOpacity(0.9),
-                  expandedHeight: 70, toolbarHeight: 70, pinned: true, elevation: 4, centerTitle: true,
-                  title: const Text("Pool Orders", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 20)),
-                  leading: IconButton(
-                    icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                  actions: [
-                     Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            hasActiveFilter ? Icons.filter_list_alt : Icons.filter_list_rounded,
-                            color: hasActiveFilter ? kPremiumGold : Colors.white, 
-                            size: 26,
-                          ),
-                          tooltip: "ค้นหา & ตัวกรอง",
-                          onPressed: _showFilterSheet,
-                        ),
-                        if (hasActiveFilter)
-                          Positioned(top: 12, right: 12, child: Container(width: 8, height: 8, decoration: const BoxDecoration(color: Colors.redAccent, shape: BoxShape.circle)))
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white),
-                      onPressed: () {
-                         setState(() {
-                            _selectedCategories.clear();
-                            _selectedSaleNames.clear();
-                            _selectedAreaRanges.clear();
-                            _selectedProjectTypes.clear();
-                            _selectedDateRange = ''; 
-                            _searchQuery = '';
-                            _selectedIsImportant = false; // 🌟 เคลียร์ค่าดาวตอน Refresh
-                         });
-                         _fetchProjects(isRefresh: true);
-                      },
-                    ),
-                  ],
-                ),
-                
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12)),
-                      child: Row(
-                        children: [
-                          _buildScopeTab('ทั้งหมด', 'all', Icons.public_rounded),
-                          _buildScopeTab('ทีมของฉัน', 'team', Icons.groups_rounded),
-                          _buildScopeTab('ของฉัน', 'mine', Icons.person_rounded),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-
-                if (!_isLoading)
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: 24, right: 24, bottom: 12, top: 4),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.info_outline_rounded, color: kPremiumGold, size: 16),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              hasActiveFilter ? "พบ ${_displayedOrders.length} รายการ (จากตัวกรอง)" : "กำลังแสดง ${_groupedOrders.length} จาก $_totalItems บิล",
-                              style: const TextStyle(color: kPremiumGold, fontSize: 13, fontWeight: FontWeight.w500)
-                            )
-                          ),
-                          if (hasActiveFilter)
-                            InkWell(
-                              onTap: () {
-                                setState(() {
-                                  _selectedCategories.clear();
-                                  _selectedSaleNames.clear();
-                                  _selectedAreaRanges.clear();
-                                  _selectedProjectTypes.clear();
-                                  _selectedDateRange = ''; 
-                                  _searchQuery = '';
-                                  _selectedIsImportant = false; // 🌟 เคลียร์ค่าดาวด้วย
-                                  _applyFilters();
-                                });
-                              },
-                              child: Row(
-                                children: const [
-                                  Icon(Icons.close_rounded, color: Colors.redAccent, size: 18),
-                                  SizedBox(width: 4),
-                                  Text("ล้าง", style: TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold))
-                                ],
-                              ),
-                            )
-                        ],
-                      ),
-                    ),
-                  ),
-
-                if (_isLoading)
-                  const SliverFillRemaining(child: Center(child: CircularProgressIndicator(color: kNeonPurple)))
-                else if (_errorMessage != null)
-                  SliverFillRemaining(child: _buildErrorState())
-                else if (_displayedOrders.isEmpty)
-                  SliverFillRemaining(
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.search_off_rounded, size: 60, color: Colors.grey[700]),
-                          const SizedBox(height: 16),
-                          Text(hasActiveFilter ? "ไม่พบออเดอร์ที่ค้นหา" : "ยังไม่มีออเดอร์ในหมวดหมู่นี้", style: const TextStyle(color: Colors.white54, fontSize: 16)),
-                        ],
-                      )
-                    )
-                  )
-                else
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                    sliver: SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          if (index == _displayedOrders.length) {
-                            if (!hasMoreData || hasActiveFilter) return const SizedBox(); 
-                            
-                            return Padding(
-                              padding: const EdgeInsets.only(top: 20, bottom: 40),
-                              child: Center(
-                                child: _isLoadingMore 
-                                  ? const CircularProgressIndicator(color: kNeonPurple)
-                                  : OutlinedButton.icon(
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: kNeonPurple, 
-                                        side: BorderSide(color: kNeonPurple.withOpacity(0.5)),
-                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20))
-                                      ),
-                                      onPressed: () {
-                                        setState(() => _currentPage++); 
-                                        _fetchProjects(isRefresh: false); 
-                                      },
-                                      icon: const Icon(Icons.download_rounded, size: 20),
-                                      label: Text("โหลดข้อมูลเพิ่ม (${_totalItems - _groupedOrders.length} บิลที่เหลือ)")
-                                    ),
-                              ),
-                            );
-                          }
-                          
-                          // 🌟 คลีนโค้ดตรงนี้ให้เรียบร้อยแล้ว
-                          return PoolOrderCard(
-                            groupedOrder: _displayedOrders[index],
-                            onRefresh: () => _fetchProjects(isRefresh: true),
-                            onToggleImportant: (projectId, currentStatus) {
-                              final orderId = _displayedOrders[index]['order_data']['id'].toString();
-                              _handleToggleImportant(projectId, currentStatus, orderId);
-                            },
-                          );
-                          
-                        },
-                        childCount: _displayedOrders.length + (hasMoreData && !hasActiveFilter ? 1 : 0),
-                      ),
-                    ),
-                  ),
-              ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54))),
+            TextButton(
+              onPressed: () {
+                if (companyNameCtrl.text.isNotEmpty) {
+                  _addNewCompany(companyNameCtrl.text, tempTypeId); 
+                  Navigator.pop(ctx);
+                }
+              },
+              child: const Text("บันทึก", style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -511,23 +359,261 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
     );
   }
 
-  Widget _buildErrorState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.cloud_off_rounded, color: Colors.redAccent, size: 60),
-          const SizedBox(height: 16),
-          Text(_errorMessage ?? "เกิดข้อผิดพลาด", style: const TextStyle(color: Colors.white70, fontSize: 16), textAlign: TextAlign.center),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(backgroundColor: kNeonPurple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            onPressed: () => _fetchProjects(isRefresh: true), 
-            icon: const Icon(Icons.refresh_rounded, size: 20),
-            label: const Text("ลองใหม่")
-          )
+  // 🌟🌟🌟 ฟังก์ชันแสดง Dialog กลางจอ (เพิ่มประเภทลูกค้า) 🌟🌟🌟
+  void _showAddCustomerTypeDialog() {
+    final typeNameCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: kCardDark,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text("เพิ่มประเภทลูกค้าใหม่", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: typeNameCtrl,
+          style: const TextStyle(color: Colors.white),
+          decoration: _dialogInputDecoration("ชื่อประเภทลูกค้า *"),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () {
+              if (typeNameCtrl.text.isNotEmpty) {
+                _addNewCustomerType(typeNameCtrl.text);
+                Navigator.pop(ctx);
+              }
+            },
+            child: const Text("บันทึก", style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
   }
-}
+
+  @override
+  Widget build(BuildContext context) {
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
+      child: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(), 
+        child: Scaffold(
+          backgroundColor: kDarkBg,
+          body: Stack(
+            children: [
+              _isLoading 
+                ? const Center(child: CircularProgressIndicator(color: kPrimaryColor)) 
+                : Column(
+                    children: [
+                      _buildHeader(context),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
+                          child: Form(
+                            key: _formKey,
+                            child: Column(
+                              children: [
+                                _buildAnimatedCard(
+                                  index: 0,
+                                  child: CustomerInfoCard(
+                                    customerTypes: _customerTypes,
+                                    selectedCustomerType: _selectedCustomerType,
+                                    companyDropdownKey: _companyDropdownKey,
+                                    getCompanies: _getCompanies,
+                                    selectedCompany: _selectedCompany, // 🌟 ส่งข้อมูลเป็น Map
+                                    nameCtrl: _nameCtrl,
+                                    contactCtrl: _contactCtrl,
+                                    onAddCustomerType: _showAddCustomerTypeDialog, // 🌟 เรียก Dialog
+                                    onAddCompany: _showAddCompanyDialog, // 🌟 เรียก Dialog
+                                    onCustomerTypeChanged: (val) {
+                                      setState(() {
+                                        _selectedCustomerType = val;
+                                        _selectedCompany = null;
+                                        _companyDropdownKey.currentState?.clear();
+                                        _isTypeManuallySelected = true; 
+                                      });
+                                    },
+                                    onCompanyChanged: (val) {
+                                      setState(() {
+                                        if (val != null) {
+                                          _selectedCompany = val; 
+                                          if (val['customer_type_id'] != null) {
+                                            _selectedCustomerType = val['customer_type_id'].toString();
+                                            _isTypeManuallySelected = false; 
+                                          }
+                                        } else { _selectedCompany = null; }
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                _buildAnimatedCard(
+                                  index: 1,
+                                  child: ProjectSelectCard(
+                                    projects: _projects,
+                                    selectedProjects: _selectedProjects,
+                                    onProjectsChanged: (val) => setState(() => _selectedProjects = val),
+                                    onAddProject: () {
+                                      FocusScope.of(context).unfocus();
+                                      _showAddProjectDialog();
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                _buildAnimatedCard(
+                                  index: 2,
+                                  child: _buildSectionCard(
+                                    title: "รายละเอียดสินค้า",
+                                    icon: Icons.inventory_2_rounded,
+                                    padding: 5,
+                                    content: [
+                                      ListView.separated(
+                                        shrinkWrap: true,
+                                        physics: const NeverScrollableScrollPhysics(),
+                                        itemCount: _orderItems.length,
+                                        separatorBuilder: (_, __) => Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Divider(color: Colors.white.withOpacity(0.1))),
+                                        itemBuilder: (ctx, index) => ProductItemCard(
+                                          index: index,
+                                          item: _orderItems[index],
+                                          productCategories: _productCategories,
+                                          projects: _selectedProjects,
+                                          onDelete: () => setState(() => _orderItems.removeAt(index)),
+                                        ),
+                                      ),
+                                      const SizedBox(height: 24),
+                                      _buildAddItemButton(),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 40),
+                                _buildSubmitButton(),
+                                const SizedBox(height: 60),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- Widgets ---
+  Widget _buildAddItemButton() {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          FocusScope.of(context).unfocus(); 
+          setState(() => _orderItems.add(ProductItem()));
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: kPrimaryColor.withOpacity(0.5), width: 1.5),
+            borderRadius: BorderRadius.circular(16),
+            color: kPrimaryColor.withOpacity(0.05),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.add_circle_rounded, color: kPrimaryColor),
+              SizedBox(width: 8),
+              Text("เพิ่มรายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: kPrimaryColor)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return _buildAnimatedCard(
+      index: 3,
+      child: ElevatedButton(
+        onPressed: _submitOrder,
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          backgroundColor: kPrimaryColor, 
+        ),
+        child: const Center(
+          child: Text("บันทึก", style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+      color: kDarkBg.withOpacity(0.95), 
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20)),
+          ),
+          const Text("New Record", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+          GestureDetector(
+            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrderHistoryScreen())),
+            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.history_rounded, color: Colors.white, size: 24)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnimatedCard({required int index, required Widget child}) {
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 600),
+      opacity: _startAnimation ? 1.0 : 0.0,
+      child: AnimatedContainer(
+        duration: Duration(milliseconds: 600 + (index * 150)),
+        transform: Matrix4.translationValues(0, _startAnimation ? 0 : 50, 0),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({required String title, required IconData icon, required List<Widget> content, double padding = 24}) {
+    return Container(
+      width: double.infinity, padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: kPrimaryColor, size: 22)),
+            const SizedBox(width: 12),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white))),
+          ]),
+          Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1, color: Colors.white.withOpacity(0.1))),
+          ...content,
+        ],
+      ),
+    );
+  }
+
+  void _showAddProjectDialog() {
+    showDialog(
+      context: context,
+      builder: (ctx) => AddProjectDialog(
+        allProjects: _projects, 
+        onSelect: (selectedProject) {
+          setState(() {
+            if (!_selectedProjects.contains(selectedProject)) {
+              _selectedProjects = List.from(_selectedProjects)..add(selectedProject);
+            }
+          });
+        },
+        onSaveNew: (name) async { return await _createNewProject(name); },
+      ),
+    );
+  }
+} 
