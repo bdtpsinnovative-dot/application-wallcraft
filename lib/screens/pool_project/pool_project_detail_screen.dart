@@ -1,3 +1,4 @@
+//lib/screens/pool_project/pool_project_detail_screen.dart
 import 'dart:ui';
 import 'dart:convert';
 import 'package:flutter/material.dart';
@@ -203,7 +204,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
     }
   }
 
-  Future<void> _saveOrderInfo(String newCustomerName, String newPhone) async {
+Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newNote) async {
     try {
       final String orderId = orderData['id'] ?? '';
       if (orderId.isEmpty) throw Exception("Missing Order ID");
@@ -216,6 +217,7 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
           "order_id": orderId,
           "customer_name": newCustomerName,
           "phone": newPhone,
+          "note": newNote, // 🌟 ยิง Note ไปพร้อมกันเลย
         })
       );
 
@@ -223,8 +225,12 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
         setState(() {
           orderData['customer_name'] = newCustomerName;
           orderData['phone'] = newPhone;
+          // 🌟 อัปเดต Note ให้เปลี่ยนตามทันที
+          for (var item in items) {
+            item['note'] = newNote; 
+          }
         });
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('อัปเดตข้อมูลลูกค้าสำเร็จ!'), backgroundColor: kLimeGreen));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('อัปเดตข้อมูลบิลสำเร็จ!'), backgroundColor: kLimeGreen));
       } else {
         final errorData = jsonDecode(response.body);
         throw Exception(errorData['error'] ?? 'เกิดข้อผิดพลาดในการบันทึกข้อมูล');
@@ -341,12 +347,13 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
                                 builder: (context) => EditOrderInfoDialog(
                                   initialCustomerName: orderData['customer_name'] ?? '',
                                   initialPhone: orderData['phone'] ?? '',
+                                  initialNote: orderNote, // 🌟 ส่งตัวแปร orderNote ที่ดึงไว้แล้วเข้าไป
                                   onSave: _saveOrderInfo, 
                                 )
                               );
                             }, 
                             icon: const Icon(Icons.edit_note_rounded, color: kPremiumGold, size: 26),
-                            tooltip: "แก้ไขข้อมูลลูกค้า",
+                            tooltip: "แก้ไขข้อมูลบิล",
                             padding: EdgeInsets.zero,
                             constraints: const BoxConstraints(),
                           )

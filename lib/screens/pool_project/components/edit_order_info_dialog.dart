@@ -7,12 +7,14 @@ const Color kNeonPurple = Color(0xFFB52BFF);
 class EditOrderInfoDialog extends StatefulWidget {
   final String initialCustomerName;
   final String initialPhone;
-  final Future<void> Function(String customerName, String phone) onSave;
+  final String initialNote; // 🌟 1. เพิ่มตัวรับค่า Note เดิม
+  final Future<void> Function(String customerName, String phone, String note) onSave; // 🌟 2. ส่ง Note กลับไปด้วยตอนกดเซฟ
 
   const EditOrderInfoDialog({
     super.key,
     required this.initialCustomerName,
     required this.initialPhone,
+    required this.initialNote, // 🌟 บังคับใส่ Note
     required this.onSave,
   });
 
@@ -23,17 +25,21 @@ class EditOrderInfoDialog extends StatefulWidget {
 class _EditOrderInfoDialogState extends State<EditOrderInfoDialog> {
   late TextEditingController customerCtrl;
   late TextEditingController phoneCtrl;
+  late TextEditingController noteCtrl; // 🌟 3. สร้าง Controller สำหรับ Note
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    // ถ้าแสดงคำว่า 'ไม่ระบุชื่อลูกค้า' ให้เคลียร์เป็นช่องว่างเวลาแก้ไข
     customerCtrl = TextEditingController(
       text: widget.initialCustomerName.contains('ไม่ระบุ') ? '' : widget.initialCustomerName
     );
     phoneCtrl = TextEditingController(
       text: widget.initialPhone == '-' ? '' : widget.initialPhone
+    );
+    // 🌟 ดึงค่าโน้ตเก่ามาแสดง
+    noteCtrl = TextEditingController(
+      text: widget.initialNote == '-' ? '' : widget.initialNote
     );
   }
 
@@ -41,6 +47,7 @@ class _EditOrderInfoDialogState extends State<EditOrderInfoDialog> {
   void dispose() {
     customerCtrl.dispose();
     phoneCtrl.dispose();
+    noteCtrl.dispose(); // 🌟 คืนหน่วยความจำ
     super.dispose();
   }
 
@@ -55,7 +62,6 @@ class _EditOrderInfoDialogState extends State<EditOrderInfoDialog> {
       ),
       child: Container(
         padding: const EdgeInsets.all(24),
-        // 🌟 เพิ่ม SingleChildScrollView ตรงนี้เพื่อป้องกันปัญหาลายเหลืองดำตอนคีย์บอร์ดเด้ง
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -69,7 +75,7 @@ class _EditOrderInfoDialogState extends State<EditOrderInfoDialog> {
                     child: const Icon(Icons.manage_accounts_rounded, color: kNeonPurple, size: 20)
                   ),
                   const SizedBox(width: 12),
-                  const Text("แก้ไขข้อมูลลูกค้า", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                  const Text("แก้ไขข้อมูลบิล", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 20),
@@ -110,6 +116,25 @@ class _EditOrderInfoDialogState extends State<EditOrderInfoDialog> {
                   focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kNeonPurple, width: 1)),
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // 🌟 3. ช่องกรอก Note 
+              const Text("หมายเหตุ (Note)", style: TextStyle(color: kPremiumGold, fontSize: 13, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: noteCtrl,
+                maxLines: 4, // ขยายให้พิมพ์ได้หลายบรรทัด
+                style: const TextStyle(color: Colors.white, fontSize: 14),
+                decoration: InputDecoration(
+                  hintText: "กรอกรายละเอียดหมายเหตุ",
+                  hintStyle: const TextStyle(color: Colors.white24, fontSize: 14),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.03),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: kNeonPurple, width: 1)),
+                ),
+              ),
               
               const SizedBox(height: 24),
 
@@ -133,7 +158,8 @@ class _EditOrderInfoDialogState extends State<EditOrderInfoDialog> {
                       ),
                       onPressed: _isLoading ? null : () async {
                         setState(() => _isLoading = true);
-                        await widget.onSave(customerCtrl.text, phoneCtrl.text);
+                        // 🌟 ส่งค่า Note กลับไปให้หน้าหลักด้วย
+                        await widget.onSave(customerCtrl.text, phoneCtrl.text, noteCtrl.text);
                         if (context.mounted) {
                           setState(() => _isLoading = false);
                           Navigator.pop(context);
