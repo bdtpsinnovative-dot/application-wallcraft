@@ -9,8 +9,8 @@ import '../../services/api_service.dart';
 // ✨ นำเข้า Widget ที่เราแยกไฟล์ออกมา
 import 'widgets/summary_stat_card.dart';
 import 'widgets/admin_charts.dart';
-import 'widgets/admin_filter_modal.dart'; // นำเข้า Filter Modal
-import 'widgets/ai_chat_modal.dart'; // นำเข้า AI Chat Modal
+import 'widgets/admin_filter_modal.dart';
+import 'widgets/ai_chat_modal.dart';
 
 class AdminSummaryScreen extends StatefulWidget {
   const AdminSummaryScreen({super.key});
@@ -53,6 +53,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
   List<dynamic> _projectTypes = []; 
   List<dynamic> _productCategories = []; 
   
+  // 🎯 เปลี่ยน Type มารองรับ dynamic (เพราะ API จะส่งเป็น Object {count, area})
   List<MapEntry<String, dynamic>> _teamLeaderboard = [];
   List<MapEntry<String, dynamic>> _personLeaderboard = []; 
   List<MapEntry<String, dynamic>> _sourceLeaderboard = []; 
@@ -90,10 +91,14 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        
+        // 🎯 ดึงข้อมูลแล้วเรียงตาม count
         Map<String, dynamic> teamsData = data['stats']['team_performance'] ?? {};
-        var sortedTeams = teamsData.entries.toList()..sort((a, b) => (b.value as int).compareTo(a.value as int));
+        var sortedTeams = teamsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
+        
         Map<String, dynamic> personsData = data['stats']['person_performance'] ?? {};
-        var sortedPersons = personsData.entries.toList()..sort((a, b) => (b.value as int).compareTo(a.value as int));
+        var sortedPersons = personsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
+        
         Map<String, dynamic> sourceData = data['stats']['source_performance'] ?? {};
         var sortedSource = sourceData.entries.toList();
 
@@ -103,17 +108,22 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
             _rawStats = data['stats']; 
             _totalProjects = _rawStats['total_orders'].toString(); 
             _totalCheckins = _rawStats['total_checkins']?.toString() ?? _totalProjects;
+            
             double area = double.tryParse(_rawStats['total_area_sqm'].toString()) ?? 0;
             _totalArea = area > 1000 ? "${(area / 1000).toStringAsFixed(1)}K" : area.toStringAsFixed(0);
+            
             _importantCount = _rawStats['important_count'].toString();
             _timeLabel = data['time_label'] ?? "ทั้งหมด";
+            
             _teamLeaderboard = sortedTeams;
             _personLeaderboard = sortedPersons;
             _sourceLeaderboard = sortedSource; 
+            
             _availableTeams = List<String>.from(data['available_teams'] ?? []);
             _availablePersons = List<String>.from(data['available_persons'] ?? []);
             _projectTypes = data['project_types'] ?? [];
             _productCategories = data['product_categories'] ?? [];
+            
             _isLoading = false;
           });
         }
@@ -129,7 +139,6 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
     if (mounted) setState(() { _errorMessage = msg; _isLoading = false; });
   }
 
-  // ✨ เรียกใช้ Modal Filter ที่แยกไฟล์ไปแล้ว
   void _openFilterModal() {
     showModalBottomSheet(
       context: context,
@@ -157,7 +166,6 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
     );
   }
 
-  // ✨ เรียกใช้ Modal AI Chat ที่แยกไฟล์ไปแล้ว
   void _openAiChatModal() {
     showModalBottomSheet(
       context: context,
@@ -289,12 +297,29 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
   Widget _buildLeaderboardList() {
     List<MapEntry<String, dynamic>> dataList = _showTeamLeaderboard ? _teamLeaderboard : _personLeaderboard;
     if (dataList.isEmpty) return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(20)), child: const Center(child: Text("ไม่มีข้อมูล", style: TextStyle(color: Colors.white54))));
+    
     return Container(
       decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withOpacity(0.05))),
       child: Column(
         children: List.generate(dataList.length, (index) {
           final item = dataList[index];
-          return ListTile(leading: Text("#${index + 1}", style: TextStyle(color: index == 0 ? kPremiumGold : Colors.grey[600], fontWeight: FontWeight.bold)), title: Text(item.key, style: const TextStyle(color: Colors.white, fontSize: 14)), trailing: Text("${item.value} โครงการ", style: const TextStyle(color: kNeonPurple, fontWeight: FontWeight.bold)));
+          // 🎯 ดึงข้อมูลจาก API ที่เราแก้ใหม่
+          final count = item.value['count']; 
+          final area = (item.value['area'] as num).toStringAsFixed(1); 
+
+          return ListTile(
+            leading: Text("#${index + 1}", style: TextStyle(color: index == 0 ? kPremiumGold : Colors.grey[600], fontWeight: FontWeight.bold)),
+            title: Text(item.key, style: const TextStyle(color: Colors.white, fontSize: 14)),
+            // 🎯 แก้ไขให้แสดง 2 บรรทัด (จำนวนโครงการ และ ตร.ม.)
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text("$count โครงการ", style: const TextStyle(color: kNeonPurple, fontWeight: FontWeight.bold, fontSize: 13)),
+                Text("$area ตร.ม.", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+              ],
+            ),
+          );
         }),
       ),
     );

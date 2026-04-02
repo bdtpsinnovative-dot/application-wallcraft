@@ -13,14 +13,15 @@ final List<Color> chartColors = [
   const Color(0xFFEF4444), const Color(0xFF64748B)
 ];
 
+// หน้าจอสำหรับเทสต์ (ถ้ามีอยู่แล้วไม่ต้องลบจ้ะ)
 class FullDashboardScreen extends StatelessWidget {
   const FullDashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final sourceData = [const MapEntry('APP', 120), const MapEntry('IMPORT', 80)];
-    final teamData = [const MapEntry('Team A', 45), const MapEntry('Team B', 30)];
-    final personData = [const MapEntry('Somchai', 45), const MapEntry('Wichai', 38)];
+    final teamData = [const MapEntry('Team A', {'count': 45, 'area': 100}), const MapEntry('Team B', {'count': 30, 'area': 50})];
+    final personData = [const MapEntry('Somchai', {'count': 45, 'area': 100}), const MapEntry('Wichai', {'count': 38, 'area': 80})];
 
     return Scaffold(
       backgroundColor: kBgDark,
@@ -52,7 +53,7 @@ class FullDashboardScreen extends StatelessWidget {
   }
 }
 
-// --- 📈 1. Trend Line Chart (Fix: getTitlesWidget) ---
+// --- 📈 1. Trend Line Chart ---
 class TrendLineChart extends StatelessWidget {
   const TrendLineChart({super.key});
 
@@ -97,9 +98,8 @@ class TrendLineChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 30, // เพิ่มพื้นที่ให้ตัวหนังสือ
+                      reservedSize: 30, 
                       interval: 1,
-                      // ✅ ใช้ getTitlesWidget ตามมาตรฐาน
                       getTitlesWidget: (value, meta) {
                         int index = value.toInt();
                         if (index >= 0 && index < dateLabels.length) {
@@ -119,7 +119,6 @@ class TrendLineChart extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 35,
-                      // ✅ ใช้ getTitlesWidget คืนค่าเป็น Text Widget
                       getTitlesWidget: (value, meta) {
                         return Text(
                           value.toInt().toString(), 
@@ -159,6 +158,7 @@ class SourcePieChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     int total = sourceData.fold(0, (sum, item) => sum + (item.value as int));
+    
     return Container(
       height: 220,
       padding: const EdgeInsets.all(16),
@@ -177,7 +177,8 @@ class SourcePieChart extends StatelessWidget {
                   return PieChartSectionData(
                     color: isApp ? const Color(0xFF8B5CF6) : const Color(0xFF10B981),
                     value: item.value.toDouble(),
-                    title: '${(item.value / total * 100).round()}%',
+                    // ป้องกัน Error หาก Total เป็น 0
+                    title: total > 0 ? '${(item.value / total * 100).round()}%' : '0%',
                     radius: 30,
                     titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                   );
@@ -200,6 +201,9 @@ class TeamPieChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // ถ้าไม่มีข้อมูลให้ซ่อนไปเลย
+    if (teamData.isEmpty) return const SizedBox();
+
     return Container(
       height: 220,
       padding: const EdgeInsets.all(16),
@@ -209,19 +213,67 @@ class TeamPieChart extends StatelessWidget {
           const Text("สัดส่วนทีม", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
           const SizedBox(height: 16),
           Expanded(
-            child: PieChart(
-              PieChartData(
-                sectionsSpace: 2,
-                centerSpaceRadius: 25,
-                sections: List.generate(teamData.length, (i) {
-                  return PieChartSectionData(
-                    color: chartColors[i % chartColors.length],
-                    value: teamData[i].value.toDouble(),
-                    title: '',
-                    radius: 30,
-                  );
-                }),
-              ),
+            child: Row(
+              children: [
+                // 🎯 ส่วนที่ 1: กราฟวงกลม
+                Expanded(
+                  flex: 3,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 20,
+                      sections: List.generate(teamData.length, (i) {
+                        return PieChartSectionData(
+                          color: chartColors[i % chartColors.length],
+                          value: teamData[i].value['count'].toDouble(),
+                          // ✅ เอาตัวเลขกลับมาโชว์ในวงกลม
+                          title: '${teamData[i].value['count']}', 
+                          radius: 35,
+                          titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // 🎯 ส่วนที่ 2: ป้ายบอกชื่อทีม (Legend) ด้านข้าง
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    // โชว์สูงสุด 5 ทีมแรก เพื่อไม่ให้ล้นจอ
+                    children: List.generate(
+                      teamData.length > 5 ? 5 : teamData.length, 
+                      (index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 6.0),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8, 
+                                height: 8, 
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle, 
+                                  color: chartColors[index % chartColors.length]
+                                )
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  teamData[index].key, 
+                                  style: const TextStyle(color: Colors.white70, fontSize: 9), 
+                                  overflow: TextOverflow.ellipsis
+                                )
+                              )
+                            ],
+                          ),
+                        );
+                      }
+                    ),
+                  ),
+                )
+              ],
             ),
           ),
         ],
@@ -229,17 +281,22 @@ class TeamPieChart extends StatelessWidget {
     );
   }
 }
-
-// --- 📊 4. Person Bar Chart (Fix: getTitlesWidget) ---
+// --- 📊 4. Person Bar Chart ---
 class PersonBarChart extends StatelessWidget {
   final List<MapEntry<String, dynamic>> personData;
   const PersonBarChart({super.key, required this.personData});
 
   @override
   Widget build(BuildContext context) {
+    // ดึงมาแค่ 5 คนแรก
     final topPersons = personData.take(5).toList();
+    
+    // คำนวณความสูงของกราฟแกน Y
+    double maxY = topPersons.isNotEmpty ? topPersons.first.value['count'].toDouble() * 1.1 : 10;
+    if (maxY < 5) maxY = 5; // ล็อกเป้าขั้นต่ำกันกราฟยาวเว่อร์
+
     return Container(
-      height: 280,
+      height: 250,
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(24)),
       child: Column(
@@ -251,21 +308,24 @@ class PersonBarChart extends StatelessWidget {
             child: BarChart(
               BarChartData(
                 alignment: BarChartAlignment.spaceAround,
-                maxY: 60,
+                maxY: maxY,
                 titlesData: FlTitlesData(
                   show: true,
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 30,
-                      // ✅ ใช้ getTitlesWidget คืนค่าเป็น Padding หุ้ม Text
                       getTitlesWidget: (value, meta) {
                         int index = value.toInt();
                         if (index >= 0 && index < topPersons.length) {
+                          // ป้องกัน Error กรณีชื่อพนักงานสั้นกว่า 3 ตัวอักษร
+                          String name = topPersons[index].key;
+                          String shortName = name.length > 3 ? name.substring(0, 3) : name;
+                          
                           return Padding(
                             padding: const EdgeInsets.only(top: 10.0),
                             child: Text(
-                              topPersons[index].key.substring(0, 3), 
+                              shortName, 
                               style: const TextStyle(color: Colors.white30, fontSize: 10)
                             ),
                           );
@@ -278,7 +338,6 @@ class PersonBarChart extends StatelessWidget {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 30,
-                      // ✅ ใช้ getTitlesWidget
                       getTitlesWidget: (value, meta) {
                         return Text(
                           value.toInt().toString(), 
@@ -297,7 +356,7 @@ class PersonBarChart extends StatelessWidget {
                     x: index,
                     barRods: [
                       BarChartRodData(
-                        toY: topPersons[index].value.toDouble(), 
+                        toY: topPersons[index].value['count'].toDouble(), 
                         color: kNeonPurple,
                         width: 16,
                         borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
