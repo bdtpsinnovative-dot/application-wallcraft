@@ -7,7 +7,7 @@ import '../../services/api_service.dart';
 import '../../constants.dart';
 import 'components/edit_project_dialog.dart';
 import 'components/edit_order_info_dialog.dart'; 
-
+import 'components/project_history_modal.dart'; // 🌟 นำเข้า Modal ที่เราเพิ่งสร้าง
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kPremiumGold = Color(0xFFFFC107);
 const Color kGlowPurple = Color(0xFF4A3080);
@@ -274,10 +274,10 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
 
     for (var item in items) {
       final categoryName = item['product_categories']?['name'] ?? 'ไม่ระบุหมวดหมู่';
+      final categoryId = item['product_category_id']?.toString(); // 🌟 1. ดึง ID หมวดหมู่ออกมา
       final productProjects = item['order_item_projects'] as List? ?? [];
-      
       for (var p in productProjects) {
-        projectCards.add(_buildProjectCard(p, categoryName));
+        projectCards.add(_buildProjectCard(p, categoryName, categoryId)); // ✅ เติมเข้าไปเรียบร้อย!
       }
 
       if (item['images'] != null) {
@@ -310,10 +310,33 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
     return Scaffold(
       backgroundColor: kDarkBg,
       appBar: AppBar(
-        backgroundColor: Colors.transparent, elevation: 0,
-        leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => Navigator.pop(context)),
+        backgroundColor: Colors.transparent, 
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), 
+          onPressed: () => Navigator.pop(context)
+        ),
         title: const Text("รายละเอียด Order", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)), 
         centerTitle: true,
+        // 🌟 ย้ายมาไว้ตรงนี้ครับนาย (อยู่ใน AppBar)
+        actions: [
+          if (orderData['admin_edits'] != null && (orderData['admin_edits'] as List).isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.history_rounded, color: kPremiumGold), 
+              tooltip: "ดูประวัติการแก้ไข",
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (context) => ProjectHistoryModal(
+                    adminEdits: orderData['admin_edits'] as List<dynamic>,
+                  ),
+                );
+              },
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Stack(
         children: [
@@ -506,12 +529,15 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
     );
   }
 
-  Widget _buildProjectCard(Map<String, dynamic> pData, String category) {
+Widget _buildProjectCard(Map<String, dynamic> pData, String category, String? categoryId) {
     final String pId = pData['id'] ?? '';
     final bool isExpanded = _expandedProjectIds.contains(pId);
     final String pName = pData['project_name'] ?? '-';
     final String area = pData['area_sqm']?.toString() ?? '0';
 
+    // 🌟 2. ประกอบร่าง! เอาข้อมูลเดิมมาเพิ่ม หมวดหมู่สินค้า เข้าไป
+    Map<String, dynamic> dataForDialog = Map<String, dynamic>.from(pData);
+    dataForDialog['product_category_id'] = categoryId;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(color: kCardDark.withOpacity(0.7), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white10)),
@@ -552,11 +578,11 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
                             showDialog(
                               context: context, 
                               builder: (context) => EditProjectDialog(
-                                projectData: pData, 
-                                categories: _dynamicCategories, 
-                                projectTypes: _projectTypes, 
-                                onSave: (updatedData) => _saveData(pId, updatedData)
-                              )
+        projectData: dataForDialog, // 🌟 3. เปลี่ยนมาใช้ dataForDialog ที่เราประกอบร่างไว้
+        categories: _dynamicCategories, 
+        projectTypes: _projectTypes, 
+        onSave: (updatedData) => _saveData(pId, updatedData)
+      )
                             );
                           }, 
                           icon: const Icon(Icons.edit_note_rounded, color: kNeonPurple, size: 24),

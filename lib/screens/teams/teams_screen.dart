@@ -1,14 +1,17 @@
+//lib/screens/teams/teams_screen.dart
+
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
+import 'package:firebase_messaging/firebase_messaging.dart'; // 🌟 1. เพิ่ม Import Firebase
+import '../notifications/NotificationScreen.dart';
 import '../../constants.dart'; 
 import '../../services/api_service.dart'; 
 
-// 🎨 โทนสีใหม่: Deep Modern Dark (หรูหรา มีมิติ)
+// 🎨 โทนสีใหม่: Deep Modern Dark
 const Color kDarkBg = Color(0xFF090A0F); 
 const Color kCardSurface = Color(0xFF15171E); 
 const Color kCardInner = Color(0xFF1E202B); 
@@ -32,16 +35,30 @@ class _TeamsScreenState extends State<TeamsScreen> {
   String _searchText = "";
   final TextEditingController _searchCtrl = TextEditingController();
   
-  bool _hasUnreadNotifications = true; 
+  bool _hasUnreadNotifications = false; // 🌟 2. เริ่มต้นให้ไม่มีจุดแดงก่อน
+  StreamSubscription<RemoteMessage>? _fcmSubscription; // 🌟 3. ตัวรับสัญญาณแจ้งเตือน
 
   @override
   void initState() {
     super.initState();
     _fetchTeams(); 
+    _setupNotificationListener(); // 🌟 4. เรียกใช้ฟังก์ชันดักฟังแจ้งเตือนตอนเปิดหน้า
+  }
+
+  // 🌟 ฟังก์ชันใหม่: ดักฟังแจ้งเตือน Real-time
+  void _setupNotificationListener() {
+    _fcmSubscription = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (mounted) {
+        setState(() {
+          _hasUnreadNotifications = true; // พอมีออเดอร์เข้าปุ๊บ จุดแดงเด้งปั๊บ!
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _fcmSubscription?.cancel(); // 🌟 อย่าลืมปิดการรับสัญญาณตอนออกจากหน้า
     _searchCtrl.dispose();
     super.dispose();
   }
@@ -93,7 +110,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
     _fetchTeams();
   }
 
-  // 🔍 ระบบค้นหา (กรองจาก _teams เดิม)
   List<dynamic> get _filteredTeams {
     if (_searchText.isEmpty) return _teams;
     final searchLower = _searchText.toLowerCase();
@@ -114,7 +130,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
     }).where((team) => team != null).toList();
   }
 
-  // 🌟 ฟังก์ชันใหม่: แปลงข้อมูลจากโครงสร้าง "ทีม -> พนักงาน" ให้เป็น "พนักงาน (มีชื่อทีมแปะอยู่)" เรียงยาวๆ
   List<Map<String, dynamic>> get _flatMembers {
     List<Map<String, dynamic>> allMembers = [];
     
@@ -131,7 +146,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
             'is_my_team': isMyTeam,
           });
         } else if (member is Map) {
-          // Fallback เผื่อชนิดข้อมูลเป็น Map ธรรมดา
           allMembers.add({
             for (var key in member.keys) key.toString(): member[key],
             'team_name': teamName,
@@ -141,7 +155,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
       }
     }
 
-    // จัดเรียง: ให้คนในทีมของเรา (is_my_team) ขึ้นก่อน แล้วค่อยตามด้วยคนอื่นๆ เรียงตามตัวอักษร
     allMembers.sort((a, b) {
       if (a['is_my_team'] == true && b['is_my_team'] != true) return -1;
       if (a['is_my_team'] != true && b['is_my_team'] == true) return 1;
@@ -159,7 +172,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
         backgroundColor: kDarkBg,
         body: Stack(
           children: [
-            // 🌌 Ambient Background Glow สวยๆ
             Positioned(
               top: -50, left: -50,
               child: Container(
@@ -183,7 +195,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                 children: [
                   _buildHeader(context),
                   
-                  // 🔍 Floating Search Bar
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                     child: Container(
@@ -221,7 +232,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                     ),
                   ),
 
-                  // 📋 Content List (รายชื่อคน)
                   Expanded(
                     child: _isFirstLoading
                         ? const Center(child: CircularProgressIndicator(color: kPremiumGold))
@@ -252,8 +262,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
     );
   }
 
-  // 🏷️ Header ด้านบน
-  Widget _buildHeader(BuildContext context) {
+Widget _buildHeader(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
       child: Row(
@@ -261,16 +270,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
         children: [
           Row(
             children: [
-              if (Navigator.canPop(context))
-                GestureDetector(
-                  onTap: () => Navigator.pop(context),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: kCardSurface, borderRadius: BorderRadius.circular(14), border: Border.all(color: Colors.white.withOpacity(0.05))),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: kTextPrimary, size: 18),
-                  ),
-                ),
+              // ❌ เอา if (Navigator.canPop(context)) และปุ่มย้อนกลับออกไปเลยครับ เพราะนี่คือหน้าหลัก
               const Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -282,11 +282,19 @@ class _TeamsScreenState extends State<TeamsScreen> {
             ],
           ),
           
-          // 🔔 Notification Bell
+          // 🔔 กระดิ่งแจ้งเตือน
           GestureDetector(
             onTap: () {
+              // 1. จุดแดงหายไป
               setState(() => _hasUnreadNotifications = false); 
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('กำลังพัฒนาหน้าระบบแจ้งเตือน...'), duration: Duration(seconds: 1)));
+              
+              // 2. กดแล้วให้ Push ไปหน้า NotificationScreen
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const NotificationScreen(),
+                ),
+              );
             },
             child: Stack(
               children: [
@@ -314,7 +322,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
     );
   }
 
-  // 👤 การ์ดพนักงานโฉมใหม่ (แสดงชื่อคนเป็นหลัก และมีชื่อทีมแปะอยู่)
   Widget _buildUserCard(Map<String, dynamic> member) {
     final fullName = member['full_name'] ?? 'ไม่มีชื่อ';
     final role = member['role'] ?? 'user';
@@ -340,7 +347,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
       ),
       child: Row(
         children: [
-          // 🖼️ รูปโปรไฟล์
           Container(
             width: 54, height: 54,
             decoration: BoxDecoration(
@@ -356,13 +362,10 @@ class _TeamsScreenState extends State<TeamsScreen> {
             ),
           ),
           const SizedBox(width: 16),
-          
-          // 📝 ข้อมูลพนักงาน
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ชื่อ และ ป้าย Admin
                 Row(
                   children: [
                     Flexible(child: Text(fullName, style: const TextStyle(color: kTextPrimary, fontSize: 16, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
@@ -381,8 +384,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   ],
                 ),
                 const SizedBox(height: 6),
-                
-                // 🏢 ชื่อทีม (Chip สวยๆ)
                 Row(
                   children: [
                     Container(
@@ -407,8 +408,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                
-                // 📱 เบอร์โทรศัพท์
                 Row(
                   children: [
                     const Icon(Icons.phone_iphone_rounded, size: 13, color: kTextSecondary),
@@ -419,8 +418,6 @@ class _TeamsScreenState extends State<TeamsScreen> {
               ],
             ),
           ),
-          
-          // 📞 ปุ่มโทรออก
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(

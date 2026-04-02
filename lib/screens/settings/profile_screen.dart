@@ -1,7 +1,7 @@
 //lib/screens/settings/profile_screen.dart
 import 'dart:convert';
-import 'dart:async'; // ✅ เพิ่มสำหรับจัดการ Timeout
-import 'dart:io';    // ✅ เพิ่มสำหรับดักจับเน็ตหลุด (SocketException)
+import 'dart:async'; 
+import 'dart:io';    
 import 'dart:ui'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -15,7 +15,7 @@ import '../../services/api_service.dart';
 import 'package:path_provider/path_provider.dart'; 
 import 'custom_crop_screen.dart';
 
-// 🎨 Palette สี (ธีมเดียวกับ Home)
+// 🎨 Palette สี
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kGlowPurple = Color(0xFF4A3080);
 const Color kLimeGreen = Color(0xFFD2E862); 
@@ -38,7 +38,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   bool loading = true;
   String? avatarUrl;
   File? _imageFile; 
-  String? _errorMessage; // ✅ เพิ่มตัวแปรสำหรับเก็บข้อความ Error
+  String? _errorMessage; 
+
+  // 🌟 ตัวแปรสำหรับตั้งค่าแจ้งเตือน (เหลือแค่นี้)
+  String _notiLevel = 'team'; // 'none', 'team', 'all'
 
   final ImagePicker _picker = ImagePicker();
   
@@ -78,7 +81,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Future<void> _fetchProfile() async {
     setState(() {
       loading = true;
-      _errorMessage = null; // ✅ เคลียร์ Error เดิมก่อนโหลดใหม่
+      _errorMessage = null; 
     });
 
     final prefs = await SharedPreferences.getInstance();
@@ -95,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       final response = await ApiService.post(
         url,
         body: jsonEncode({'token': token}),
-      ).timeout(const Duration(seconds: 15)); // ✅ ขยายเวลาเป็น 15 วิ เผื่อเน็ตช้า
+      ).timeout(const Duration(seconds: 15)); 
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -107,6 +110,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
             phoneCtrl.text = profile['phone_number'] ?? '';
             emailCtrl.text = profile['email'] ?? '';
             avatarUrl = profile['avatar_url'];
+
+            // 🌟 อัปเดตค่าจาก Database (บังคับแปลง Type ให้ชัวร์)
+            _notiLevel = profile['noti_level']?.toString() ?? 'team';
 
             if (profile['teams'] != null) {
               teamNameCtrl.text = profile['teams']['team_name'] ?? 'ไม่มีทีม';
@@ -124,10 +130,8 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         throw "โหลดข้อมูลไม่สำเร็จ (${response.statusCode})";
       }
     } on SocketException {
-      // ✅ ดักจับเน็ตหลุดตอนโหลดข้อมูลครั้งแรก
       if (mounted) setState(() => _errorMessage = "ขาดการเชื่อมต่ออินเทอร์เน็ต\nกรุณาตรวจสอบสัญญาณ Wi-Fi หรือ 4G/5G");
     } on TimeoutException {
-      // ✅ ดักจับเน็ตช้า
       if (mounted) setState(() => _errorMessage = "เซิร์ฟเวอร์ใช้เวลาตอบกลับนานเกินไป\nกรุณาลองใหม่อีกครั้ง");
     } catch (e) {
       debugPrint('🔴 Profile Fetch Error: $e');
@@ -150,7 +154,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         request.headers['Authorization'] = 'Bearer $token';
       }
 
-      // ✅ ตั้ง Timeout ให้การอัปโหลดรูปด้วย (30 วินาที เพราะไฟล์ภาพอาจจะใหญ่)
       var response = await request.send().timeout(const Duration(seconds: 30));
 
       if (response.statusCode == 200) {
@@ -167,14 +170,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Future<void> _pickImage(ImageSource source) async {
     try {
-      final XFile? pickedFile = await _picker.pickImage(
-        source: source,
-        imageQuality: 80, 
-      );
-
+      final XFile? pickedFile = await _picker.pickImage(source: source, imageQuality: 80);
       if (pickedFile == null) return;
       await _cropImage(File(pickedFile.path));
-
     } catch (e) {
       debugPrint('Pick Image Error: $e');
     }
@@ -187,9 +185,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
       if (!mounted) return;
       final croppedBytes = await Navigator.push<Uint8List>(
         context,
-        MaterialPageRoute(
-          builder: (context) => CustomCropScreen(image: imageBytes),
-        ),
+        MaterialPageRoute(builder: (context) => CustomCropScreen(image: imageBytes)),
       );
 
       if (croppedBytes != null) {
@@ -253,10 +249,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         children: [
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1), 
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
             child: Icon(icon, color: kLimeGreen, size: 30),
           ),
           const SizedBox(height: 8),
@@ -266,7 +259,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
     );
   }
 
-  // ✅ ฟังก์ชันแยกสำหรับโชว์ Error SnackBar สีแดง
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -304,15 +296,21 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         }
       }
 
-      final response = await ApiService.put(
+      // ✅ ยิง http.put ตรงๆ
+      final response = await http.put(
         url,
+        headers: {
+          "Content-Type": "application/json",
+          if (token != null) "Authorization": "Bearer $token",
+        },
         body: jsonEncode({
           'token': token, 
           'full_name': nameCtrl.text,
           'phone_number': phoneCtrl.text,
           'avatar_url': finalAvatarUrl, 
+          'noti_level': _notiLevel, // 🌟 ส่งแค่ค่าระดับการแจ้งเตือน
         }),
-      ).timeout(const Duration(seconds: 15)); // ✅ ป้องกันแอปค้างตอนบันทึก
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         if(mounted) {
@@ -336,7 +334,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         throw data['error'] ?? "Update failed";
       }
     } on SocketException {
-      // ✅ แจ้งเตือนเน็ตหลุดตอนกดเซฟ (ไม่เปลี่ยนหน้าจอเป็นสีแดง)
       if(mounted) _showErrorSnackBar('ขาดการเชื่อมต่ออินเทอร์เน็ต ไม่สามารถบันทึกข้อมูลได้');
     } on TimeoutException {
       if(mounted) _showErrorSnackBar('เซิร์ฟเวอร์ตอบกลับช้าเกินไป กรุณาลองใหม่อีกครั้ง');
@@ -368,21 +365,16 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
         body: loading 
           ? const Center(child: CircularProgressIndicator(color: kLimeGreen))
           : _errorMessage != null
-              // ❌ กรณี Error / เน็ตหลุด โชว์หน้า UI ขาดการเชื่อมต่อ
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 60),
                       const SizedBox(height: 16),
-                      Text(
-                        _errorMessage!, 
-                        textAlign: TextAlign.center, 
-                        style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.5)
-                      ),
+                      Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 16, height: 1.5)),
                       const SizedBox(height: 24),
                       ElevatedButton.icon(
-                        onPressed: _fetchProfile, // กดปุ่มนี้เพื่อลองดึงข้อมูลใหม่
+                        onPressed: _fetchProfile, 
                         icon: const Icon(Icons.refresh_rounded, size: 20),
                         label: const Text('ลองใหม่อีกครั้ง', style: TextStyle(fontWeight: FontWeight.bold)),
                         style: ElevatedButton.styleFrom(
@@ -395,23 +387,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                     ],
                   ),
                 )
-              // ✅ กรณีปกติ โชว์หน้าโปรไฟล์
               : Stack(
                   children: [
                     Positioned(
-                      top: -100,
-                      right: -50, 
+                      top: -100, right: -50, 
                       child: Container(
-                        width: 300,
-                        height: 300,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: kGlowPurple.withOpacity(0.3),
-                        ),
-                        child: BackdropFilter(
-                          filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                          child: Container(color: Colors.transparent),
-                        ),
+                        width: 300, height: 300,
+                        decoration: BoxDecoration(shape: BoxShape.circle, color: kGlowPurple.withOpacity(0.3)),
+                        child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80), child: Container(color: Colors.transparent)),
                       ),
                     ),
 
@@ -419,7 +402,6 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       physics: const BouncingScrollPhysics(),
                       child: Column(
                         children: [
-                          // Header + Avatar
                           SizedBox(
                             height: 320, 
                             child: Stack(
@@ -433,33 +415,21 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           if (Navigator.of(context).canPop())
-                                            IconButton(
-                                              icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white),
-                                              onPressed: () => Navigator.pop(context),
-                                            )
+                                            IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), onPressed: () => Navigator.pop(context))
                                           else
                                             const SizedBox(width: 48),
-                                          
                                           const Text("Edit Profile", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                          
                                           const SizedBox(width: 48), 
                                         ],
                                       ),
                                     ),
                                   ),
                                 ),
-
-                                Positioned(
-                                  bottom: 20,
-                                  left: 0,
-                                  right: 0,
-                                  child: _buildAvatarSection(),
-                                ),
+                                Positioned(bottom: 20, left: 0, right: 0, child: _buildAvatarSection()),
                               ],
                             ),
                           ),
 
-                          // Form Fields
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 24),
                             child: FadeTransition(
@@ -482,8 +452,44 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                     const SizedBox(height: 16),
                                     _buildModernField(teamDescCtrl, "รายละเอียด", Icons.info_outline, readOnly: true, maxLines: 2, isTeam: true),
                                     
-                                    const SizedBox(height: 40),
+                                    const SizedBox(height: 32),
                                     
+                                    // 🌟 🌟 🌟 ส่วนตั้งค่าการแจ้งเตือน (เอาสั่นออกแล้ว) 🌟 🌟 🌟
+                                    _buildSectionTitle("Notification Settings"),
+                                    Container(
+                                      decoration: BoxDecoration(
+                                        color: kCardDark,
+                                        borderRadius: BorderRadius.circular(16),
+                                        border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                      ),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            const Text("รับการแจ้งเตือน", style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+                                            DropdownButton<String>(
+                                              value: _notiLevel,
+                                              dropdownColor: kCardDark,
+                                              underline: const SizedBox(),
+                                              icon: const Icon(Icons.arrow_drop_down_rounded, color: kLimeGreen),
+                                              style: const TextStyle(color: kLimeGreen, fontSize: 14, fontWeight: FontWeight.bold),
+                                              items: const [
+                                                DropdownMenuItem(value: 'none', child: Text("ปิดการแจ้งเตือน", style: TextStyle(color: Colors.redAccent))),
+                                                DropdownMenuItem(value: 'team', child: Text("เฉพาะทีมตัวเอง")),
+                                                DropdownMenuItem(value: 'all', child: Text("ทุกทีม")),
+                                              ],
+                                              onChanged: (val) {
+                                                if (val != null) setState(() => _notiLevel = val);
+                                              },
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    // 🌟 🌟 🌟 จบส่วนตั้งค่า 🌟 🌟 🌟
+
+                                    const SizedBox(height: 40),
                                     _buildSaveButton(),
                                     const SizedBox(height: 20),
                                     _buildLogoutButton(),
@@ -505,52 +511,28 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Widget _buildAvatarSection() {
     return Center(
       child: SizedBox(
-        width: 140,
-        height: 140,
+        width: 140, height: 140,
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
+            Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: kGlowPurple.withOpacity(0.5), blurRadius: 30, spreadRadius: 5)])),
             Container(
-              width: 130,
-              height: 130,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: kGlowPurple.withOpacity(0.5), blurRadius: 30, spreadRadius: 5)
-                ],
-              ),
-            ),
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.2), width: 2),
-                color: kCardDark,
-              ),
+              width: 120, height: 120,
+              decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.2), width: 2), color: kCardDark),
               child: CircleAvatar(
                 backgroundColor: kCardDark,
-                backgroundImage: _imageFile != null 
-                    ? FileImage(_imageFile!) 
-                    : (avatarUrl != null && avatarUrl!.isNotEmpty ? NetworkImage(avatarUrl!) : null) as ImageProvider?,
-                child: (_imageFile == null && (avatarUrl == null || avatarUrl!.isEmpty))
-                  ? const Icon(Icons.person, size: 50, color: Colors.grey) 
-                  : null,
+                backgroundImage: _imageFile != null ? FileImage(_imageFile!) : (avatarUrl != null && avatarUrl!.isNotEmpty ? NetworkImage(avatarUrl!) : null) as ImageProvider?,
+                child: (_imageFile == null && (avatarUrl == null || avatarUrl!.isEmpty)) ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
               ),
             ),
             Positioned(
-              bottom: 0, 
-              right: 0, 
+              bottom: 0, right: 0, 
               child: GestureDetector(
                 onTap: _showImageSourceChoice,
                 child: Container(
                   padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: kLimeGreen, 
-                    shape: BoxShape.circle,
-                    border: Border.all(color: kDarkBg, width: 3), 
-                  ),
+                  decoration: BoxDecoration(color: kLimeGreen, shape: BoxShape.circle, border: Border.all(color: kDarkBg, width: 3)),
                   child: const Icon(Icons.camera_alt_rounded, color: Colors.black87, size: 18),
                 ),
               ),
@@ -573,26 +555,14 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildModernField(TextEditingController ctrl, String hint, IconData icon, {bool readOnly = false, TextInputType? keyboardType, int maxLines = 1, bool isTeam = false}) {
     return Container(
-      decoration: BoxDecoration(
-        color: kCardDark, 
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)), 
-      ),
+      decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
       child: TextField(
-        controller: ctrl,
-        readOnly: readOnly,
-        keyboardType: keyboardType,
-        maxLines: maxLines,
-        style: TextStyle(
-          color: readOnly ? Colors.white54 : Colors.white, 
-          fontWeight: FontWeight.w500
-        ),
+        controller: ctrl, readOnly: readOnly, keyboardType: keyboardType, maxLines: maxLines,
+        style: TextStyle(color: readOnly ? Colors.white54 : Colors.white, fontWeight: FontWeight.w500),
         decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey[600]),
+          hintText: hint, hintStyle: TextStyle(color: Colors.grey[600]),
           prefixIcon: Icon(icon, color: readOnly ? Colors.grey : kLimeGreen), 
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           suffixIcon: readOnly ? const Icon(Icons.lock_outline, size: 16, color: Colors.white24) : null,
         ),
       ),
@@ -601,20 +571,11 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildSaveButton() {
     return Container(
-      width: double.infinity,
-      height: 56,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(16),
-        color: kLimeGreen, 
-        boxShadow: [BoxShadow(color: kLimeGreen.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 5))],
-      ),
+      width: double.infinity, height: 56,
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: kLimeGreen, boxShadow: [BoxShadow(color: kLimeGreen.withOpacity(0.3), blurRadius: 15, offset: const Offset(0, 5))]),
       child: ElevatedButton(
         onPressed: _updateProfile,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.transparent, 
-          shadowColor: Colors.transparent, 
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))
-        ),
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
         child: const Text('Save Changes', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)), 
       ),
     );
@@ -622,18 +583,10 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
 
   Widget _buildLogoutButton() {
     return SizedBox(
-      width: double.infinity,
-      height: 56,
+      width: double.infinity, height: 56,
       child: OutlinedButton.icon(
-        onPressed: _logout,
-        icon: const Icon(Icons.logout_rounded),
-        label: const Text('Log Out', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.redAccent,
-          side: BorderSide(color: Colors.redAccent.withOpacity(0.5), width: 1.5),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          backgroundColor: Colors.transparent,
-        ),
+        onPressed: _logout, icon: const Icon(Icons.logout_rounded), label: const Text('Log Out', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent, side: BorderSide(color: Colors.redAccent.withOpacity(0.5), width: 1.5), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)), backgroundColor: Colors.transparent),
       ),
     );
   }

@@ -19,7 +19,7 @@ class _TextChatPageState extends State<TextChatPage> {
   
   // ข้อความเริ่มต้น
   final List<Map<String, String>> _messages = [
-    {'role': 'assistant', 'content': 'Hello! I am WallCraft AI. How can I help you with your wall design today?'}
+    {'role': 'assistant', 'content': 'ผมคือ AI ของแบรนด์ Wallcraft'}
   ];
   
   bool _isLoading = false;

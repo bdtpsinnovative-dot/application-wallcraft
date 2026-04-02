@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "927523194955",
+    "project_id": "wallcraft-notification",
+    "storage_bucket": "wallcraft-notification.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:927523194955:android:e7cf0e4bc2377ca26565ce",
+        "android_client_info": {
+          "package_name": "com.example.hello_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDoocmPO4tJhh9PB_WDZx5mqIJmQwQVxLo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -44,10 +44,16 @@
 		<key>CADisableMinimumFrameDurationOnPhone</key>
 		<true/>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
-		<true/>
-		<key>UIStatusBarHidden</key>
-		<true/>
-		<key>UIViewControllerBasedStatusBarAppearance</key>
-		<false/>
-	</dict>
+        <true/>
+        <key>UIStatusBarHidden</key>
+        <true/>
+        <key>UIViewControllerBasedStatusBarAppearance</key>
+        <false/>
+
+                <key>NSSpeechRecognitionUsageDescription</key>
+        <string>แอปต้องการสิทธิ์เข้าถึงการจดจำเสียงเพื่อพิมพ์ข้อความ</string>
+        <key>NSMicrophoneUsageDescription</key>
+        <string>แอปต้องการสิทธิ์เข้าถึงไมโครโฟนเพื่อรับเสียงพูด</string>
+
+    </dict>
 </plist>

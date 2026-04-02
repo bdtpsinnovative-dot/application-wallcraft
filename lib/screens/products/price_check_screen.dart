@@ -21,21 +21,37 @@ class PriceCheckScreen extends StatefulWidget {
 
 class _PriceCheckScreenState extends State<PriceCheckScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController(); // 🌟 ตัวจับการเลื่อนหน้าจอ
   
   List<Map<String, dynamic>> _filteredProducts = [];
   bool _isLoading = false; 
-  String? _errorMessage; // ✅ สร้างตัวแปรเก็บข้อความ Error
+  bool _isLoadingMore = false; // 🌟 สถานะตอนกำลังโหลดหน้าถัดไป
+  bool _hasMore = true; // 🌟 เช็คว่ามีข้อมูลหน้าถัดไปอีกไหม
+  String? _errorMessage; 
   Timer? _debounce; 
+
+  int _currentPage = 1;
+  final int _limit = 50; // 🌟 ดึงทีละ 50 รายการ
 
   @override
   void initState() {
     super.initState();
-    _fetchProducts(''); 
+    _fetchProducts('', isRefresh: true); 
+    
+    // 🌟 จับเหตุการณ์เวลาเลื่อนจอลงมาสุด
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore && _hasMore) {
+          _loadMoreProducts();
+        }
+      }
+    });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     _debounce?.cancel(); 
     super.dispose();
   }
@@ -48,15 +64,30 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     return NumberFormat('#,##0.00').format(roundedPrice); 
   }
 
-  Future<void> _fetchProducts(String keyword) async {
-    // ✅ เคลียร์ค่า Error ทิ้งทุกครั้งที่เริ่มดึงข้อมูลใหม่
+  // 🌟 ฟังก์ชันโหลดเพิ่ม
+  Future<void> _loadMoreProducts() async {
     setState(() {
-      _isLoading = true;
-      _errorMessage = null; 
+      _isLoadingMore = true;
+      _currentPage++;
     });
+    await _fetchProducts(_searchController.text, isRefresh: false);
+  }
+
+  Future<void> _fetchProducts(String keyword, {bool isRefresh = true}) async {
+    if (isRefresh) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null; 
+        _currentPage = 1;
+        _hasMore = true;
+        _filteredProducts.clear();
+      });
+    }
 
     try {
-      final response = await ApiService.get(AppConfig.productsUrl(keyword));
+      // 🌟 ส่ง page และ limit ไปกับ URL ด้วย
+      final url = Uri.parse('${AppConfig.baseUrl}/products?keyword=${Uri.encodeComponent(keyword)}&page=$_currentPage&limit=$_limit');
+      final response = await ApiService.get(url);
 
       if (response.statusCode == 200) {
         final decodedResponse = jsonDecode(response.body);
@@ -66,32 +97,37 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
           
           if (mounted) {
             setState(() {
-              _filteredProducts = List<Map<String, dynamic>>.from(rawData);
+              // 🌟 ถ้าข้อมูลส่งกลับมาน้อยกว่า limit แปลว่าหมดก๊อกแล้ว ไม่มีหน้าต่อไปแล้ว
+              if (rawData.length < _limit) {
+                _hasMore = false;
+              }
+              
+              if (isRefresh) {
+                _filteredProducts = List<Map<String, dynamic>>.from(rawData);
+              } else {
+                _filteredProducts.addAll(List<Map<String, dynamic>>.from(rawData));
+              }
             });
           }
         } else {
-          // กรณี API ส่ง success เป็น false
           throw "เซิร์ฟเวอร์เกิดข้อผิดพลาด กรุณาลองใหม่";
         }
       } else {
         throw "ไม่สามารถเชื่อมต่อระบบได้ (${response.statusCode})";
       }
     } on SocketException {
-      // ✅ ดักจับ Error เน็ตหลุดแบบตรงจุด
       if (mounted) {
         setState(() {
           _errorMessage = "ขาดการเชื่อมต่ออินเทอร์เน็ต\nกรุณาตรวจสอบสัญญาณ Wi-Fi หรือ 4G/5G ของคุณ";
         });
       }
     } on TimeoutException {
-      // ✅ ดักจับ Error เน็ตช้าเกินไป
       if (mounted) {
         setState(() {
           _errorMessage = "เซิร์ฟเวอร์ใช้เวลาตอบกลับนานเกินไป\nกรุณาลองใหม่อีกครั้ง";
         });
       }
     } catch (e) {
-      // ✅ ดักจับ Error อื่นๆ ที่เราคาดไม่ถึง
       print('Fetch Error: $e');
       if (mounted) {
         setState(() {
@@ -99,19 +135,23 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
         });
       }
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isLoadingMore = false;
+        });
+      }
     }
   }
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      _fetchProducts(query);
+      _fetchProducts(query, isRefresh: true); // 🌟 เวลาค้นหาใหม่ ต้องสั่ง Refresh เริ่มหน้า 1 ใหม่
     });
   }
 
-  // ✨ Bottom Sheet (เพิ่มระบบ Filter หมวดหมู่ฟิล์ม)
-// ✨ ปรับปรุงโฉมใหม่: Bottom Sheet (เน้นความคลีนและหรูหรา)
+  // ✨ Bottom Sheet (คงความสวยงามไว้เหมือนเดิม 100%)
   void _showVariantDetails(BuildContext context, Map<String, dynamic> product) {
     List<Map<String, dynamic>> allVariants = List<Map<String, dynamic>>.from(product['variants']);
     allVariants.sort((a, b) => ((a['price'] ?? 0) as num).compareTo((b['price'] ?? 0) as num));
@@ -140,7 +180,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
               height: MediaQuery.of(context).size.height * 0.85,
               decoration: const BoxDecoration(
                 color: Color(0xFF151517),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)), // มนกว่าเดิม
+                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
               ),
               child: Column(
                 children: [
@@ -230,7 +270,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                           ),
                           child: Row(
                             children: [
-                              // 1. รูปสินค้า (มนขึ้นและมีเงาเบาๆ)
+                              // 1. รูปสินค้า
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: Container(
@@ -251,7 +291,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                                     Text(patternName, 
                                       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
                                     const SizedBox(height: 4),
-                                    // จัดกลุ่มผิวและขนาดไว้ด้วยกันแบบคลีนๆ
                                     Text("${v['film'] ?? ''}", 
                                       style: TextStyle(color: kAccentColor.withOpacity(0.8), fontSize: 12)),
                                     Text("${v['thickness_mm']}mm | ${v['width_mm']}x${v['length_mm']}mm", 
@@ -260,7 +299,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                                 ),
                               ),
                               
-                              // 3. ราคา (ตัวใหญ่ ชัดเจน ไม่มี /ชิ้น)
+                              // 3. ราคา
                               Text(
                                 "฿${_formatPrice(v['price'])}",
                                 style: const TextStyle(color: kAccentColor, fontSize: 18, fontWeight: FontWeight.bold),
@@ -318,7 +357,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                           icon: const Icon(Icons.clear_rounded, color: Colors.white54),
                           onPressed: () {
                             _searchController.clear();
-                            _fetchProducts(''); 
+                            _fetchProducts('', isRefresh: true); 
                           },
                         )
                       : null,
@@ -334,7 +373,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
               child: _isLoading 
                 ? const Center(child: CircularProgressIndicator(color: kAccentColor))
                 : _errorMessage != null
-                  // ✅ ถ้ามี Error (เน็ตหลุด) โชว์ UI สวยๆ ตรงนี้
                   ? Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -348,7 +386,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                           ),
                           const SizedBox(height: 24),
                           ElevatedButton.icon(
-                            onPressed: () => _fetchProducts(_searchController.text),
+                            onPressed: () => _fetchProducts(_searchController.text, isRefresh: true),
                             icon: const Icon(Icons.refresh_rounded, size: 20),
                             label: const Text('ลองใหม่อีกครั้ง', style: TextStyle(fontWeight: FontWeight.bold)),
                             style: ElevatedButton.styleFrom(
@@ -361,12 +399,21 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                         ],
                       ),
                     )
-                  // ✅ ถ้าไม่มี Error ก็ทำงานปกติ
                   : _filteredProducts.isNotEmpty
                     ? ListView.builder(
+                        controller: _scrollController, // 🌟 ผูกตัวจับการเลื่อนเข้ากับ ListView ตรงนี้
                         physics: const BouncingScrollPhysics(),
-                        itemCount: _filteredProducts.length,
+                        itemCount: _filteredProducts.length + (_isLoadingMore ? 1 : 0), // 🌟 บวกเพิ่ม 1 ช่องเผื่อตอนโชว์ที่หมุนๆ
                         itemBuilder: (context, index) {
+                          
+                          // 🌟 ถ้าไถมาถึงล่างสุดแล้วกำลังโหลดอยู่ ให้โชว์ตัวหมุนๆ โหลดดิ้ง
+                          if (index == _filteredProducts.length) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 20),
+                              child: Center(child: CircularProgressIndicator(color: kAccentColor)),
+                            );
+                          }
+
                           final product = _filteredProducts[index];
                           
                           String priceText = "";

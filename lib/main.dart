@@ -1,7 +1,10 @@
- import 'package:flutter/material.dart';
+//lib/main.dart
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-// ❌ ลบ import supabase_flutter ออก เพราะเราไม่ได้ใช้มันแล้ว
+import 'package:firebase_core/firebase_core.dart'; // ✅ เพิ่มตัวนี้
+import 'firebase_options.dart'; // ✅ เพิ่มตัวนี้ (ไฟล์ที่นายรัน flutterfire generate มา)
+import 'services/notification_service.dart'; // ✅ เพิ่มตัวนี้
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 
@@ -13,8 +16,16 @@ void main() async {
   
   try {
     await dotenv.load(fileName: ".env");
-    print("✅ Load .env success: ${dotenv.env['BASE_URL']}");
-    // ❌ เอา Supabase.initialize ออกทั้งหมด
+    
+    // 🔥 ปลุกพลัง Firebase ตรงนี้ครับนาย
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+    
+    // 🔔 ตั้งค่าพื้นฐาน Notification (ขอสิทธิ์)
+    await NotificationService.initNotification();
+    
+    print("✅ Load .env and Firebase success");
   } catch (e) {
     print("❌ Error initializing: $e");
   }
