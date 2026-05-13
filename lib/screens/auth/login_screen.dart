@@ -1,19 +1,23 @@
 // lib/screens/auth/login_screen.dart
 import 'dart:convert';
-import 'dart:io'; // ✅ เพิ่ม import นี้เพื่อเช็คเรื่องเน็ตหลุด
+import 'dart:io'; 
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+
+// 🌟 1. เพิ่ม Import 2 ตัวนี้เข้ามาเพื่อจัดการระบบแจ้งเตือน
+import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../services/notification_service.dart';
+
 import '../../constants.dart';
 import '../home/home_screen.dart';
 
-// 🎨 Palette สีสไตล์ Monochrome (ขาว-ดำ) เรียบหรู
 const Color kDarkBg = Color(0xFF0F0F11);
-const Color kGlowPurple = Color(0xFF2A2A35); // ปรับแสงฟุ้งให้เป็นสีเทาอมม่วงนิดๆ ดูแพงขึ้น
+const Color kGlowPurple = Color(0xFF2A2A35); 
 const Color kCardDark = Color(0xFF1C1C1E);
-const Color kPrimaryWhite = Colors.white; // ⚪️ ใช้สีขาวเป็นสีหลักแทนสีเขียว
+const Color kPrimaryWhite = Colors.white; 
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -32,9 +36,6 @@ class _LoginScreenState extends State<LoginScreen> {
   bool showPass = false;
   bool isRegister = false;
 
-  // -----------------------------------------------------------
-  // 🟢 ฟังก์ชันแปลภาษา Error ให้เป็นภาษาคนเข้าใจง่าย
-  // -----------------------------------------------------------
   String _getFriendlyErrorMessage(String serverError) {
     String msg = serverError.toLowerCase();
 
@@ -98,6 +99,16 @@ class _LoginScreenState extends State<LoginScreen> {
             await prefs.setString('user_id', data['session']['user']['id']);
           }
 
+          // 🌟 2. เพิ่มโค้ดดึงและอัปโหลด FCM Token ทันทีที่ล็อกอินสำเร็จ!
+          try {
+            String? fcmToken = await FirebaseMessaging.instance.getToken();
+            if (fcmToken != null) {
+              await NotificationService.uploadTokenToServer(fcmToken);
+            }
+          } catch (fcmError) {
+            print("FCM Token Upload Failed: $fcmError");
+          }
+
           if (mounted) {
             Navigator.pushReplacement(
               context,
@@ -117,8 +128,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('✅ สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-                backgroundColor: kPrimaryWhite, // ⚪️ แจ้งเตือนสีขาว
+                content: Text('สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                backgroundColor: kPrimaryWhite,
                 behavior: SnackBarBehavior.floating,
                 margin: EdgeInsets.all(20),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10))),
@@ -147,13 +158,12 @@ class _LoginScreenState extends State<LoginScreen> {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-      prefixIcon: Icon(icon, color: Colors.white70, size: 20), // ⚪️ ไอคอนสีขาวหม่น
+      prefixIcon: Icon(icon, color: Colors.white70, size: 20),
       filled: true,
       fillColor: Colors.white.withOpacity(0.05),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(0.05))),
-      // ⚪️ ขอบสว่างเป็นสีขาวตอนกดพิมพ์
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: kPrimaryWhite, width: 1.5)),
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent)),
     );
@@ -167,7 +177,6 @@ class _LoginScreenState extends State<LoginScreen> {
         backgroundColor: kDarkBg,
         body: Stack(
           children: [
-            // 🌌 Background Glow (แสงเทาอมม่วง เรียบๆ)
             Positioned(
               top: -50,
               right: -50,
@@ -186,7 +195,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start, 
                   children: [
-                    // 🏗️ App Name
                     const Text(
                       'WallCraft',
                       style: TextStyle(
@@ -203,7 +211,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     const SizedBox(height: 48),
                     
-                    // 🛡️ Glass Login Card
                     ClipRRect(
                       borderRadius: BorderRadius.circular(32),
                       child: BackdropFilter(
@@ -257,7 +264,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 
                                 const SizedBox(height: 32),
                                 
-                                // ⚪️ Main Button (พื้นขาว ตัวหนังสือดำ)
                                 SizedBox(
                                   width: double.infinity,
                                   height: 60,
@@ -270,8 +276,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                                     ),
                                     child: loading
-                                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3))
-                                        : Text(isRegister ? 'CREATE ACCOUNT' : 'SIGN IN', style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                                      ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3))
+                                      : Text(isRegister ? 'CREATE ACCOUNT' : 'SIGN IN', style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 1.2)),
                                   ),
                                 ),
                               ],
@@ -283,7 +289,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     
                     const SizedBox(height: 32),
                     
-                    // Toggle Register/Login
                     Center(
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
@@ -293,7 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             onTap: () => setState(() { isRegister = !isRegister; error = null; }),
                             child: const Text(
                               'Switch',
-                              style: TextStyle(color: kPrimaryWhite, fontWeight: FontWeight.bold), // ⚪️ เปลี่ยนสีลิงก์เป็นสีขาว
+                              style: TextStyle(color: kPrimaryWhite, fontWeight: FontWeight.bold), 
                             ),
                           ),
                         ],

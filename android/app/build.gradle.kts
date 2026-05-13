@@ -20,8 +20,8 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
+    jvmTarget = "17" // ✅ ใส่เป็น String ตรงๆ แบบนี้เลยครับ ชัวร์สุด
+}
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
@@ -58,7 +58,7 @@ android {
     }
 }
 dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.3") // 👈 เพิ่มตัวแปลภาษา Java 8 ครับ
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 flutter {
     source = "../.."

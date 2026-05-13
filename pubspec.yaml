@@ -1,7 +1,7 @@
 name: Wallceaft
 description: "A new Flutter project."
 publish_to: 'none'
-version: 1.0.4+5
+version: 1.0.5
 
 environment:
   sdk: '>=3.10.4 <4.0.0'
@@ -9,13 +9,17 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+    
+  # 🔄 ระบบอัปเดตแอป 
+  ota_update: 7.1.0
+  
   crop_your_image: ^2.0.0
 
   # 🔍 ระบบค้นหาและ Dropdown
   dropdown_search: ^6.0.1 
 
   # 🌐 การเชื่อมต่อและฐานข้อมูล
-  http: ^1.2.2
+  http: ^1.6.0
   flutter_dotenv: ^5.2.0
   supabase_flutter: ^2.0.0 
   shared_preferences: ^2.2.2 
@@ -31,7 +35,7 @@ dependencies:
   # 📍 พิกัดและตำแหน่ง (เพิ่ม 2 ตัวนี้เข้ามาให้แล้ว)
   geolocator: ^14.0.2
   device_info_plus: ^11.1.1
-  url_launcher: ^6.2.6
+  url_launcher: ^6.3.2
 
   # 🎙️ ระบบเสียงและ AI
   speech_to_text: ^7.3.0
@@ -41,6 +45,7 @@ dependencies:
   firebase_messaging: ^16.1.3
   flutter_local_notifications: ^17.2.2
   fl_chart: ^1.2.0
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:

@@ -1,16 +1,19 @@
 import 'dart:convert';
 import 'dart:async';
-import 'dart:io'; // ✅ เพิ่มดักจับเน็ตหลุด (SocketException)
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import '../../constants.dart';
 import '../../services/api_service.dart';
 
+// 🌟 Import ชิ้นส่วนที่เราหั่นออกไปเมื่อกี้เข้ามาใช้งาน
+import 'widgets/product_card.dart';
+import 'widgets/price_check_modals.dart';
+
 const Color kDarkBg = Color(0xFF0F0F11); 
 const Color kCardDark = Color(0xFF1C1C1E); 
-const Color kAccentColor = Color(0xFFC6A87C); // สีทอง Tarra Stone
+const Color kAccentColor = Color(0xFFC6A87C); 
 
 class PriceCheckScreen extends StatefulWidget {
   const PriceCheckScreen({super.key});
@@ -21,24 +24,40 @@ class PriceCheckScreen extends StatefulWidget {
 
 class _PriceCheckScreenState extends State<PriceCheckScreen> {
   final TextEditingController _searchController = TextEditingController();
-  final ScrollController _scrollController = ScrollController(); // 🌟 ตัวจับการเลื่อนหน้าจอ
+  final ScrollController _scrollController = ScrollController(); 
   
   List<Map<String, dynamic>> _filteredProducts = [];
   bool _isLoading = false; 
-  bool _isLoadingMore = false; // 🌟 สถานะตอนกำลังโหลดหน้าถัดไป
-  bool _hasMore = true; // 🌟 เช็คว่ามีข้อมูลหน้าถัดไปอีกไหม
+  bool _isLoadingMore = false; 
+  bool _hasMore = true; 
   String? _errorMessage; 
   Timer? _debounce; 
 
   int _currentPage = 1;
-  final int _limit = 50; // 🌟 ดึงทีละ 50 รายการ
+  final int _limit = 50; 
+
+  String _selectedCategory = 'ทั้งหมด';
+
+  final Map<String, List<String>> _categoryGroups = {
+    'CRAFT STONE': [
+      'Tarra Stone', 'Panorama', 'Strength Rock', 'Geoform', 
+      'Urban Form', 'Nature Grain', 'Rust', 'Finesse'
+    ],
+    'LUXE SERIES': [
+      'Fabric', 'Leather', 'Metallic', 'Semi Outdoor', 
+      'Signature', 'Stone', 'Velvet', 'Wood'
+    ],
+    'ESSENTIAL SERIES': [
+      'Solid Panel', 'Hollow Core Panel', 'Decor Panel', 
+      'Accessories', 'Aluminium & LED'
+    ],
+  };
 
   @override
   void initState() {
     super.initState();
     _fetchProducts('', isRefresh: true); 
     
-    // 🌟 จับเหตุการณ์เวลาเลื่อนจอลงมาสุด
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
         if (!_isLoadingMore && _hasMore) {
@@ -56,7 +75,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     super.dispose();
   }
 
-  // ✨ ปัดเศษเป็นเลขจำนวนเต็ม แล้วโชว์ .00 พร้อมลูกน้ำ
   String _formatPrice(dynamic priceData) {
     if (priceData == null) return "0.00";
     double rawPrice = (priceData as num).toDouble(); 
@@ -64,7 +82,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     return NumberFormat('#,##0.00').format(roundedPrice); 
   }
 
-  // 🌟 ฟังก์ชันโหลดเพิ่ม
   Future<void> _loadMoreProducts() async {
     setState(() {
       _isLoadingMore = true;
@@ -85,8 +102,18 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     }
 
     try {
-      // 🌟 ส่ง page และ limit ไปกับ URL ด้วย
-      final url = Uri.parse('${AppConfig.baseUrl}/products?keyword=${Uri.encodeComponent(keyword)}&page=$_currentPage&limit=$_limit');
+      String urlString = '${AppConfig.baseUrl}/products?keyword=${Uri.encodeComponent(keyword)}&page=$_currentPage&limit=$_limit';
+      
+      if (_selectedCategory != 'ทั้งหมด') {
+        if (_categoryGroups.containsKey(_selectedCategory)) {
+          String subItems = _categoryGroups[_selectedCategory]!.join(',');
+          urlString += '&collections=${Uri.encodeComponent(subItems)}';
+        } else {
+          urlString += '&collection=${Uri.encodeComponent(_selectedCategory)}';
+        }
+      }
+
+      final url = Uri.parse(urlString);
       final response = await ApiService.get(url);
 
       if (response.statusCode == 200) {
@@ -97,7 +124,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
           
           if (mounted) {
             setState(() {
-              // 🌟 ถ้าข้อมูลส่งกลับมาน้อยกว่า limit แปลว่าหมดก๊อกแล้ว ไม่มีหน้าต่อไปแล้ว
               if (rawData.length < _limit) {
                 _hasMore = false;
               }
@@ -116,24 +142,11 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
         throw "ไม่สามารถเชื่อมต่อระบบได้ (${response.statusCode})";
       }
     } on SocketException {
-      if (mounted) {
-        setState(() {
-          _errorMessage = "ขาดการเชื่อมต่ออินเทอร์เน็ต\nกรุณาตรวจสอบสัญญาณ Wi-Fi หรือ 4G/5G ของคุณ";
-        });
-      }
+      if (mounted) setState(() => _errorMessage = "ขาดการเชื่อมต่ออินเทอร์เน็ต\nกรุณาตรวจสอบสัญญาณ Wi-Fi หรือ 4G/5G ของคุณ");
     } on TimeoutException {
-      if (mounted) {
-        setState(() {
-          _errorMessage = "เซิร์ฟเวอร์ใช้เวลาตอบกลับนานเกินไป\nกรุณาลองใหม่อีกครั้ง";
-        });
-      }
+      if (mounted) setState(() => _errorMessage = "เซิร์ฟเวอร์ใช้เวลาตอบกลับนานเกินไป\nกรุณาลองใหม่อีกครั้ง");
     } catch (e) {
-      print('Fetch Error: $e');
-      if (mounted) {
-        setState(() {
-          _errorMessage = "เกิดข้อผิดพลาดบางอย่าง: ไม่สามารถดึงข้อมูลได้";
-        });
-      }
+      if (mounted) setState(() => _errorMessage = "เกิดข้อผิดพลาดบางอย่าง: ไม่สามารถดึงข้อมูลได้");
     } finally {
       if (mounted) {
         setState(() {
@@ -147,176 +160,8 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     _debounce = Timer(const Duration(milliseconds: 500), () {
-      _fetchProducts(query, isRefresh: true); // 🌟 เวลาค้นหาใหม่ ต้องสั่ง Refresh เริ่มหน้า 1 ใหม่
+      _fetchProducts(query, isRefresh: true); 
     });
-  }
-
-  // ✨ Bottom Sheet (คงความสวยงามไว้เหมือนเดิม 100%)
-  void _showVariantDetails(BuildContext context, Map<String, dynamic> product) {
-    List<Map<String, dynamic>> allVariants = List<Map<String, dynamic>>.from(product['variants']);
-    allVariants.sort((a, b) => ((a['price'] ?? 0) as num).compareTo((b['price'] ?? 0) as num));
-
-    Set<String> uniqueFilms = {'ทั้งหมด'};
-    for (var v in allVariants) {
-      String filmName = v['film']?.toString().trim() ?? '';
-      if (filmName.isNotEmpty) uniqueFilms.add(filmName);
-    }
-    List<String> filterOptions = uniqueFilms.toList();
-    String selectedFilter = 'ทั้งหมด';
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setModalState) {
-            List<Map<String, dynamic>> displayVariants = allVariants.where((v) {
-              if (selectedFilter == 'ทั้งหมด') return true;
-              return (v['film']?.toString().trim() ?? '') == selectedFilter;
-            }).toList();
-
-            return Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: const BoxDecoration(
-                color: Color(0xFF151517),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-              ),
-              child: Column(
-                children: [
-                  // Handle Bar
-                  Container(
-                    margin: const EdgeInsets.only(top: 12, bottom: 20),
-                    width: 45, height: 5,
-                    decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10)),
-                  ),
-                  
-                  // Header Section
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(product['collection'].toString().toUpperCase(), 
-                                style: const TextStyle(color: kAccentColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 2)),
-                              const SizedBox(height: 4),
-                              Text(product['name'], 
-                                style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                            ],
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.white38),
-                          onPressed: () => Navigator.pop(context),
-                        )
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Film Filter
-                  if (filterOptions.length > 1)
-                    SizedBox(
-                      height: 38,
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 24),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: filterOptions.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 8),
-                        itemBuilder: (context, index) {
-                          bool isSelected = selectedFilter == filterOptions[index];
-                          return GestureDetector(
-                            onTap: () => setModalState(() => selectedFilter = filterOptions[index]),
-                            child: AnimatedContainer(
-                              duration: const Duration(milliseconds: 200),
-                              padding: const EdgeInsets.symmetric(horizontal: 18),
-                              alignment: Alignment.center,
-                              decoration: BoxDecoration(
-                                color: isSelected ? kAccentColor : Colors.white.withOpacity(0.05),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(filterOptions[index],
-                                style: TextStyle(color: isSelected ? Colors.black : Colors.white70, 
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, fontSize: 13)),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  
-                  const SizedBox(height: 20),
-                  const Divider(color: Colors.white10, height: 1),
-                  
-                  // รายการรุ่นย่อย
-                  Expanded(
-                    child: ListView.separated(
-                      padding: const EdgeInsets.all(24),
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: displayVariants.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final v = displayVariants[index];
-                        final patternName = v['pattern'] ?? v['color'] ?? 'Standard';
-                        
-                        return Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: kCardDark,
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: Colors.white.withOpacity(0.05)),
-                          ),
-                          child: Row(
-                            children: [
-                              // 1. รูปสินค้า
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  width: 65, height: 65,
-                                  color: Colors.black38,
-                                  child: (v['variant_image'] != null)
-                                    ? Image.network(v['variant_image'], fit: BoxFit.cover)
-                                    : const Icon(Icons.image, color: Colors.white12),
-                                ),
-                              ),
-                              const SizedBox(width: 16),
-                              
-                              // 2. ข้อมูลชื่อและสเปค
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(patternName, 
-                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                                    const SizedBox(height: 4),
-                                    Text("${v['film'] ?? ''}", 
-                                      style: TextStyle(color: kAccentColor.withOpacity(0.8), fontSize: 12)),
-                                    Text("${v['thickness_mm']}mm | ${v['width_mm']}x${v['length_mm']}mm", 
-                                      style: TextStyle(color: Colors.grey[500], fontSize: 12)),
-                                  ],
-                                ),
-                              ),
-                              
-                              // 3. ราคา
-                              Text(
-                                "฿${_formatPrice(v['price'])}",
-                                style: const TextStyle(color: kAccentColor, fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            );
-          }
-        );
-      },
-    );
   }
 
   @override
@@ -332,12 +177,31 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
         ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list_rounded, color: Colors.white),
+            onPressed: () {
+              // 🌟 เรียกใช้ Modal เลือกหมวดหมู่ที่แยกไฟล์ไว้
+              showCategoryFilterModal(
+                context: context,
+                selectedCategory: _selectedCategory,
+                categoryGroups: _categoryGroups,
+                onCategorySelected: (newCategory) {
+                  if (_selectedCategory != newCategory) {
+                    setState(() => _selectedCategory = newCategory);
+                    _fetchProducts(_searchController.text, isRefresh: true);
+                  }
+                },
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
         child: Column(
           children: [
-            // 🔍 ช่องค้นหา
             Container(
               decoration: BoxDecoration(
                 color: kCardDark,
@@ -366,9 +230,34 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
+            
+            if (_selectedCategory != 'ทั้งหมด') ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  const Icon(Icons.check_circle_outline_rounded, color: kAccentColor, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    "หมวดหมู่: $_selectedCategory",
+                    style: const TextStyle(color: kAccentColor, fontSize: 13, fontWeight: FontWeight.bold),
+                  ),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _selectedCategory = 'ทั้งหมด');
+                      _fetchProducts(_searchController.text, isRefresh: true);
+                    },
+                    child: const Text(
+                      "ล้างตัวกรอง",
+                      style: TextStyle(color: Colors.white54, fontSize: 12, decoration: TextDecoration.underline),
+                    ),
+                  )
+                ],
+              ),
+            ],
+            
+            const SizedBox(height: 16),
 
-            // 📋 รายการสินค้า
             Expanded(
               child: _isLoading 
                 ? const Center(child: CircularProgressIndicator(color: kAccentColor))
@@ -401,12 +290,11 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                     )
                   : _filteredProducts.isNotEmpty
                     ? ListView.builder(
-                        controller: _scrollController, // 🌟 ผูกตัวจับการเลื่อนเข้ากับ ListView ตรงนี้
+                        controller: _scrollController, 
                         physics: const BouncingScrollPhysics(),
-                        itemCount: _filteredProducts.length + (_isLoadingMore ? 1 : 0), // 🌟 บวกเพิ่ม 1 ช่องเผื่อตอนโชว์ที่หมุนๆ
+                        itemCount: _filteredProducts.length + (_isLoadingMore ? 1 : 0), 
                         itemBuilder: (context, index) {
                           
-                          // 🌟 ถ้าไถมาถึงล่างสุดแล้วกำลังโหลดอยู่ ให้โชว์ตัวหมุนๆ โหลดดิ้ง
                           if (index == _filteredProducts.length) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(vertical: 20),
@@ -414,105 +302,17 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                             );
                           }
 
-                          final product = _filteredProducts[index];
-                          
-                          String priceText = "";
-                          if (product['minPrice'] == product['maxPrice']) {
-                            priceText = "฿${_formatPrice(product['minPrice'])}";
-                          } else {
-                            priceText = "฿${_formatPrice(product['minPrice'])} - ฿${_formatPrice(product['maxPrice'])}";
-                          }
-
-                          String displayImage = product['image'] ?? '';
-                          if (displayImage.isEmpty && product['variants'].isNotEmpty) {
-                            displayImage = product['variants'][0]['variant_image'] ?? '';
-                          }
-
-                          return GestureDetector(
-                            onTap: () => _showVariantDetails(context, product),
-                            child: Container(
-                              margin: const EdgeInsets.only(bottom: 16), 
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: kCardDark,
-                                borderRadius: BorderRadius.circular(20), 
-                                border: Border.all(color: Colors.white.withOpacity(0.06)),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.2),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 4),
-                                  )
-                                ]
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.center,
-                                children: [
-                                  // 🖼️ รูปภาพ
-                                  Container(
-                                    width: 80, height: 80,
-                                    decoration: BoxDecoration(
-                                      color: Colors.black26, 
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: Colors.white.withOpacity(0.05)),
-                                    ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: displayImage.isNotEmpty
-                                          ? Image.network(displayImage, fit: BoxFit.cover, errorBuilder: (_,__,___) => const Icon(Icons.broken_image_rounded, color: Colors.white38))
-                                          : const Icon(Icons.image_not_supported_rounded, color: Colors.white38),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16), 
-
-                                  // 📝 ข้อมูลตรงกลาง 
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        if (product["collection"].toString().isNotEmpty)
-                                          Text(
-                                            product["collection"].toString().toUpperCase(),
-                                            style: const TextStyle(color: kAccentColor, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.5),
-                                          ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          product["name"],
-                                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, height: 1.2),
-                                          overflow: TextOverflow.ellipsis,
-                                          maxLines: 2,
-                                        ),
-                                        const SizedBox(height: 8),
-                                        
-                                        Text(
-                                          priceText,
-                                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
-                                        ),
-                                        const SizedBox(height: 10),
-
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: kAccentColor.withOpacity(0.15), 
-                                            borderRadius: BorderRadius.circular(6),
-                                          ),
-                                          child: Text(
-                                            "${product['variants'].length} รุ่นย่อย",
-                                            style: const TextStyle(color: kAccentColor, fontSize: 11, fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-
-                                  // ➡ ไอคอนลูกศรชี้ขวาสุด
-                                  const Padding(
-                                    padding: EdgeInsets.only(left: 8),
-                                    child: Icon(Icons.arrow_forward_ios_rounded, color: Colors.white24, size: 16),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          // 🌟 เรียกใช้ ProductCard ที่หั่นแยกไปไว้ในไฟล์อื่น
+                          return ProductCard(
+                            product: _filteredProducts[index],
+                            formatPrice: _formatPrice,
+                            onTap: () {
+                              showVariantDetailsModal(
+                                context: context,
+                                product: _filteredProducts[index],
+                                formatPrice: _formatPrice,
+                              );
+                            },
                           );
                         },
                       )

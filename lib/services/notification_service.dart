@@ -1,4 +1,5 @@
 // lib/services/notification_service.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -20,7 +21,7 @@ class NotificationService {
       sound: true,
     );
 
-    // 3. ตั้งค่า Initialization
+    // 3. ตั้งค่า Initialization (ไอคอนขาวดำ สไตล์มินิมอล)
     const AndroidInitializationSettings androidInit = AndroidInitializationSettings('ic_notification');
     const DarwinInitializationSettings iosInit = DarwinInitializationSettings();
     const InitializationSettings initSettings = InitializationSettings(
@@ -35,22 +36,25 @@ class NotificationService {
       },
     );
 
-    // 4. จัดการ Token
+    // 4. จัดการ Token ทันทีที่เปิดแอป
     String? token = await _fcm.getToken();
     if (token != null) {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('fcm_token', token);
       await uploadTokenToServer(token);
     }
 
-    // 5. ดักฟังข้อความ
+    // 🌟 4.1 ดักฟังกรณี Firebase แอบเปลี่ยน Token กลางคัน จะได้ส่งไปอัปเดตอัตโนมัติ
+    _fcm.onTokenRefresh.listen((newToken) {
+      uploadTokenToServer(newToken);
+    });
+
+    // 5. ดักฟังข้อความตอนเปิดแอปอยู่ (Foreground)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print("🔔 แจ้งเตือนเข้า: ${message.notification?.title}");
       _showLocalNotification(message);
     });
   }
 
-static void _showLocalNotification(RemoteMessage message) {
+  static void _showLocalNotification(RemoteMessage message) {
     RemoteNotification? notification = message.notification;
     AndroidNotification? android = message.notification?.android;
 
@@ -61,37 +65,43 @@ static void _showLocalNotification(RemoteMessage message) {
         notification.body,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            // 🌟 1. เปลี่ยนชื่อ Channel ID ตรงนี้ (เปลี่ยนจาก high_importance_channel เป็นชื่ออื่น เพื่อล้างค่าเดิมที่มือถือจำไว้)
             'order_alert_channel_v2', 
             'การแจ้งเตือนออเดอร์',
             channelDescription: 'แจ้งเตือนเมื่อมีออเดอร์ใหม่เข้าทีม',
             importance: Importance.max, 
             priority: Priority.high,    
             icon: 'ic_notification', 
-            color: Color(0xFF000000), 
-            
-            // 🌟 2. เพิ่ม 2 บรรทัดนี้สำหรับเรียกเสียงที่เราเอาไปใส่ในโฟลเดอร์ raw
+            color: Color(0xFF000000), // โทนดำเข้ากับธีมแอป
             playSound: true,
             sound: RawResourceAndroidNotificationSound('notification_sound'), 
           ),
-          // 🌟 3. เพิ่มของ iOS เข้าไปด้วยเลยครับ วันหน้านายทำลง iPhone จะได้มีเสียงดังปังๆ
           iOS: DarwinNotificationDetails(
             presentAlert: true,
             presentBadge: true,
             presentSound: true,
-            sound: 'notification_sound.mp3', // ของ iOS ต้องระบุนามสกุล .mp3 ด้วยครับ
+            sound: 'notification_sound.mp3', 
           )
         ),
       );
     }
   }
 
+  // 🌟 แยกออกมาให้ชัดเจน และทำ Public ไว้เผื่อเรียกใช้ตอน Login เสร็จ
   static Future<void> uploadTokenToServer(String token) async {
     try {
       final prefs = await SharedPreferences.getInstance();
+      
+      // เก็บ Token ลงเครื่องไว้ก่อน
+      await prefs.setString('fcm_token', token);
+      
+      // เช็คว่ามีคน Login อยู่หรือเปล่า
       final authToken = prefs.getString('auth_token');
-      if (authToken != null) {
+      
+      if (authToken != null && authToken.isNotEmpty) {
+        print("📤 กำลังส่ง FCM Token เข้า Database...");
         await ApiService.updateFcmToken(token);
+      } else {
+        print("⚠️ ยังไม่ได้ล็อกอิน เก็บ Token ไว้ในเครื่องรอไปก่อนนะจ๊ะ");
       }
     } catch (e) {
       print("❌ อัปเดต Token พลาด: $e");

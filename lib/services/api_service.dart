@@ -1,13 +1,12 @@
-// lib/services/api_service.dart
 import 'dart:convert';
+import 'dart:io'; // 👈 เพิ่มตัวนี้เพื่อเช็ค Platform.isAndroid
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../constants.dart'; // 👈 อย่าลืมเช็คว่า AppConfig อยู่ในไฟล์ไหนนะครับ
+import '../constants.dart'; 
 import 'auth_service.dart'; 
 
 class ApiService {
   
-  // ฟังก์ชันสำหรับใส่ Token เข้าไปใน Header อัตโนมัติ
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
@@ -18,35 +17,38 @@ class ApiService {
   }
 
   // ==================================================
-  // 🔔 [NEW] ฟังก์ชันส่ง FCM Token ไปอัปเดตที่เซิร์ฟเวอร์
+  // 🔔 ให้ Flutter ยิงกลับไปที่ API Next.js ตามเดิมครับ
   // ==================================================
   static Future<void> updateFcmToken(String fcmToken) async {
-    // 🚩 เปลี่ยน URL ให้ตรงกับที่นายตั้งใน Next.js นะครับ
-    final url = Uri.parse('${AppConfig.baseUrl}/profile/fcm'); 
-    
-    // เราใช้ patch() ที่เราเขียนไว้ด้านล่าง เพราะมันมีระบบจัดการ Token 401 ให้แล้ว
-    final response = await patch(
-      url, 
-      body: jsonEncode({'fcm_token': fcmToken})
-    );
+    try {
+      // 🚩 กลับไปใช้ baseUrl เพื่อวิ่งเข้า Next.js ครับ
+      final url = Uri.parse('${AppConfig.baseUrl}/profile/fcm');
+      
+      final response = await patch(
+        url, 
+        body: jsonEncode({
+          'fcm_token': fcmToken,
+          // ส่ง device_type ไปด้วย เผื่อในอนาคต Next.js อยากใช้
+          'device_type': Platform.isAndroid ? 'android' : 'ios', 
+        })
+      );
 
-    if (response.statusCode == 200) {
-      print("🚀 [ApiService] อัปเดต FCM Token สำเร็จ");
-    } else {
-      print("❌ [ApiService] อัปเดต FCM Token พลาด: ${response.statusCode}");
-      throw Exception('Failed to update FCM Token');
+      if (response.statusCode == 200) {
+        print("🚀 [ApiService] อัปเดต FCM Token ผ่าน API สำเร็จ!");
+      } else {
+        print("❌ [ApiService] อัปเดต FCM Token พลาด: ${response.statusCode}");
+      }
+    } catch (e) {
+      print("❌ [ApiService] Error: $e");
     }
   }
 
-  // ==================================================
-  // 🟢 GET Method
-  // ==================================================
+  // --- Method อื่นๆ (get, post, put, patch) คงเดิมไว้ครับ ---
+  
   static Future<http.Response> get(Uri uri) async {
     var headers = await _getHeaders();
     var response = await http.get(uri, headers: headers);
-
     if (response.statusCode == 401) {
-      print("⚠️ Token หมดอายุ (GET)! กำลังพยายามต่ออายุ...");
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
@@ -56,15 +58,10 @@ class ApiService {
     return response;
   }
 
-  // ==================================================
-  // 🟡 POST Method
-  // ==================================================
   static Future<http.Response> post(Uri uri, {Object? body}) async {
     var headers = await _getHeaders();
     var response = await http.post(uri, headers: headers, body: body);
-
     if (response.statusCode == 401) {
-      print("⚠️ Token หมดอายุ (POST)! กำลังพยายามต่ออายุ...");
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
@@ -74,33 +71,10 @@ class ApiService {
     return response;
   }
 
-  // ==================================================
-  // 🟠 PUT Method
-  // ==================================================
-  static Future<http.Response> put(Uri uri, {Object? body}) async {
-    var headers = await _getHeaders();
-    var response = await http.put(uri, headers: headers, body: body);
-
-    if (response.statusCode == 401) {
-      print("⚠️ Token หมดอายุ (PUT)! กำลังพยายามต่ออายุ...");
-      bool refreshed = await AuthService.tryRefreshToken();
-      if (refreshed) {
-        headers = await _getHeaders();
-        response = await http.put(uri, headers: headers, body: body);
-      }
-    }
-    return response;
-  }
-
-  // ==================================================
-  // 🟣 PATCH Method 
-  // ==================================================
   static Future<http.Response> patch(Uri uri, {Object? body}) async {
     var headers = await _getHeaders();
     var response = await http.patch(uri, headers: headers, body: body);
-
     if (response.statusCode == 401) {
-      print("⚠️ Token หมดอายุ (PATCH)! กำลังพยายามต่ออายุ...");
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();

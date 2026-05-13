@@ -1,11 +1,12 @@
 //lib/screens/orders/components/product_item_card.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart'; // 👈 ตัวนี้แหละที่มาช่วยชีวิต
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
 import 'package:path/path.dart' as p;
+
 // 🎨 Palette สี (Theme: Simple Black & White - ขาวดำ ชัดเจน)
 const Color kCardDark = Color(0xFF1C1C1E);
 const Color kInputBg = Color(0xFF2C2C2E);
@@ -46,7 +47,45 @@ class ProductItemCard extends StatefulWidget {
 
 class _ProductItemCardState extends State<ProductItemCard> {
   
-Future<void> _showImageSourceModal() async {
+  // 🌟 1. จังหวะแรก: ทำงานตอนการ์ดสินค้านี้ถูกสร้างขึ้นมาครั้งแรก
+  @override
+  void initState() {
+    super.initState();
+    _checkAutoSelectProject();
+  }
+
+  // 🌟 2. จังหวะสอง: ทำงานเมื่อข้อมูล projects จากด้านบนมีการเปลี่ยนแปลง
+  @override
+  void didUpdateWidget(ProductItemCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // เช็คว่าจำนวนโปรเจกต์ที่เลือกเปลี่ยนไปไหม
+    if (widget.projects.length != oldWidget.projects.length) {
+      _checkAutoSelectProject();
+    }
+  }
+
+  // 🌟 3. ฟังก์ชันหลักสำหรับ Auto-Tick (ติ๊กถูกอัตโนมัติ)
+  void _checkAutoSelectProject() {
+    // ถ้ามีโปรเจกต์ให้เลือกแค่ 1 อันเป๊ะๆ
+    if (widget.projects.length == 1) {
+      String onlyProjectId = widget.projects[0]['id'];
+      
+      // ถ้ายังไม่ได้ติ๊กโปรเจกต์นี้
+      if (!widget.item.selectedProjectIds.contains(onlyProjectId)) {
+        // ใช้ addPostFrameCallback เพื่อป้องกัน Error การเรียก setState ชนกับการ Build UI
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              widget.item.selectedProjectIds.add(onlyProjectId);
+              widget.item.projectAreaControllers.putIfAbsent(onlyProjectId, () => TextEditingController());
+            });
+          }
+        });
+      }
+    }
+  }
+
+  Future<void> _showImageSourceModal() async {
     // ✅ 1. ท่าไม้ตาย: สั่งหุบแป้นพิมพ์แบบเด็ดขาดลึกถึงระดับ OS
     FocusManager.instance.primaryFocus?.unfocus();
     SystemChannels.textInput.invokeMethod('TextInput.hide');
@@ -124,16 +163,15 @@ Future<void> _showImageSourceModal() async {
     }
   }
 
-  // ✨ Decoration ธีมขาว-ดำ (แก้ไข Error ซ้ำแล้วครับ)
+  // ✨ Decoration ธีมขาว-ดำ
   InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
-      labelText: label, // ✅ เหลือบรรทัดเดียวแล้วครับ
-      labelStyle: const TextStyle(color: Colors.grey), // Label สีเทา
-      prefixIcon: Icon(icon, size: 22, color: kPrimaryColor), // ไอคอนสีขาว
+      labelText: label,
+      labelStyle: const TextStyle(color: Colors.grey),
+      prefixIcon: Icon(icon, size: 22, color: kPrimaryColor),
       filled: true, 
       fillColor: kInputBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      // ✅ เพิ่มเส้นขอบสีขาวจางๆ ให้มองเห็นช่องง่ายขึ้น
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: kPrimaryColor, width: 1.5)),
@@ -149,9 +187,9 @@ Future<void> _showImageSourceModal() async {
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.1),
             shape: BoxShape.circle,
-            border: Border.all(color: kPrimaryColor), // ขอบสีขาว
+            border: Border.all(color: kPrimaryColor),
           ),
-          child: Icon(icon, color: kPrimaryColor, size: 30), // ไอคอนสีขาว
+          child: Icon(icon, color: kPrimaryColor, size: 30),
         ),
         const SizedBox(height: 8),
         Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white))
@@ -162,10 +200,9 @@ Future<void> _showImageSourceModal() async {
   @override
   Widget build(BuildContext context) {
     return Container(
-      // ครอบด้วย Container เพื่อแยกแต่ละ Item ให้ชัดเจนขึ้น
-      padding: const EdgeInsets.all(16), // เพิ่ม Padding ให้เนื้อหาไม่ติดขอบ
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: kCardDark, // ใช้สีการ์ดทึบ
+        color: kCardDark,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.white.withOpacity(0.1)),
       ),
@@ -176,7 +213,7 @@ Future<void> _showImageSourceModal() async {
           if (widget.index > 0) 
             IconButton(
               onPressed: widget.onDelete, 
-              icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 28) // ปุ่มลบสีแดงชัดๆ
+              icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 28)
             )
         ]),
         const SizedBox(height: 16),
@@ -225,19 +262,17 @@ Future<void> _showImageSourceModal() async {
           minLines: 3,
           maxLines: 5,
           keyboardType: TextInputType.multiline,
-          style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.white), // ตัวหนังสือใหญ่ขึ้น
+          style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.white),
           decoration: InputDecoration(
             labelText: "โน๊ต",
             labelStyle: const TextStyle(color: Colors.grey),
             hintText: "พิมพ์รายละเอียดเพิ่มเติม...",
             hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
             alignLabelWithHint: true,
-            
             prefixIcon: const Padding(
               padding: EdgeInsets.only(bottom: 45), 
               child: Icon(Icons.edit_note_rounded, size: 24, color: kPrimaryColor),
             ),
-            
             filled: true,
             fillColor: kInputBg,
             contentPadding: const EdgeInsets.all(16),
@@ -253,7 +288,7 @@ Future<void> _showImageSourceModal() async {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.black, // พื้นหลังดำตัดกับการ์ด
+              color: Colors.black, 
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: Colors.white.withOpacity(0.2)),
             ),
@@ -276,11 +311,11 @@ Future<void> _showImageSourceModal() async {
                     padding: const EdgeInsets.only(bottom: 16.0),
                     child: Row(children: [
                       SizedBox(
-                        width: 28, height: 28, // Checkbox ใหญ่ขึ้น
+                        width: 28, height: 28,
                         child: Checkbox(
                           value: isChecked,
-                          activeColor: kPrimaryColor, // สีขาว
-                          checkColor: Colors.black, // ติ๊กสีดำ
+                          activeColor: kPrimaryColor, 
+                          checkColor: Colors.black, 
                           side: const BorderSide(color: Colors.grey, width: 1.5),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                           onChanged: (val) {
@@ -338,7 +373,7 @@ Future<void> _showImageSourceModal() async {
         ]),
         const SizedBox(height: 12),
         SizedBox(
-          height: 100, // เพิ่มความสูง
+          height: 100, 
           child: ListView.builder(
             scrollDirection: Axis.horizontal,
             itemCount: widget.item.itemImages.length + 1,

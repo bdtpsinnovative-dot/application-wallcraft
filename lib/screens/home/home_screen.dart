@@ -6,8 +6,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ota_update/ota_update.dart';
+// 🌟 เพิ่ม 2 Packages นี้สำหรับการเช็คเวอร์ชันและเปิดเว็บ
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-// 🌟 เรียกใช้ไฟล์จริงที่เราสร้างไว้
+import '../tracking/tracking_screen.dart';
 import '../admin_summary/admin_summary_screen.dart';
 import '../products/price_check_screen.dart';
 import '../../constants.dart';
@@ -58,10 +62,120 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     _teamsScreen = const TeamsScreen();
     _profileScreen = const ProfileScreen();
-    // 🌟 ตัวนี้จะไปเรียก Class ในไฟล์ admin_summary_screen.dart มาแสดงครับ
     _adminSummaryScreen = const AdminSummaryScreen(); 
+    
+    // 🌟 สั่งเช็คอัปเดตทันทีที่เปิดแอป
+    _checkForUpdate();
   }
 
+  // ==========================================================
+  // 🌟 ส่วนของ Logic ตรวจสอบเวอร์ชันแอป
+  // ==========================================================
+  Future<void> _checkForUpdate() async {
+    try {
+      // 1. ดึงเวอร์ชันแอปปัจจุบัน (ที่ตั้งไว้ใน pubspec.yaml)
+      PackageInfo packageInfo = await PackageInfo.fromPlatform();
+      String currentVersion = packageInfo.version; 
+
+      // 2. ยิง API ไปเช็คเวอร์ชันล่าสุด 
+      // ⚠️ ตรงนี้แก้ URL API ให้ชี้ไปที่ Backend Vercel ของนายนะครับ
+      final response = await http.get(Uri.parse('${AppConfig.baseUrl}/check-update'));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        String latestVersion = data['latest_version'];
+        String downloadUrl = data['download_url'];
+
+        // 3. ถ้าเวอร์ชันไม่ตรงกัน ให้โชว์หน้าต่างอัปเดต
+        if (currentVersion != latestVersion) {
+          _showUpdateDialog(latestVersion, downloadUrl);
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking update: $e");
+    }
+  }
+void _showUpdateDialog(String latestVersion, String downloadUrl) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // บังคับให้โหลดจนเสร็จหรือกดปิดเอง
+      builder: (BuildContext context) {
+        // ตัวแปรสำหรับเก็บสถานะใน Dialog
+        String progress = '';
+        bool isDownloading = false;
+
+        // ใช้ StatefulBuilder เพื่อให้อัปเดต UI แค่ในหน้าต่าง Dialog นี้
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              backgroundColor: kCardDark,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              title: const Text("มีอัปเดตเวอร์ชันใหม่!", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              content: Text(
+                isDownloading 
+                    ? "กำลังดาวน์โหลด... $progress%\nกรุณารอสักครู่" 
+                    : "พบแอปเวอร์ชัน $latestVersion\nกรุณาอัปเดตเพื่อการใช้งานที่สมบูรณ์ที่สุดครับ",
+                style: const TextStyle(color: Colors.white70, height: 1.5),
+              ),
+              actions: [
+                // ถ้ากำลังโหลดอยู่ ซ่อนปุ่มปิดไปเลย กัน User กดหนี
+                if (!isDownloading)
+                  TextButton(
+                    child: const Text("ปิด", style: TextStyle(color: Colors.grey)),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDownloading ? Colors.grey : kLimeGreen,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))
+                  ),
+                  // ถ้ากำลังโหลดอยู่ ให้ปุ่มกดไม่ได้ (null)
+                  onPressed: isDownloading ? null : () async {
+                    setStateDialog(() {
+                      isDownloading = true;
+                      progress = '0';
+                    });
+
+                    try {
+                      // เริ่มโหลด APK มาลงเครื่อง
+                      OtaUpdate()
+                          .execute(
+                        downloadUrl,
+                        destinationFilename: 'wallcraft_update_$latestVersion.apk', // ตั้งชื่อไฟล์หลบ cache
+                      )
+                          .listen(
+                        (OtaEvent event) {
+                          // อัปเดต % หน้าจอ
+                          setStateDialog(() {
+                            progress = event.value ?? '';
+                          });
+
+                          // โหลดเสร็จ ระบบกำลังจะเด้งหน้า Install ของ Android
+                          if (event.status == OtaStatus.INSTALLING) {
+                            Navigator.of(context).pop(); // ปิด Dialog ทิ้งเลย
+                          }
+                        },
+                      );
+                    } catch (e) {
+                      debugPrint('Failed to make OTA update. Details: $e');
+                      setStateDialog(() {
+                        isDownloading = false;
+                      });
+                    }
+                  },
+                  child: Text(
+                    isDownloading ? "กำลังโหลด..." : "อัปเดตเลย", 
+                    style: const TextStyle(fontWeight: FontWeight.bold)
+                  ),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
   void _updateAdminStatus(bool isAdmin) {
     if (_isAdmin != isAdmin) {
       setState(() {
@@ -75,10 +189,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Widget> get _currentPages {
     if (_isAdmin) {
-      // 0: หน้าแรก, 1: ทีม, 2: รายงานแอดมิน, 3: โปรไฟล์
       return [_homeDashboard, _teamsScreen, _adminSummaryScreen, _profileScreen];
     } else {
-      // 0: หน้าแรก, 1: ทีม, 2: โปรไฟล์
       return [_homeDashboard, _teamsScreen, _profileScreen];
     }
   }
@@ -348,7 +460,14 @@ class _HomeDashboardState extends State<_HomeDashboard> with SingleTickerProvide
               _buildGlassMenuCard(2, 'AI Expert', 'AIผู้เชี่ยวชาญ', Icons.auto_awesome_rounded, Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatHubScreen()))),
               _buildGlassMenuCard(3, 'AI Search', 'ค้นหารูปด้วยAI', Icons.image_search_rounded, Colors.cyanAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AiSearchScreen()))),
               _buildGlassMenuCard(4, 'Pool Project', 'โปรเจกต์ทั้งหมด', Icons.workspaces_rounded, Colors.indigoAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PoolProjectScreen()))),
-              _buildGlassMenuCard(5, 'เช็คการขนส่ง', 'เร็วๆนี้', Icons.local_shipping_rounded, Colors.pinkAccent, () {}),
+              _buildGlassMenuCard(
+                5, 
+                'เช็คการขนส่ง', 
+                'ติดตามสถานะ',
+                Icons.local_shipping_rounded, 
+                Colors.pinkAccent, 
+                () => Navigator.push(context, MaterialPageRoute(builder: (context) => const TrackingScreen()))
+              ),
             ],
           ),
           const SizedBox(height: 40),
@@ -442,4 +561,3 @@ class _HomeDashboardState extends State<_HomeDashboard> with SingleTickerProvide
     );
   }
 }
-// ❌ ลบ Class AdminSummaryScreen เก่าที่เคยอยู่ตรงนี้ทิ้งไปได้เลยครับนาย!
