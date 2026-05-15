@@ -73,22 +73,23 @@ class _HomeScreenState extends State<HomeScreen> {
   // ==========================================================
   Future<void> _checkForUpdate() async {
     try {
-      // 1. ดึงเวอร์ชันแอปปัจจุบัน (ที่ตั้งไว้ใน pubspec.yaml)
       PackageInfo packageInfo = await PackageInfo.fromPlatform();
       String currentVersion = packageInfo.version; 
 
-      // 2. ยิง API ไปเช็คเวอร์ชันล่าสุด 
-      // ⚠️ ตรงนี้แก้ URL API ให้ชี้ไปที่ Backend Vercel ของนายนะครับ
       final response = await http.get(Uri.parse('${AppConfig.baseUrl}/check-update'));
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         String latestVersion = data['latest_version'];
-        String downloadUrl = data['download_url'];
+        
+        // ดึง URL แยกตามระบบ
+        String downloadUrlAndroid = data['download_url_android'];
+        String downloadUrlIos = data['download_url_ios'];
 
-        // 3. ถ้าเวอร์ชันไม่ตรงกัน ให้โชว์หน้าต่างอัปเดต
         if (currentVersion != latestVersion) {
-          _showUpdateDialog(latestVersion, downloadUrl);
+          // ส่ง Link เข้า Dialog โดยเช็คจาก Platform ทันที
+          String targetUrl = Platform.isIOS ? downloadUrlIos : downloadUrlAndroid;
+          _showUpdateDialog(latestVersion, targetUrl);
         }
       }
     } catch (e) {
@@ -132,36 +133,40 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
                   ),
                   // ถ้ากำลังโหลดอยู่ ให้ปุ่มกดไม่ได้ (null)
                   onPressed: isDownloading ? null : () async {
+                    // ถ้าระบบเป็น iOS ให้เด้งเปิด TestFlight เลย
+                    if (Platform.isIOS) {
+                      final Uri url = Uri.parse(downloadUrl);
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      }
+                      return; // หยุดการทำงาน ไม่ต้องลงไปรัน OTA ข้างล่าง
+                    }
+
+                    // ถ้าระบบเป็น Android ให้รัน OTA โหลด APK ตามปกติ
                     setStateDialog(() {
                       isDownloading = true;
                       progress = '0';
                     });
 
                     try {
-                      // เริ่มโหลด APK มาลงเครื่อง
                       OtaUpdate()
                           .execute(
                         downloadUrl,
-                        destinationFilename: 'wallcraft_update_$latestVersion.apk', // ตั้งชื่อไฟล์หลบ cache
+                        destinationFilename: 'wallcraft_update_$latestVersion.apk',
                       )
                           .listen(
                         (OtaEvent event) {
-                          // อัปเดต % หน้าจอ
                           setStateDialog(() {
                             progress = event.value ?? '';
                           });
-
-                          // โหลดเสร็จ ระบบกำลังจะเด้งหน้า Install ของ Android
                           if (event.status == OtaStatus.INSTALLING) {
-                            Navigator.of(context).pop(); // ปิด Dialog ทิ้งเลย
+                            Navigator.of(context).pop(); 
                           }
                         },
                       );
                     } catch (e) {
                       debugPrint('Failed to make OTA update. Details: $e');
-                      setStateDialog(() {
-                        isDownloading = false;
-                      });
+                      setStateDialog(() => isDownloading = false);
                     }
                   },
                   child: Text(
