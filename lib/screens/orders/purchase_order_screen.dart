@@ -47,7 +47,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   
   List<dynamic> _selectedProjects = []; 
   List<ProductItem> _orderItems = [ProductItem()];
-  
+  List<dynamic> _projectTypes = []; // 🟢 เพิ่มตัวนี้
   List<dynamic> _customerTypes = [];
   List<dynamic> _productCategories = [];
   List<dynamic> _projects = [];
@@ -62,22 +62,22 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     });
   }
 
-  Future<void> _fetchDropdownData() async {
-    final url = Uri.parse('${AppConfig.baseUrl}/orders');
-    try {
-      final response = await ApiService.get(url);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        setState(() {
-          _customerTypes = data['customer_types'] ?? [];
-          _productCategories = data['product_categories'] ?? [];
-          _projects = data['projects'] ?? [];
-          _isLoading = false;
-        });
-      }
-    } catch (e) { setState(() => _isLoading = false); }
-  }
-
+Future<void> _fetchDropdownData() async {
+  final url = Uri.parse('${AppConfig.baseUrl}/orders');
+  try {
+    final response = await ApiService.get(url);
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      setState(() {
+        _customerTypes = data['customer_types'] ?? [];
+        _productCategories = data['product_categories'] ?? [];
+        _projects = data['projects'] ?? [];
+        _projectTypes = data['project_types'] ?? []; // 🟢 เพิ่มบรรทัดนี้ครับนาย
+        _isLoading = false;
+      });
+    }
+  } catch (e) { setState(() => _isLoading = false); }
+}
   Future<List<dynamic>> _getCompanies(String filter) async {
     String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
     if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
@@ -218,18 +218,27 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
            itemImagesBase64.add(base64Encode(await f.readAsBytes()));
         }
         List<Map<String, dynamic>> projectUsages = [];
-        for (var projectId in item.selectedProjectIds) {
-           String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
-           projectUsages.add({'project_id': projectId, 'area_sqm': areaText});
-        }
-        itemsPayload.add({
-          'product_category_id': item.categoryId,
-          'interest_level': item.interestLevel,
-          'note': item.noteCtrl.text,
-          'project_usage': projectUsages,
-          'images': itemImagesBase64,
-        });
+      for (var projectId in item.selectedProjectIds) {
+         String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
+         
+         projectUsages.add({
+           'project_id': projectId, 
+           'area_sqm': areaText,
+           
+           // 🌟 🌟 🌟 จุดที่นายถาม คือตรงนี้ครับนาย! 🌟 🌟 🌟
+           // ส่งประเภทโครงการที่เซลส์เลือกในการ์ด แนบไปพร้อมกับโครงการที่ติ๊ก
+           'project_type_id': item.projectTypeId, 
+         });
       }
+
+      itemsPayload.add({
+        'product_category_id': item.categoryId,
+        'interest_level': item.interestLevel,
+        'note': item.noteCtrl.text,
+        'project_usage': projectUsages,
+        'images': itemImagesBase64,
+      });
+    }
 
       final response = await ApiService.post(
         Uri.parse('${AppConfig.baseUrl}/orders'),
@@ -471,12 +480,13 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                         itemCount: _orderItems.length,
                                         separatorBuilder: (_, __) => Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Divider(color: Colors.white.withOpacity(0.1))),
                                         itemBuilder: (ctx, index) => ProductItemCard(
-                                          index: index,
-                                          item: _orderItems[index],
-                                          productCategories: _productCategories,
-                                          projects: _selectedProjects,
-                                          onDelete: () => setState(() => _orderItems.removeAt(index)),
-                                        ),
+  index: index,
+  item: _orderItems[index],
+  productCategories: _productCategories,
+  projects: _selectedProjects,
+  projectTypes: _projectTypes, // 🟢 1. เช็กบรรทัดนี้! ต้องส่งค่านี้ไปด้วยนะครับนาย
+  onDelete: () => setState(() => _orderItems.removeAt(index)),
+),
                                       ),
                                       const SizedBox(height: 24),
                                       _buildAddItemButton(),

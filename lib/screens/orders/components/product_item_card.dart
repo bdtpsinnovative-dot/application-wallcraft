@@ -1,4 +1,3 @@
-//lib/screens/orders/components/product_item_card.dart
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -7,15 +6,16 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:path_provider/path_provider.dart' as path_provider;
 import 'package:path/path.dart' as p;
 
-// 🎨 Palette สี (Theme: Simple Black & White - ขาวดำ ชัดเจน)
+// 🎨 Palette สี
 const Color kCardDark = Color(0xFF1C1C1E);
 const Color kInputBg = Color(0xFF2C2C2E);
-const Color kPrimaryColor = Color(0xFFFFFFFF); // ✅ ใช้สีขาวเป็นสีหลัก (High Contrast)
+const Color kPrimaryColor = Color(0xFFFFFFFF);
 
 // --- 1. Class Model ---
 class ProductItem {
   String? categoryId;
   String? interestLevel;
+  String? projectTypeId; // 🌟 1. เพิ่มตัวเก็บค่า "ประเภทโครงการ"
   TextEditingController noteCtrl = TextEditingController();
   List<File> itemImages = [];
   List<String> selectedProjectIds = [];
@@ -30,6 +30,7 @@ class ProductItemCard extends StatefulWidget {
   final ProductItem item;
   final List<dynamic> productCategories;
   final List<dynamic> projects; 
+  final List<dynamic> projectTypes; // 🌟 2. เพิ่มตัวแปรรับ List ประเภทโครงการจากหน้าหลัก
   final VoidCallback onDelete;
 
   const ProductItemCard({
@@ -38,6 +39,7 @@ class ProductItemCard extends StatefulWidget {
     required this.item,
     required this.productCategories,
     required this.projects,
+    required this.projectTypes, // 🌟 อย่าลืมส่งค่านี้มาจากหน้าหลักด้วยนะครับ
     required this.onDelete,
   });
 
@@ -47,32 +49,24 @@ class ProductItemCard extends StatefulWidget {
 
 class _ProductItemCardState extends State<ProductItemCard> {
   
-  // 🌟 1. จังหวะแรก: ทำงานตอนการ์ดสินค้านี้ถูกสร้างขึ้นมาครั้งแรก
   @override
   void initState() {
     super.initState();
     _checkAutoSelectProject();
   }
 
-  // 🌟 2. จังหวะสอง: ทำงานเมื่อข้อมูล projects จากด้านบนมีการเปลี่ยนแปลง
   @override
   void didUpdateWidget(ProductItemCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // เช็คว่าจำนวนโปรเจกต์ที่เลือกเปลี่ยนไปไหม
     if (widget.projects.length != oldWidget.projects.length) {
       _checkAutoSelectProject();
     }
   }
 
-  // 🌟 3. ฟังก์ชันหลักสำหรับ Auto-Tick (ติ๊กถูกอัตโนมัติ)
   void _checkAutoSelectProject() {
-    // ถ้ามีโปรเจกต์ให้เลือกแค่ 1 อันเป๊ะๆ
     if (widget.projects.length == 1) {
       String onlyProjectId = widget.projects[0]['id'];
-      
-      // ถ้ายังไม่ได้ติ๊กโปรเจกต์นี้
       if (!widget.item.selectedProjectIds.contains(onlyProjectId)) {
-        // ใช้ addPostFrameCallback เพื่อป้องกัน Error การเรียก setState ชนกับการ Build UI
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             setState(() {
@@ -86,11 +80,8 @@ class _ProductItemCardState extends State<ProductItemCard> {
   }
 
   Future<void> _showImageSourceModal() async {
-    // ✅ 1. ท่าไม้ตาย: สั่งหุบแป้นพิมพ์แบบเด็ดขาดลึกถึงระดับ OS
     FocusManager.instance.primaryFocus?.unfocus();
     SystemChannels.textInput.invokeMethod('TextInput.hide');
-    
-    // รอให้แป้นพิมพ์ลงสนิทจริงๆ ก่อนโชว์ BottomSheet
     await Future.delayed(const Duration(milliseconds: 300));
     
     if (!mounted) return;
@@ -104,31 +95,21 @@ class _ProductItemCardState extends State<ProductItemCard> {
         padding: const EdgeInsets.all(24),
         height: 180,
         decoration: const BoxDecoration(
-          color: kCardDark, // พื้นหลังเข้ม
+          color: kCardDark,
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
             _buildPickIcon(Icons.camera_alt_rounded, "Camera", () async {
-              // ✅ 2. ปิด Bottom Sheet ก่อน
               Navigator.pop(ctx);
-              
-              // 🌟 3. จุดสำคัญที่สุด: ต้องหน่วงเวลาให้ Bottom Sheet รูดปิดสนิทก่อนเปิดกล้อง!
               await Future.delayed(const Duration(milliseconds: 350));
-              
-              // 4. พอจอโล่งคลีน ค่อยเรียกกล้อง
               final p = await picker.pickImage(source: ImageSource.camera);
               if (p != null) await _processImage(File(p.path));
             }),
             _buildPickIcon(Icons.photo_library_rounded, "Gallery", () async {
-              // ✅ 2. ปิด Bottom Sheet ก่อน
               Navigator.pop(ctx);
-              
-              // 🌟 3. หน่วงเวลารอ Bottom Sheet ปิดสนิท
               await Future.delayed(const Duration(milliseconds: 350));
-              
-              // 4. ค่อยเรียกอัลบั้ม
               final l = await picker.pickMultiImage();
               for (var p in l) {
                 await _processImage(File(p.path));
@@ -140,7 +121,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
     );
   }
 
-  // ✅ 2. แก้ฟังก์ชันนี้เพื่อดักบั๊กตอนแอปตื่นจาก Background
   Future<void> _processImage(File f) async {
     try {
       final dir = await path_provider.getTemporaryDirectory();
@@ -151,8 +131,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
         minWidth: 1024, minHeight: 1024, quality: 70, format: CompressFormat.webp
       );
       
-      // 🌟 หัวใจอยู่ตรงนี้! ต้องเช็ค mounted เสมอ
-      // เพราะหลังจากเปิดกล้องแล้วกลับมา หน้าจออาจจะกำลัง Refresh ตัวเองอยู่
       if (result != null && mounted) {
         setState(() {
           widget.item.itemImages.add(File(result.path));
@@ -163,8 +141,7 @@ class _ProductItemCardState extends State<ProductItemCard> {
     }
   }
 
-  // ✨ Decoration ธีมขาว-ดำ
-  InputDecoration _inputDecoration(String label, IconData icon) {
+InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
       labelStyle: const TextStyle(color: Colors.grey),
@@ -175,9 +152,13 @@ class _ProductItemCardState extends State<ProductItemCard> {
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
       enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide(color: Colors.white.withOpacity(0.3))),
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: kPrimaryColor, width: 1.5)),
+      
+      // 👇 3 บรรทัดที่เพิ่มเข้ามาเพื่อให้ขอบแดงทำงานได้สมบูรณ์
+      errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
+      focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent, width: 2.0)),
+      errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
     );
   }
-
   Widget _buildPickIcon(IconData icon, String label, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -207,7 +188,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
         border: Border.all(color: Colors.white.withOpacity(0.1)),
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        // Header: Item #1 + Delete Button
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text("สินค้าที่ #${widget.index + 1}", style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryColor, fontSize: 18)),
           if (widget.index > 0) 
@@ -218,7 +198,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
         ]),
         const SizedBox(height: 16),
 
-        // Dropdown เลือกสินค้า
         DropdownButtonFormField<String>(
           value: widget.item.categoryId,
           isExpanded: true,
@@ -234,7 +213,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
         ),
         const SizedBox(height: 16),
 
-        // Dropdown ระดับความสนใจ
         DropdownButtonFormField<String>(
           value: widget.item.interestLevel,
           isExpanded: true,
@@ -256,7 +234,40 @@ class _ProductItemCardState extends State<ProductItemCard> {
         ),
         const SizedBox(height: 16),
 
-        // Note Field
+        // 🌟 3. เพิ่ม Dropdown ประเภทโครงการ (Project Type) ตรงนี้ครับ
+        if (widget.projectTypes.isNotEmpty) ...[
+                  DropdownButtonFormField<String>(
+                    value: widget.item.projectTypeId,
+                    // 🚨 ทริค: ถ้ามีการติ๊กโปรเจกต์เมื่อไหร่ ให้เปิดโหมด Validate ทันที
+                    autovalidateMode: widget.item.selectedProjectIds.isNotEmpty 
+                        ? AutovalidateMode.always 
+                        : AutovalidateMode.disabled,
+                    isExpanded: true,
+                    decoration: _inputDecoration(
+                      widget.item.selectedProjectIds.isNotEmpty 
+                        ? "ประเภทโครงการ *" // เปลี่ยน Label ให้มีดอกจัน
+                        : "ประเภทโครงการ (ไม่บังคับ)", 
+                      Icons.domain_rounded
+                    ),
+                    dropdownColor: kCardDark,
+                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    items: widget.projectTypes.map((item) => DropdownMenuItem<String>(
+                      value: item['id'], 
+                      child: Text(item['name'] ?? '-', overflow: TextOverflow.ellipsis)
+                    )).toList(),
+                    onChanged: (val) => setState(() => widget.item.projectTypeId = val),
+                    validator: (v) {
+                      if (widget.item.selectedProjectIds.isNotEmpty && v == null) {
+                        return 'กรุณาระบุประเภทโครงการด้วยครับ';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  Divider(color: Colors.white.withOpacity(0.1)), // เส้นคั่นแบ่งโซนให้ดูเนียนตา
+                  const SizedBox(height: 16),
+                ],
+
         TextFormField(
           controller: widget.item.noteCtrl,
           minLines: 3,
@@ -283,7 +294,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
         ),
         const SizedBox(height: 24),
         
-        // ส่วนจัดการโครงการและพื้นที่ (Checkbox)
         if (widget.projects.isNotEmpty)
           Container(
             padding: const EdgeInsets.all(16),
@@ -301,7 +311,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
                 ]),
                 const SizedBox(height: 16),
 
-                // Loop สร้าง Checkbox
                 ...widget.projects.map((p) {
                   String pid = p['id'];
                   bool isChecked = widget.item.selectedProjectIds.contains(pid);
@@ -323,8 +332,15 @@ class _ProductItemCardState extends State<ProductItemCard> {
                               if (val == true) {
                                 widget.item.selectedProjectIds.add(pid);
                               } else {
+                                // ตอนเอาติ๊กออก
                                 widget.item.selectedProjectIds.remove(pid);
                                 widget.item.projectAreaControllers[pid]?.clear();
+                                
+                                // 🌟 🌟 เพิ่ม Logic ตรงนี้: 
+                                // ถ้าลบโครงการออกจนหมด (ว่างเปล่า) ให้เคลียร์ประเภทโครงการเป็น null 
+                                if (widget.item.selectedProjectIds.isEmpty) {
+                                  widget.item.projectTypeId = null;
+                                }
                               }
                             });
                           },
@@ -365,7 +381,6 @@ class _ProductItemCardState extends State<ProductItemCard> {
 
         const SizedBox(height: 24),
         
-        // ส่วนแสดงรูปภาพ (Gallery)
         Row(children: const [
           Icon(Icons.photo_library_outlined, size: 20, color: Colors.white), 
           SizedBox(width: 8), 
