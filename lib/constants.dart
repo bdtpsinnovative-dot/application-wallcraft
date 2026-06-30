@@ -9,7 +9,7 @@ class AppConfig {
   static Uri get registerUrl => Uri.parse('$baseUrl/auth/register');
   static Uri get refreshTokenUrl => Uri.parse('$baseUrl/auth/refresh');
   static Uri get chatUrl => Uri.parse('$baseUrl/chat');
-
+  static Uri get tpsTrackingUrl => Uri.parse('$baseUrl/tps-tracking'); // ตามชื่อโฟลเดอร์ที่เราตั้งไว้
   static Uri productsUrl(String keyword) => Uri.parse('$baseUrl/products?keyword=$keyword');
 
   // 🤖 เพิ่มบรรทัดนี้เข้าไปครับ เพื่อให้ AI Search รู้จักทางไปหา Backend

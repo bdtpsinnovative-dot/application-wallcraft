@@ -1,28 +1,28 @@
 name: Wallceaft
 description: "A new Flutter project."
-publish_to: 'none'
+publish_to: "none"
 version: 1.0.5
 
 environment:
-  sdk: '>=3.10.4 <4.0.0'
+  sdk: ">=3.10.4 <4.0.0"
 
 dependencies:
   flutter:
     sdk: flutter
-    
-  # 🔄 ระบบอัปเดตแอป 
+
+  # 🔄 ระบบอัปเดตแอป
   ota_update: 7.1.0
-  
+
   crop_your_image: ^2.0.0
 
   # 🔍 ระบบค้นหาและ Dropdown
-  dropdown_search: ^6.0.1 
+  dropdown_search: ^6.0.1
 
   # 🌐 การเชื่อมต่อและฐานข้อมูล
   http: ^1.6.0
   flutter_dotenv: ^5.2.0
-  supabase_flutter: ^2.0.0 
-  shared_preferences: ^2.2.2 
+  supabase_flutter: ^2.0.0
+  shared_preferences: ^2.2.2
 
   # 📸 รูปภาพและการจัดการไฟล์
   image_picker: ^1.2.1
@@ -66,11 +66,11 @@ flutter:
   uses-material-design: true
   assets:
     - .env
-    - assets/icon/app_icon.png 
+    - assets/icon/app_icon.png
 
 # ==========================================
 # ✅ 2. ตั้งค่าหน้าจอโหลด (Splash Screen) ตรงนี้
 # ==========================================
 flutter_native_splash:
-  color: "#0F0F11"  # สีเทาเข้ม (Theme เดียวกับแอป)
+  color: "#0F0F11" # สีเทาเข้ม (Theme เดียวกับแอป)
   fullscreen: true

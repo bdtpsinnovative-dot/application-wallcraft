@@ -133,24 +133,34 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
-  // 🖼️ วาดหน้าต่างป๊อปอัพ (ปรับให้รองรับข้อมูลแบบใหม่)
+// 🖼️ วาดหน้าต่างป๊อปอัพ (ปรับให้รองรับข้อมูลแบบใหม่)
   void _buildDetailsPopup(BuildContext context, Map<String, dynamic> data) {
     final customerName = data['customer_name'] ?? data['companies']?['name'] ?? 'ลูกค้าทั่วไป';
     final creatorName = data['profiles']?['full_name'] ?? 'เพื่อนร่วมทีม';
     
-    // พยายามขุดหาชื่อโปรเจกต์และรูปภาพจาก order_items
+    // พยายามขุดหาชื่อโปรเจกต์และข้อมูลอื่นๆ จาก order_items
     String projectName = '-';
     String areaSqm = '-';
+    String projectNote = '-'; // 🌟 เพิ่มตัวแปรรับคอมเมนต์
+    String queueLevel = '-';  // 🌟 เพิ่มตัวแปรรับคิว
+    String projectYear = '-'; // 🌟 เพิ่มตัวแปรรับ พ.ศ.
     List<dynamic> images = [];
-    
+    String productCat = '-';
+    String projectType = '-';
     if (data['order_items'] != null && (data['order_items'] as List).isNotEmpty) {
       final firstItem = (data['order_items'] as List)[0];
       images = firstItem['images'] ?? [];
-      
+      productCat = firstItem['product_categories']?['name'] ?? '-';
       final projects = firstItem['order_item_projects'] as List?;
       if (projects != null && projects.isNotEmpty) {
+        projectType = projects[0]['project_types']?['name'] ?? '-';
         projectName = projects[0]['project_name'] ?? '-';
         areaSqm = projects[0]['area_sqm']?.toString() ?? '-';
+        
+        // 🌟 ดึงข้อมูลที่แอดมินเพิ่งแก้มาแสดง
+        projectNote = projects[0]['project_note'] ?? '-';
+        queueLevel = projects[0]['queue_level']?.toString() ?? '-';
+        projectYear = projects[0]['project_year']?.toString() ?? '-';
       }
     }
 
@@ -175,6 +185,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 _buildDetailRow('ลูกค้า:', customerName),
                 _buildDetailRow('โครงการ:', projectName),
                 _buildDetailRow('พื้นที่ (ตร.ม.):', areaSqm),
+                
+                // 🌟 เพิ่มแถวแสดงข้อมูลที่แอดมินแก้
+                const Divider(color: Colors.white10, height: 24, thickness: 1),
+                _buildDetailRow('คิวงาน:', queueLevel != '-' ? 'คิวที่ $queueLevel' : '-'),
+                _buildDetailRow('พ.ศ.:', projectYear),
+                _buildDetailRow('คอมเมนต์:', projectNote),
+                const Divider(color: Colors.white10, height: 24, thickness: 1),
+
                 _buildDetailRow('ผู้ทำรายการ:', creatorName),
                 
                 // 🖼️ ถ้ามีรูปให้โชว์เป็นแกลลอรีเล็กๆ
