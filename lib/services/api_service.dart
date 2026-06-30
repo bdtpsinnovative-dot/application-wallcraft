@@ -2,11 +2,10 @@ import 'dart:convert';
 import 'dart:io'; // 👈 เพิ่มตัวนี้เพื่อเช็ค Platform.isAndroid
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import '../constants.dart'; 
-import 'auth_service.dart'; 
+import '../constants.dart';
+import 'auth_service.dart';
 
 class ApiService {
-  
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
@@ -21,30 +20,47 @@ class ApiService {
   // ==================================================
   static Future<void> updateFcmToken(String fcmToken) async {
     try {
-      // 🚩 กลับไปใช้ baseUrl เพื่อวิ่งเข้า Next.js ครับ
       final url = Uri.parse('${AppConfig.baseUrl}/profile/fcm');
-      
+
       final response = await patch(
-        url, 
+        url,
         body: jsonEncode({
           'fcm_token': fcmToken,
-          // ส่ง device_type ไปด้วย เผื่อในอนาคต Next.js อยากใช้
-          'device_type': Platform.isAndroid ? 'android' : 'ios', 
-        })
+          'device_type': Platform.isAndroid ? 'android' : 'ios',
+        }),
       );
 
-      if (response.statusCode == 200) {
+      if (isSuccessfulFcmUpdateResponse(response)) {
         print("🚀 [ApiService] อัปเดต FCM Token ผ่าน API สำเร็จ!");
+        print("📦 [ApiService] Response body: ${response.body}");
       } else {
         print("❌ [ApiService] อัปเดต FCM Token พลาด: ${response.statusCode}");
+        print("📦 [ApiService] Response body: ${response.body}");
       }
     } catch (e) {
       print("❌ [ApiService] Error: $e");
     }
   }
 
+  static bool isSuccessfulFcmUpdateResponse(http.Response response) {
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return true;
+    }
+
+    try {
+      final decoded = jsonDecode(response.body);
+      if (decoded is Map<String, dynamic>) {
+        return decoded['success'] == true ||
+            decoded['ok'] == true ||
+            decoded['status'] == 'success';
+      }
+    } catch (_) {}
+
+    return false;
+  }
+
   // --- Method อื่นๆ (get, post, put, patch) คงเดิมไว้ครับ ---
-  
+
   static Future<http.Response> get(Uri uri) async {
     var headers = await _getHeaders();
     var response = await http.get(uri, headers: headers);

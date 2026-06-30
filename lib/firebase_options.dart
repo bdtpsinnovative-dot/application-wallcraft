@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '927523194955',
     projectId: 'wallcraft-notification',
     storageBucket: 'wallcraft-notification.firebasestorage.app',
-    iosBundleId: 'com.example.helloApp',
+    iosBundleId: 'com.wallcraft.app.dev',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -73,7 +73,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '927523194955',
     projectId: 'wallcraft-notification',
     storageBucket: 'wallcraft-notification.firebasestorage.app',
-    iosBundleId: 'com.example.helloApp',
+    iosBundleId: 'com.wallcraft.app.dev',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

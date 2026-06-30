@@ -56,34 +56,62 @@ class NotificationService {
     });
   }
 
-  static void _showLocalNotification(RemoteMessage message) {
-    RemoteNotification? notification = message.notification;
-    if (notification != null) {
-      _localNotifications.show(
-        notification.hashCode,
-        notification.title,
-        notification.body,
-        const NotificationDetails(
-          android: AndroidNotificationDetails(
-            'order_alert_channel_v2',
-            'การแจ้งเตือนออเดอร์',
-            channelDescription: 'แจ้งเตือนเมื่อมีออเดอร์ใหม่เข้าทีม',
-            importance: Importance.max,
-            priority: Priority.high,
-            icon: 'ic_notification',
-            color: Color(0xFF000000), // โทนดำเข้ากับธีมแอป
-            playSound: true,
-            sound: RawResourceAndroidNotificationSound('notification_sound'),
-          ),
-          iOS: DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-            sound: 'notification_sound.mp3',
-          ),
-        ),
-      );
+  static String resolveTitle(RemoteMessage message) {
+    final notificationTitle = message.notification?.title;
+    if (notificationTitle != null && notificationTitle.isNotEmpty) {
+      return notificationTitle;
     }
+
+    final dataTitle = message.data['title'] ?? message.data['Title'] ?? message.data['title_th'];
+    if (dataTitle != null && dataTitle.toString().trim().isNotEmpty) {
+      return dataTitle.toString();
+    }
+
+    return 'WallCraft';
+  }
+
+  static String resolveBody(RemoteMessage message) {
+    final notificationBody = message.notification?.body;
+    if (notificationBody != null && notificationBody.isNotEmpty) {
+      return notificationBody;
+    }
+
+    final dataBody = message.data['body'] ?? message.data['message'] ?? message.data['body_th'];
+    if (dataBody != null && dataBody.toString().trim().isNotEmpty) {
+      return dataBody.toString();
+    }
+
+    return 'คุณมีข้อความใหม่';
+  }
+
+  static void _showLocalNotification(RemoteMessage message) {
+    final title = resolveTitle(message);
+    final body = resolveBody(message);
+
+    _localNotifications.show(
+      message.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'order_alert_channel_v2',
+          'การแจ้งเตือนออเดอร์',
+          channelDescription: 'แจ้งเตือนเมื่อมีออเดอร์ใหม่เข้าทีม',
+          importance: Importance.max,
+          priority: Priority.high,
+          icon: 'ic_notification',
+          color: Color(0xFF000000), // โทนดำเข้ากับธีมแอป
+          playSound: true,
+          sound: RawResourceAndroidNotificationSound('notification_sound'),
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          sound: 'notification_sound.mp3',
+        ),
+      ),
+    );
   }
 
   static Future<String?> _getFcmToken() async {
