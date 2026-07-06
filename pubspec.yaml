@@ -1,4 +1,4 @@
-name: wallcraft
+name: Wallceaft
 description: "A new Flutter project."
 publish_to: "none"
 version: 1.0.6+2
@@ -38,7 +38,7 @@ dependencies:
   url_launcher: ^6.3.2
 
   # 🎙️ ระบบเสียงและ AI
-  speech_to_text: ^7.3.0
+  speech_to_text: ^7.4.0
   flutter_tts: ^4.0.2
   intl: ^0.20.2
   firebase_core: ^4.6.0

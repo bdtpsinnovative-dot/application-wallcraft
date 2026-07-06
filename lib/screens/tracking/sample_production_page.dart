@@ -35,15 +35,15 @@ class _SampleProductionPageState extends State<SampleProductionPage> {
 
   // Mockup Data สำหรับ Series และ Film
   final List<String> _seriesOptions = [
-    'Series A (Standard)',
-    'Series B (Premium)',
-    'Series C (Eco)'
+    'Craft Stone',
+    'Luxe Series',
+    'Essential'
   ];
 
   final Map<String, List<String>> _seriesToFilms = {
-    'Series A (Standard)': ['Matte Finish', 'Glossy Clear'],
-    'Series B (Premium)': ['Texture Wood', 'Metallic Brushed', 'Anti-scratch Film', 'Matte Finish'],
-    'Series C (Eco)': ['Matte Finish'],
+    'Craft Stone': ['Digital Print', 'Solid', 'Hand Made'],
+    'Luxe Series': [],
+    'Essential': ['PVC', 'PP', 'PU', 'PET'],
   };
 
   List<String> get _availableFilms {
@@ -303,9 +303,10 @@ class _SampleProductionPageState extends State<SampleProductionPage> {
       return;
     }
     
-    if (_selectedCompany == null || _selectedProject == null || _selectedSeries == null || _selectedFilm == null) {
+    bool isFilmRequired = _availableFilms.isNotEmpty;
+    if (_selectedCompany == null || _selectedProject == null || _selectedSeries == null || (isFilmRequired && _selectedFilm == null)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select Company, Project, Series, and Film')),
+        const SnackBar(content: Text('Please fill all required fields')),
       );
       return;
     }
@@ -574,14 +575,16 @@ class _SampleProductionPageState extends State<SampleProductionPage> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                _buildDropdown(
-                  label: _selectedSeries == null ? 'Select Series First' : 'Film Pattern',
-                  icon: Icons.texture_outlined,
-                  value: _selectedFilm,
-                  items: _availableFilms.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
-                  onChanged: _availableFilms.isEmpty ? null : (val) => setState(() => _selectedFilm = val),
-                ),
+                if (_selectedSeries == null || _availableFilms.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _buildDropdown(
+                    label: _selectedSeries == null ? 'Select Series First' : 'Film Pattern',
+                    icon: Icons.texture_outlined,
+                    value: _selectedFilm,
+                    items: _availableFilms.map((e) => DropdownMenuItem(value: e, child: Text(e, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis))).toList(),
+                    onChanged: _availableFilms.isEmpty ? null : (val) => setState(() => _selectedFilm = val),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 
                 Container(
