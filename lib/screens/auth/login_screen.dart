@@ -101,7 +101,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
           // 🌟 2. เพิ่มโค้ดดึงและอัปโหลด FCM Token ทันทีที่ล็อกอินสำเร็จ!
           try {
-            String? fcmToken = await FirebaseMessaging.instance.getToken();
+            String? fcmToken = await NotificationService.getFcmToken();
             if (fcmToken != null) {
               await NotificationService.uploadTokenToServer(fcmToken);
             }

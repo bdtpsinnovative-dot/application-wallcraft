@@ -13,7 +13,13 @@ class NotificationService {
 
   static Future<void> initNotification() async {
     // 1. ขอสิทธิ์แจ้งเตือน
-    await _fcm.requestPermission(alert: true, badge: true, sound: true);
+    NotificationSettings settings = await _fcm.requestPermission(alert: true, badge: true, sound: true);
+
+    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      print("❌ การแจ้งเตือนถูกปฏิเสธ (User Denied)");
+      // ใน iOS ถ้าสิทธิ์ถูกปฏิเสธ บางครั้งเราไม่ควรพยายามดึง Token ต่อ
+      return; 
+    }
 
     // 2. ตั้งค่า Foreground สำหรับ iOS
     await _fcm.setForegroundNotificationPresentationOptions(
@@ -39,7 +45,7 @@ class NotificationService {
     );
 
     // 4. จัดการ Token ทันทีที่เปิดแอป
-    String? token = await _getFcmToken();
+    String? token = await getFcmToken();
     if (token != null) {
       await uploadTokenToServer(token);
     }
@@ -114,16 +120,29 @@ class NotificationService {
     );
   }
 
-  static Future<String?> _getFcmToken() async {
+  static Future<String?> getFcmToken() async {
     if (Platform.isIOS) {
+      String? apnsToken;
       for (var attempt = 0; attempt < 10; attempt++) {
-        final apnsToken = await _fcm.getAPNSToken();
+        apnsToken = await _fcm.getAPNSToken();
         if (apnsToken != null) break;
         await Future.delayed(const Duration(milliseconds: 500));
       }
+      
+      // ถ้ารอจนครบ 5 วินาทีแล้วยังไม่ได้ APNs Token (เช่น รันบน Simulator) ให้หยุดทันที
+      // ขืนไปเรียก _fcm.getToken() ต่อ จะพังด้วย Error [firebase_messaging/apns-token-not-set]
+      if (apnsToken == null) {
+        print("❌ ไม่พบ APNs Token (คุณกำลังรันบน Simulator หรือไม่ได้เพิ่ม Push Notification Capability ใช่ไหม?)");
+        return null;
+      }
     }
 
-    return _fcm.getToken();
+    try {
+      return await _fcm.getToken();
+    } catch (e) {
+      print("❌ ดึง FCM Token ไม่สำเร็จ: $e");
+      return null;
+    }
   }
 
   // 🌟 แยกออกมาให้ชัดเจน และทำ Public ไว้เผื่อเรียกใช้ตอน Login เสร็จ
