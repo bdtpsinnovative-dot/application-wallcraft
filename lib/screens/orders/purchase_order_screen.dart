@@ -1,4 +1,4 @@
-﻿// lib/screens/orders/purchase_order_screen.dart
+// lib/screens/orders/purchase_order_screen.dart
 import 'dart:convert';
 import 'dart:ui';
 import 'dart:io'; 
@@ -53,31 +53,49 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   List<dynamic> _projects = [];
   bool _isLoading = true;
 
+  // 🌟 Static Cache for Dropdowns
+  static Map<String, dynamic>? _cachedDropdownData;
+
   @override
   void initState() {
     super.initState();
-    _fetchDropdownData();
+    if (_cachedDropdownData != null) {
+      _populateDropdownsFromCache(_cachedDropdownData!);
+      _fetchDropdownData(isSilent: true);
+    } else {
+      _fetchDropdownData();
+    }
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _startAnimation = true);
     });
   }
 
-Future<void> _fetchDropdownData() async {
-  final url = Uri.parse('${AppConfig.baseUrl}/orders');
-  try {
-    final response = await ApiService.get(url);
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      setState(() {
-        _customerTypes = data['customer_types'] ?? [];
-        _productCategories = data['product_categories'] ?? [];
-        _projects = data['projects'] ?? [];
-        _projectTypes = data['project_types'] ?? []; // 🟢 เพิ่มบรรทัดนี้ครับนาย
-        _isLoading = false;
-      });
+  void _populateDropdownsFromCache(Map<String, dynamic> data) {
+    if (!mounted) return;
+    setState(() {
+      _customerTypes = data['customer_types'] ?? [];
+      _productCategories = data['product_categories'] ?? [];
+      _projects = data['projects'] ?? [];
+      _projectTypes = data['project_types'] ?? [];
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _fetchDropdownData({bool isSilent = false}) async {
+    if (!isSilent) setState(() => _isLoading = true);
+    final url = Uri.parse('${AppConfig.baseUrl}/orders');
+    try {
+      final response = await ApiService.get(url);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _cachedDropdownData = data;
+        _populateDropdownsFromCache(data);
+      }
+    } catch (e) {
+      if (!isSilent) setState(() => _isLoading = false);
     }
-  } catch (e) { setState(() => _isLoading = false); }
-}
+  }
   Future<List<dynamic>> _getCompanies(String filter) async {
     String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
     if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
@@ -408,12 +426,11 @@ Future<void> _fetchDropdownData() async {
           backgroundColor: kDarkBg,
           body: Stack(
             children: [
-              _isLoading 
-                ? const Center(child: CircularProgressIndicator(color: kPrimaryColor)) 
-                : Column(
-                    children: [
-                      _buildHeader(context),
-                      Expanded(
+              Column(
+                children: [
+                  if (_isLoading) const LinearProgressIndicator(color: kLimeGreen, backgroundColor: Colors.transparent),
+                  _buildHeader(context),
+                  Expanded(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
                           child: Form(

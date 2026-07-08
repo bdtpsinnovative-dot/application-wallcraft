@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../constants.dart';
 import '../../services/api_service.dart';
 
@@ -14,6 +16,7 @@ import 'widgets/price_check_modals.dart';
 const Color kDarkBg = Color(0xFF0F0F11); 
 const Color kCardDark = Color(0xFF1C1C1E); 
 const Color kAccentColor = Color(0xFFC6A87C); 
+const String _cacheKey = 'cached_products_list';
 
 class PriceCheckScreen extends StatefulWidget {
   const PriceCheckScreen({super.key});
@@ -56,7 +59,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchProducts('', isRefresh: true); 
+    _loadCacheAndFetch();
     
     _scrollController.addListener(() {
       if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
@@ -90,19 +93,22 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     await _fetchProducts(_searchController.text, isRefresh: false);
   }
 
-  Future<void> _fetchProducts(String keyword, {bool isRefresh = true}) async {
+  Future<void> _fetchProducts(String keyword, {bool isRefresh = true, bool isSilent = false, int? customLimit}) async {
     if (isRefresh) {
       setState(() {
-        _isLoading = true;
+        if (!isSilent) {
+          _isLoading = true;
+          _filteredProducts.clear();
+        }
         _errorMessage = null; 
         _currentPage = 1;
         _hasMore = true;
-        _filteredProducts.clear();
       });
     }
 
     try {
-      String urlString = '${AppConfig.baseUrl}/products?keyword=${Uri.encodeComponent(keyword)}&page=$_currentPage&limit=$_limit';
+      int requestLimit = customLimit ?? _limit;
+      String urlString = '${AppConfig.baseUrl}/products?keyword=${Uri.encodeComponent(keyword)}&page=$_currentPage&limit=$requestLimit';
       
       if (_selectedCategory != 'ทั้งหมด') {
         if (_categoryGroups.containsKey(_selectedCategory)) {
@@ -129,7 +135,16 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
               }
               
               if (isRefresh) {
-                _filteredProducts = List<Map<String, dynamic>>.from(rawData);
+                var listData = List<Map<String, dynamic>>.from(rawData);
+                // สับเปลี่ยนลำดับเฉพาะตอนโหลดหน้าแรกแบบไม่มีเงื่อนไขค้นหา
+                if (keyword.isEmpty && _selectedCategory == 'ทั้งหมด') {
+                  listData.shuffle();
+                }
+                _filteredProducts = listData;
+                // Save to SharedPreferences if it's a clean initial fetch
+                if (keyword.isEmpty && _selectedCategory == 'ทั้งหมด' && customLimit == null) {
+                  _saveToCache(_filteredProducts);
+                }
               } else {
                 _filteredProducts.addAll(List<Map<String, dynamic>>.from(rawData));
               }
@@ -154,6 +169,51 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
           _isLoadingMore = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadCacheAndFetch() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? cachedData = prefs.getString(_cacheKey);
+      
+      if (cachedData != null && cachedData.isNotEmpty) {
+        final List<dynamic> decoded = jsonDecode(cachedData);
+        var listData = List<Map<String, dynamic>>.from(decoded);
+        listData.shuffle(); // สลับตำแหน่งข้อมูลในแคชให้ดูใหม่ทุกครั้งที่เปิด
+        if (mounted) {
+          setState(() {
+            _filteredProducts = listData;
+          });
+        }
+        // แอบโหลดเบื้องหลังเพื่ออัปเดตข้อมูลใหม่ล่าสุด
+        _fetchProducts('', isRefresh: true, isSilent: true);
+      } else {
+        // ถ้าไม่มีแคช ให้ดึง 10 อันแรกมาโชว์ไวๆ ก่อน แล้วค่อยดึงเต็ม
+        _fetchProducts('', isRefresh: true, customLimit: 10).then((_) {
+          _fetchProducts('', isRefresh: true, isSilent: true);
+        });
+      }
+    } catch (e) {
+      _fetchProducts('', isRefresh: true);
+    }
+    
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+        if (!_isLoadingMore && _hasMore) {
+          _loadMoreProducts();
+        }
+      }
+    });
+  }
+
+  Future<void> _saveToCache(List<Map<String, dynamic>> products) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      // เซฟ 50 รายการแรกลงเครื่อง
+      await prefs.setString(_cacheKey, jsonEncode(products));
+    } catch (e) {
+      debugPrint('Cache Save Error: $e');
     }
   }
 

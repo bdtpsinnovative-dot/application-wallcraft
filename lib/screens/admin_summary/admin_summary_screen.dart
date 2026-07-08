@@ -60,10 +60,63 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
 
   Map<String, dynamic> _rawStats = {}; 
 
+  // 🌟 Static Cache Variables
+  static Map<String, dynamic>? _cachedData;
+  static bool _hasLoadedOnce = false;
+
   @override
   void initState() {
     super.initState();
-    _fetchSummaryData(); 
+    // Default to 'monthly' (This month) instead of 'all' to save bandwidth
+    if (!_hasLoadedOnce) {
+      _currentFilter = 'monthly';
+    }
+
+    if (_cachedData != null) {
+      // โหลดข้อมูลจาก Cache ทันทีโดยไม่ต้องขึ้น Loading Screen
+      _populateDataFromCache(_cachedData!);
+      // แอบรีเฟรชข้อมูลพื้นหลัง (Silent Refresh)
+      _fetchSummaryData(isSilent: true);
+    } else {
+      _fetchSummaryData(); 
+    }
+  }
+
+  void _populateDataFromCache(Map<String, dynamic> data) {
+    if (!mounted) return;
+    
+    Map<String, dynamic> teamsData = data['stats']['team_performance'] ?? {};
+    var sortedTeams = teamsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
+    
+    Map<String, dynamic> personsData = data['stats']['person_performance'] ?? {};
+    var sortedPersons = personsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
+    
+    Map<String, dynamic> sourceData = data['stats']['source_performance'] ?? {};
+    var sortedSource = sourceData.entries.toList();
+
+    setState(() {
+      _aiInsight = data['ai_insight'] ?? "ไม่พบข้อความสรุปจาก AI";
+      _rawStats = data['stats']; 
+      _totalProjects = _rawStats['total_orders'].toString(); 
+      _totalCheckins = _rawStats['total_checkins']?.toString() ?? _totalProjects;
+      
+      double area = double.tryParse(_rawStats['total_area_sqm'].toString()) ?? 0;
+      _totalArea = area > 1000 ? "${(area / 1000).toStringAsFixed(1)}K" : area.toStringAsFixed(0);
+      
+      _importantCount = _rawStats['important_count'].toString();
+      _timeLabel = data['time_label'] ?? "ทั้งหมด";
+      
+      _teamLeaderboard = sortedTeams;
+      _personLeaderboard = sortedPersons;
+      _sourceLeaderboard = sortedSource; 
+      
+      _availableTeams = List<String>.from(data['available_teams'] ?? []);
+      _availablePersons = List<String>.from(data['available_persons'] ?? []);
+      _projectTypes = data['project_types'] ?? [];
+      _productCategories = data['product_categories'] ?? [];
+      
+      _isLoading = false;
+    });
   }
 
   @override
@@ -73,8 +126,10 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
     super.dispose();
   }
 
-  Future<void> _fetchSummaryData() async {
-    setState(() { _isLoading = true; _errorMessage = null; });
+  Future<void> _fetchSummaryData({bool isSilent = false}) async {
+    if (!isSilent) {
+      setState(() { _isLoading = true; _errorMessage = null; });
+    }
 
     try {
       String urlStr = '${AppConfig.baseUrl}/admin/ai-summary?filter=$_currentFilter'
@@ -91,41 +146,12 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
-        // 🎯 ดึงข้อมูลแล้วเรียงตาม count
-        Map<String, dynamic> teamsData = data['stats']['team_performance'] ?? {};
-        var sortedTeams = teamsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
-        
-        Map<String, dynamic> personsData = data['stats']['person_performance'] ?? {};
-        var sortedPersons = personsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
-        
-        Map<String, dynamic> sourceData = data['stats']['source_performance'] ?? {};
-        var sortedSource = sourceData.entries.toList();
-
         if (mounted) {
-          setState(() {
-            _aiInsight = data['ai_insight'] ?? "ไม่พบข้อความสรุปจาก AI";
-            _rawStats = data['stats']; 
-            _totalProjects = _rawStats['total_orders'].toString(); 
-            _totalCheckins = _rawStats['total_checkins']?.toString() ?? _totalProjects;
-            
-            double area = double.tryParse(_rawStats['total_area_sqm'].toString()) ?? 0;
-            _totalArea = area > 1000 ? "${(area / 1000).toStringAsFixed(1)}K" : area.toStringAsFixed(0);
-            
-            _importantCount = _rawStats['important_count'].toString();
-            _timeLabel = data['time_label'] ?? "ทั้งหมด";
-            
-            _teamLeaderboard = sortedTeams;
-            _personLeaderboard = sortedPersons;
-            _sourceLeaderboard = sortedSource; 
-            
-            _availableTeams = List<String>.from(data['available_teams'] ?? []);
-            _availablePersons = List<String>.from(data['available_persons'] ?? []);
-            _projectTypes = data['project_types'] ?? [];
-            _productCategories = data['product_categories'] ?? [];
-            
-            _isLoading = false;
-          });
+          // เก็บลง Cache
+          _cachedData = data;
+          _hasLoadedOnce = true;
+          // แสดงผล
+          _populateDataFromCache(data);
         }
       } else {
         throw Exception('Failed');

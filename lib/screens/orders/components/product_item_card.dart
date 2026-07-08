@@ -200,8 +200,9 @@ InputDecoration _inputDecoration(String label, IconData icon) {
 
         DropdownButtonFormField<String>(
           value: widget.item.categoryId,
+          autovalidateMode: AutovalidateMode.onUserInteraction,
           isExpanded: true,
-          decoration: _inputDecoration("หมวดหมู่สินค้า", Icons.shopping_bag_outlined),
+          decoration: _inputDecoration("หมวดหมู่สินค้า *", Icons.shopping_bag_outlined),
           dropdownColor: kCardDark,
           style: const TextStyle(color: Colors.white, fontSize: 16),
           items: widget.productCategories.map((item) => DropdownMenuItem<String>(
@@ -209,7 +210,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
             child: Text(item['name'] ?? '-', overflow: TextOverflow.ellipsis)
           )).toList(),
           onChanged: (val) => setState(() => widget.item.categoryId = val),
-          validator: (v) => v == null ? 'Required' : null,
+          validator: (v) => v == null ? 'กรุณาระบุหมวดหมู่สินค้าด้วยครับ' : null,
         ),
         const SizedBox(height: 16),
 
@@ -238,17 +239,9 @@ InputDecoration _inputDecoration(String label, IconData icon) {
         if (widget.projectTypes.isNotEmpty) ...[
                   DropdownButtonFormField<String>(
                     value: widget.item.projectTypeId,
-                    // 🚨 ทริค: ถ้ามีการติ๊กโปรเจกต์เมื่อไหร่ ให้เปิดโหมด Validate ทันที
-                    autovalidateMode: widget.item.selectedProjectIds.isNotEmpty 
-                        ? AutovalidateMode.always 
-                        : AutovalidateMode.disabled,
+                    autovalidateMode: AutovalidateMode.onUserInteraction,
                     isExpanded: true,
-                    decoration: _inputDecoration(
-                      widget.item.selectedProjectIds.isNotEmpty 
-                        ? "ประเภทโครงการ *" // เปลี่ยน Label ให้มีดอกจัน
-                        : "ประเภทโครงการ (ไม่บังคับ)", 
-                      Icons.domain_rounded
-                    ),
+                    decoration: _inputDecoration("ประเภทโครงการ *", Icons.domain_rounded),
                     dropdownColor: kCardDark,
                     style: const TextStyle(color: Colors.white, fontSize: 16),
                     items: widget.projectTypes.map((item) => DropdownMenuItem<String>(
@@ -256,12 +249,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                       child: Text(item['name'] ?? '-', overflow: TextOverflow.ellipsis)
                     )).toList(),
                     onChanged: (val) => setState(() => widget.item.projectTypeId = val),
-                    validator: (v) {
-                      if (widget.item.selectedProjectIds.isNotEmpty && v == null) {
-                        return 'กรุณาระบุประเภทโครงการด้วยครับ';
-                      }
-                      return null;
-                    },
+                    validator: (v) => v == null ? 'กรุณาระบุประเภทโครงการด้วยครับ' : null,
                   ),
                   const SizedBox(height: 16),
                   Divider(color: Colors.white.withOpacity(0.1)), // เส้นคั่นแบ่งโซนให้ดูเนียนตา

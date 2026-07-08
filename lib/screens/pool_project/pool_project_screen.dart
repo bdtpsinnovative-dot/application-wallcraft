@@ -51,11 +51,26 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
   final List<String> _dateRanges = ['7 วันล่าสุด', '14 วันล่าสุด', '30 วันล่าสุด'];
   final List<String> _areaRanges = ['น้อยกว่า 50 sq.m.', '50 - 200 sq.m.', '201 - 500 sq.m.', 'มากกว่า 500 sq.m.'];
 
+  // 🌟 Static Cache
+  static List<Map<String, dynamic>>? _cachedGroupedOrders;
+
   @override
   void initState() {
     super.initState();
-    _fetchFilterOptions(); 
-    _fetchProjects(isRefresh: true);
+    if (_cachedGroupedOrders != null) {
+      _groupedOrders = List.from(_cachedGroupedOrders!);
+      _applyFilters();
+      _isLoading = false;
+      _fetchFilterOptions(); 
+      _fetchProjects(isRefresh: true, isSilent: true);
+    } else {
+      _fetchFilterOptions(); 
+      // โหลดแบบ Progressive: โหลด 5 อันแรกให้เสร็จภายในเสี้ยววิ
+      _fetchProjects(isRefresh: true, customLimit: 5).then((_) {
+        // จากนั้นแอบโหลด 150 อันมาทับเบื้องหลังเงียบๆ
+        _fetchProjects(isRefresh: true, isSilent: true);
+      });
+    }
   }
 
   Future<void> _fetchFilterOptions() async {
@@ -110,17 +125,25 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
     }
   }
 
-  Future<void> _fetchProjects({bool isRefresh = false}) async {
+  Future<void> _fetchProjects({bool isRefresh = false, bool isSilent = false, int? customLimit}) async {
     if (isRefresh) {
-      setState(() { _isLoading = true; _currentPage = 1; _errorMessage = null; _hasMoreData = true; });
+      setState(() { 
+        if (!isSilent && _groupedOrders.isEmpty) {
+          _isLoading = true; 
+        }
+        _currentPage = 1; 
+        _errorMessage = null; 
+        _hasMoreData = true; 
+      });
     } else {
       setState(() => _isLoadingMore = true);
     }
 
     try {
+      int requestLimit = customLimit ?? _limit;
       Map<String, String> queryParams = {
         'page': _currentPage.toString(),
-        'limit': _limit.toString(),
+        'limit': requestLimit.toString(),
         'scope': _selectedScope,
         'search': _searchQuery,
       };
@@ -165,8 +188,13 @@ class _PoolProjectScreenState extends State<PoolProjectScreen> {
 
         setState(() {
           _groupedOrders = currentList;
+          // บันทึก Cache เฉพาะเวลาไม่ได้ใช้ Filter เท่านั้น และไม่ใช่ตอนจงใจโหลดแค่ 5 อันแรก
+          if (_searchQuery.isEmpty && _selectedScope == 'all' && _selectedCategories.isEmpty && _selectedProjectTypes.isEmpty && customLimit == null) {
+            _cachedGroupedOrders = List.from(_groupedOrders);
+          }
+          
           // เช็คว่าถ้า API ส่งข้อมูลมาเต็ม limit แปลว่าน่าจะมีหน้าต่อไป
-          _hasMoreData = rawData.length == _limit; 
+          _hasMoreData = rawData.length == requestLimit; 
           
           _applyFilters(); 
           _isLoading = false;

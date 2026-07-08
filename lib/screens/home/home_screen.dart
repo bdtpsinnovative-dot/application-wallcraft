@@ -80,16 +80,21 @@ class _HomeScreenState extends State<HomeScreen> {
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        String latestVersion = data['latest_version'];
+        
+        // ดึง Version แยกตามระบบ
+        String latestVersionAndroid = data['latest_version_android'] ?? '1.0.0';
+        String latestVersionIos = data['latest_version_ios'] ?? '1.0.0';
         
         // ดึง URL แยกตามระบบ
         String downloadUrlAndroid = data['download_url_android'];
         String downloadUrlIos = data['download_url_ios'];
 
-        if (currentVersion != latestVersion) {
-          // ส่ง Link เข้า Dialog โดยเช็คจาก Platform ทันที
-          String targetUrl = Platform.isIOS ? downloadUrlIos : downloadUrlAndroid;
-          _showUpdateDialog(latestVersion, targetUrl);
+        // ตรวจสอบแยกแพลตฟอร์ม
+        String targetLatestVersion = Platform.isIOS ? latestVersionIos : latestVersionAndroid;
+        String targetUrl = Platform.isIOS ? downloadUrlIos : downloadUrlAndroid;
+
+        if (currentVersion != targetLatestVersion) {
+          _showUpdateDialog(targetLatestVersion, targetUrl);
         }
       }
     } catch (e) {
@@ -255,9 +260,12 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
           child: BottomNavigationBar(
             currentIndex: _selectedIndex,
             onTap: (index) {
+              bool wasOnHome = _selectedIndex == 0;
               setState(() => _selectedIndex = index);
               if (index == 0) {
-                _homeKey.currentState?.refreshData(); 
+                // ถ้ากดแท็บ Home ซ้ำ (ตอนอยู่ที่ Home อยู่แล้ว) ค่อยให้ขึ้นโหลด (เหมือนตั้งใจกดรีเฟรช)
+                // แต่ถ้าสลับมาจากหน้าอื่น ให้แค่แอบรีเฟรชเงียบๆ (Silent) พอครับ
+                _homeKey.currentState?.refreshData(isSilent: !wasOnHome); 
               }
             },
             backgroundColor: Colors.transparent,
@@ -332,11 +340,13 @@ class _HomeDashboardState extends State<_HomeDashboard> with SingleTickerProvide
     super.dispose();
   }
 
-  Future<void> refreshData() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null; 
-    });
+  Future<void> refreshData({bool isSilent = false}) async {
+    if (!isSilent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null; 
+      });
+    }
 
     try {
       await Future.wait([
