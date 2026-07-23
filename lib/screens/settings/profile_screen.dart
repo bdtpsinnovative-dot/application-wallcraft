@@ -403,35 +403,35 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                       child: Column(
                         children: [
                           SizedBox(
-                            height: 320, 
+                            height: 210, 
                             child: Stack(
                               children: [
                                 Positioned(
                                   top: 0, left: 0, right: 0,
                                   child: SafeArea(
                                     child: Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                                       child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                         children: [
                                           if (Navigator.of(context).canPop())
-                                            IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white), onPressed: () => Navigator.pop(context))
+                                            IconButton(icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white, size: 18), onPressed: () => Navigator.pop(context))
                                           else
-                                            const SizedBox(width: 48),
-                                          const Text("Edit Profile", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                                          const SizedBox(width: 48), 
+                                            const SizedBox(width: 40),
+                                          const Text("Edit Profile", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                                          const SizedBox(width: 40), 
                                         ],
                                       ),
                                     ),
                                   ),
                                 ),
-                                Positioned(bottom: 20, left: 0, right: 0, child: _buildAvatarSection()),
+                                Positioned(bottom: 10, left: 0, right: 0, child: _buildAvatarSection()),
                               ],
                             ),
                           ),
 
                           Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
                             child: FadeTransition(
                               opacity: _fadeAnimation,
                               child: SlideTransition(
@@ -440,12 +440,12 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
                                   children: [
                                     _buildSectionTitle("Personal Info"),
                                     _buildModernField(emailCtrl, "อีเมล", Icons.email_outlined, readOnly: true),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 10),
                                     _buildModernField(nameCtrl, "ชื่อ-นามสกุล", Icons.person_outline),
-                                    const SizedBox(height: 16),
+                                    const SizedBox(height: 10),
                                     _buildModernField(phoneCtrl, "เบอร์โทรศัพท์", Icons.phone_outlined, keyboardType: TextInputType.phone),
                                     
-                                    const SizedBox(height: 32),
+                                    const SizedBox(height: 20),
                                     
                                     _buildSectionTitle("Team Info"),
                                     _buildModernField(teamNameCtrl, "ชื่อทีม", Icons.groups_outlined, readOnly: true, isTeam: true),
@@ -511,19 +511,19 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Widget _buildAvatarSection() {
     return Center(
       child: SizedBox(
-        width: 140, height: 140,
+        width: 96, height: 96,
         child: Stack(
           alignment: Alignment.center,
           clipBehavior: Clip.none,
           children: [
-            Container(width: 130, height: 130, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: kGlowPurple.withOpacity(0.5), blurRadius: 30, spreadRadius: 5)])),
+            Container(width: 90, height: 90, decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: kGlowPurple.withOpacity(0.4), blurRadius: 20, spreadRadius: 3)])),
             Container(
-              width: 120, height: 120,
+              width: 84, height: 84,
               decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.2), width: 2), color: kCardDark),
               child: CircleAvatar(
                 backgroundColor: kCardDark,
                 backgroundImage: _imageFile != null ? FileImage(_imageFile!) : (avatarUrl != null && avatarUrl!.isNotEmpty ? NetworkImage(avatarUrl!) : null) as ImageProvider?,
-                child: (_imageFile == null && (avatarUrl == null || avatarUrl!.isEmpty)) ? const Icon(Icons.person, size: 50, color: Colors.grey) : null,
+                child: (_imageFile == null && (avatarUrl == null || avatarUrl!.isEmpty)) ? const Icon(Icons.person, size: 36, color: Colors.grey) : null,
               ),
             ),
             Positioned(
@@ -531,9 +531,9 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
               child: GestureDetector(
                 onTap: _showImageSourceChoice,
                 child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: kLimeGreen, shape: BoxShape.circle, border: Border.all(color: kDarkBg, width: 3)),
-                  child: const Icon(Icons.camera_alt_rounded, color: Colors.black87, size: 18),
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(color: kLimeGreen, shape: BoxShape.circle, border: Border.all(color: kDarkBg, width: 2)),
+                  child: const Icon(Icons.camera_alt_rounded, color: Colors.black87, size: 14),
                 ),
               ),
             ),

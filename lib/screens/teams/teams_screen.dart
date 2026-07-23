@@ -6,7 +6,9 @@ import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_messaging/firebase_messaging.dart'; // 🌟 1. เพิ่ม Import Firebase
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import '../notifications/NotificationScreen.dart';
 import '../../constants.dart'; 
 import '../../services/api_service.dart'; 
@@ -99,6 +101,22 @@ class _TeamsScreenState extends State<TeamsScreen> {
       _errorMessage = msg;
       _isFirstLoading = false;
     });
+  }
+
+  Future<void> _makePhoneCall(String phoneNumber) async {
+    final cleanPhone = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
+    if (cleanPhone.isNotEmpty) {
+      final Uri launchUri = Uri(scheme: 'tel', path: cleanPhone);
+      try {
+        if (await canLaunchUrl(launchUri)) {
+          await launchUrl(launchUri);
+        } else {
+          await launchUrl(launchUri, mode: LaunchMode.externalApplication);
+        }
+      } catch (e) {
+        debugPrint("Error launching call: $e");
+      }
+    }
   }
 
   void _onRefresh() {
@@ -196,28 +214,27 @@ class _TeamsScreenState extends State<TeamsScreen> {
                   _buildHeader(context),
                   
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                     child: Container(
                       decoration: BoxDecoration(
                         color: kCardSurface,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1.5),
-                        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5))]
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
                       ),
                       child: TextField(
                         controller: _searchCtrl,
-                        style: const TextStyle(color: kTextPrimary, fontSize: 15),
+                        style: const TextStyle(color: kTextPrimary, fontSize: 13),
                         onChanged: (val) => setState(() => _searchText = val),
                         decoration: InputDecoration(
                           hintText: "ค้นหารายชื่อพนักงาน หรือ ทีม...",
-                          hintStyle: TextStyle(color: kTextSecondary.withOpacity(0.5), fontSize: 14),
-                          prefixIcon: const Icon(Icons.search_rounded, color: kPremiumGold, size: 22),
+                          hintStyle: TextStyle(color: kTextSecondary.withOpacity(0.5), fontSize: 13),
+                          prefixIcon: const Icon(Icons.search_rounded, color: kPremiumGold, size: 20),
                           suffixIcon: _searchText.isNotEmpty 
                             ? IconButton(
                                 icon: Container(
                                   padding: const EdgeInsets.all(4),
                                   decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
-                                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 14)
+                                  child: const Icon(Icons.close_rounded, color: Colors.white, size: 12)
                                 ),
                                 onPressed: () {
                                   _searchCtrl.clear();
@@ -226,7 +243,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                               ) 
                             : null,
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
                         ),
                       ),
                     ),
@@ -244,7 +261,7 @@ class _TeamsScreenState extends State<TeamsScreen> {
                                     color: kDarkBg,
                                     backgroundColor: kPremiumGold,
                                     child: ListView.builder(
-                                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+                                      padding: const EdgeInsets.fromLTRB(10, 4, 10, 40),
                                       physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()), 
                                       itemCount: _flatMembers.length,
                                       itemBuilder: (context, index) {
@@ -264,58 +281,17 @@ class _TeamsScreenState extends State<TeamsScreen> {
 
 Widget _buildHeader(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 20, 24, 10),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(
+        children: const [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ❌ เอา if (Navigator.canPop(context)) และปุ่มย้อนกลับออกไปเลยครับ เพราะนี่คือหน้าหลัก
-              const Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Directory", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: kTextPrimary, letterSpacing: 0.5)),
-                  SizedBox(height: 4),
-                  Text("รายชื่อพนักงานทั้งหมด", style: TextStyle(fontSize: 13, color: kTextSecondary)),
-                ],
-              ),
+              Text("Directory", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kTextPrimary, letterSpacing: 0.5)),
+              SizedBox(height: 2),
+              Text("รายชื่อพนักงานทั้งหมด", style: TextStyle(fontSize: 12, color: kTextSecondary)),
             ],
-          ),
-          
-          // 🔔 กระดิ่งแจ้งเตือน
-          GestureDetector(
-            onTap: () {
-              // 1. จุดแดงหายไป
-              setState(() => _hasUnreadNotifications = false); 
-              
-              // 2. กดแล้วให้ Push ไปหน้า NotificationScreen
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const NotificationScreen(),
-                ),
-              );
-            },
-            child: Stack(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(color: kCardSurface, shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.05))),
-                  child: const Icon(Icons.notifications_outlined, color: kTextPrimary, size: 22),
-                ),
-                if (_hasUnreadNotifications)
-                  Positioned(
-                    top: 10, right: 12,
-                    child: Container(
-                      width: 10, height: 10,
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent, shape: BoxShape.circle,
-                        border: Border.all(color: kCardSurface, width: 2),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
           ),
         ],
       ),
@@ -332,36 +308,32 @@ Widget _buildHeader(BuildContext context) {
     final isAdmin = role == 'admin';
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: kCardSurface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isMyTeam ? kPremiumGold.withOpacity(0.3) : Colors.white.withOpacity(0.05), 
-          width: isMyTeam ? 1.5 : 1
+          width: isMyTeam ? 1.2 : 1
         ),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 8))
-        ]
       ),
       child: Row(
         children: [
           Container(
-            width: 54, height: 54,
+            width: 42, height: 42,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: kCardInner,
-              border: Border.all(color: isAdmin ? kPremiumGold : Colors.white.withOpacity(0.1), width: isAdmin ? 2 : 1),
-              boxShadow: isAdmin ? [BoxShadow(color: kPremiumGold.withOpacity(0.2), blurRadius: 10)] : [],
+              border: Border.all(color: isAdmin ? kPremiumGold : Colors.white.withOpacity(0.1), width: isAdmin ? 1.5 : 1),
             ),
             child: ClipOval(
               child: (avatarUrl != null && avatarUrl.toString().isNotEmpty)
-                  ? Image.network(avatarUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: kTextSecondary, size: 28))
-                  : Icon(Icons.person_rounded, color: isAdmin ? kPremiumGold : kTextSecondary, size: 28),
+                  ? Image.network(avatarUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.person_rounded, color: kTextSecondary, size: 22))
+                  : Icon(Icons.person_rounded, color: isAdmin ? kPremiumGold : kTextSecondary, size: 22),
             ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -418,14 +390,17 @@ Widget _buildHeader(BuildContext context) {
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: kCardInner, 
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.05))
+          GestureDetector(
+            onTap: () => _makePhoneCall(phone),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: kPremiumGold.withOpacity(0.15), 
+                shape: BoxShape.circle,
+                border: Border.all(color: kPremiumGold.withOpacity(0.4))
+              ),
+              child: const Icon(Icons.call_rounded, color: kPremiumGold, size: 18),
             ),
-            child: const Icon(Icons.call_rounded, color: kTextPrimary, size: 18),
           )
         ],
       ),

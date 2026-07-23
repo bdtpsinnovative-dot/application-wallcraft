@@ -217,21 +217,21 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(24.0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: kPremiumGold.withOpacity(0.1), borderRadius: BorderRadius.circular(15)), child: const Icon(Icons.analytics_rounded, color: kPremiumGold, size: 28)),
-                          const SizedBox(width: 16),
+                          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kPremiumGold.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.analytics_rounded, color: kPremiumGold, size: 22)),
+                          const SizedBox(width: 12),
                           const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [Text("รายงานสรุป", style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)), Text("Enterprise Insight", style: TextStyle(color: Colors.white54, fontSize: 13))],
+                            children: [Text("รายงานสรุป", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), Text("Enterprise Insight", style: TextStyle(color: Colors.white54, fontSize: 11))],
                           ),
                         ],
                       ),
-                      GestureDetector(onTap: _openFilterModal, child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kCardDark, border: Border.all(color: kPremiumGold.withOpacity(0.5)), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.tune_rounded, color: kPremiumGold, size: 22)))
+                      GestureDetector(onTap: _openFilterModal, child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kCardDark, border: Border.all(color: kPremiumGold.withOpacity(0.5)), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.tune_rounded, color: kPremiumGold, size: 18)))
                     ],
                   ),
                 ),
@@ -243,7 +243,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                       : RefreshIndicator(
                           color: kPremiumGold, backgroundColor: kCardDark, onRefresh: _fetchSummaryData,
                           child: ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10), physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), physics: const AlwaysScrollableScrollPhysics(),
                             children: [
                               _buildAiInsightBanner(),
                               const SizedBox(height: 24),
@@ -267,7 +267,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                               ),
                               const SizedBox(height: 24),
 
-                              const TrendLineChart(),
+                              TrendLineChart(trendData: _rawStats['daily_trend']),
                               const SizedBox(height: 16),
                               SourcePieChart(sourceData: _sourceLeaderboard),
                               const SizedBox(height: 16),

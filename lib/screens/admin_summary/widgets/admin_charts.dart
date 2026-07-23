@@ -55,25 +55,36 @@ class FullDashboardScreen extends StatelessWidget {
 
 // --- 📈 1. Trend Line Chart ---
 class TrendLineChart extends StatelessWidget {
-  const TrendLineChart({super.key});
+  final List<dynamic>? trendData;
+  const TrendLineChart({super.key, this.trendData});
 
   @override
   Widget build(BuildContext context) {
-    List<String> getPastSevenDays() {
-      return List.generate(7, (index) {
+    List<String> dateLabels = [];
+    List<FlSpot> spots = [];
+
+    if (trendData != null && trendData!.isNotEmpty) {
+      for (int i = 0; i < trendData!.length; i++) {
+        final item = trendData![i];
+        final date = item['date'] ?? '';
+        final count = (item['count'] ?? 0).toDouble();
+        dateLabels.add(date);
+        spots.add(FlSpot(i.toDouble(), count));
+      }
+    } else {
+      for (int index = 0; index < 7; index++) {
         DateTime date = DateTime.now().subtract(Duration(days: 6 - index));
-        return DateFormat('dd/MM').format(date);
-      });
+        dateLabels.add(DateFormat('dd/MM').format(date));
+        spots.add(FlSpot(index.toDouble(), 0));
+      }
     }
 
-    final dateLabels = getPastSevenDays();
-
     return Container(
-      height: 280,
-      padding: const EdgeInsets.fromLTRB(10, 20, 20, 10),
+      height: 240,
+      padding: const EdgeInsets.fromLTRB(10, 16, 16, 10),
       decoration: BoxDecoration(
         color: kCardDark,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.05)),
       ),
       child: Column(
@@ -82,12 +93,13 @@ class TrendLineChart extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.only(left: 10),
             child: Text("แนวโน้มโครงการ (รายวัน)", 
-              style: TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+              style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
           ),
-          const SizedBox(height: 30),
+          const SizedBox(height: 20),
           Expanded(
             child: LineChart(
               LineChartData(
+                minY: 0,
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
@@ -98,13 +110,13 @@ class TrendLineChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 30, 
+                      reservedSize: 26, 
                       interval: 1,
                       getTitlesWidget: (value, meta) {
                         int index = value.toInt();
                         if (index >= 0 && index < dateLabels.length) {
                           return Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
+                            padding: const EdgeInsets.only(top: 6.0),
                             child: Text(
                               dateLabels[index],
                               style: const TextStyle(color: Colors.white30, fontSize: 10, fontWeight: FontWeight.bold),
@@ -118,7 +130,7 @@ class TrendLineChart extends StatelessWidget {
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
-                      reservedSize: 35,
+                      reservedSize: 30,
                       getTitlesWidget: (value, meta) {
                         return Text(
                           value.toInt().toString(), 
@@ -133,12 +145,13 @@ class TrendLineChart extends StatelessWidget {
                 borderData: FlBorderData(show: false),
                 lineBarsData: [
                   LineChartBarData(
-                    spots: const [FlSpot(0, 10), FlSpot(1, 15), FlSpot(2, 12), FlSpot(3, 20), FlSpot(4, 35), FlSpot(5, 25), FlSpot(6, 40)],
+                    spots: spots,
                     isCurved: true,
+                    preventCurveOverShooting: true,
                     color: const Color(0xFF3B82F6), 
-                    barWidth: 4,
+                    barWidth: 3,
                     dotData: const FlDotData(show: true),
-                    belowBarData: BarAreaData(show: true, color: const Color(0xFF3B82F6).withOpacity(0.1)),
+                    belowBarData: BarAreaData(show: true, color: const Color(0xFF3B82F6).withOpacity(0.15)),
                   ),
                 ],
               ),
@@ -159,27 +172,37 @@ class SourcePieChart extends StatelessWidget {
   Widget build(BuildContext context) {
     int total = sourceData.fold(0, (sum, item) => sum + (item.value as int));
     
+    int appCount = 0;
+    int importCount = 0;
+    for (var item in sourceData) {
+      if (item.key.toUpperCase() == 'APP') appCount = item.value as int;
+      if (item.key.toUpperCase() == 'IMPORT') importCount = item.value as int;
+    }
+
     return Container(
-      height: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(24)),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCardDark, 
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Column(
         children: [
-          const Text("ที่มาข้อมูล", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          Expanded(
+          const Text("ที่มาข้อมูล (APP vs IMPORT)", style: TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 140,
             child: PieChart(
               PieChartData(
-                sectionsSpace: 4,
+                sectionsSpace: 3,
                 centerSpaceRadius: 25,
                 sections: sourceData.map((item) {
                   final isApp = item.key.toUpperCase() == 'APP';
                   return PieChartSectionData(
-                    color: isApp ? const Color(0xFF8B5CF6) : const Color(0xFF10B981),
+                    color: isApp ? const Color(0xFF3B82F6) : const Color(0xFFF59E0B),
                     value: item.value.toDouble(),
-                    // ป้องกัน Error หาก Total เป็น 0
                     title: total > 0 ? '${(item.value / total * 100).round()}%' : '0%',
-                    radius: 30,
+                    radius: 28,
                     titleStyle: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
                   );
                 }).toList(),
@@ -187,7 +210,44 @@ class SourcePieChart extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 12),
-          const Text("APP vs IMPORT", style: TextStyle(color: Colors.white30, fontSize: 9)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // ป้ายปุ่มสีแอป APP (น้ำเงิน)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF3B82F6).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFF3B82F6).withOpacity(0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.phone_iphone_rounded, size: 12, color: Color(0xFF3B82F6)),
+                    const SizedBox(width: 4),
+                    Text("APP: $appCount งาน", style: const TextStyle(color: Color(0xFF3B82F6), fontSize: 11, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              // ป้ายปุ่มสี IMPORT (ส้มทอง)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF59E0B).withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.file_upload_rounded, size: 12, color: Color(0xFFF59E0B)),
+                    const SizedBox(width: 4),
+                    Text("IMPORT: $importCount งาน", style: const TextStyle(color: Color(0xFFF59E0B), fontSize: 11, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );

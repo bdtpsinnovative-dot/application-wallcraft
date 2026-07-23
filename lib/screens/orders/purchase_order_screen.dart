@@ -13,6 +13,7 @@ import 'dart:async';
 import '../../constants.dart';
 import '../../services/api_service.dart';
 import 'order_history_screen.dart';
+import '../notifications/NotificationScreen.dart';
 
 import 'components/product_item_card.dart';
 import 'components/add_project_dialog.dart'; 
@@ -214,6 +215,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   }
 
   Future<void> _submitOrder() async {
+    if (_isLoading) return;
     FocusScope.of(context).unfocus(); 
     if (!_formKey.currentState!.validate()) return;
     
@@ -274,7 +276,10 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       
       if (response.statusCode == 200 || response.statusCode == 201) { 
         if (mounted) {
+          NotificationScreen.invalidateCache();
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ'), backgroundColor: Colors.green));
+          _formKey.currentState?.reset();
+          _companyDropdownKey.currentState?.clear();
           setState(() {
               _nameCtrl.clear();
               _contactCtrl.clear();
@@ -562,14 +567,20 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     return _buildAnimatedCard(
       index: 3,
       child: ElevatedButton(
-        onPressed: _submitOrder,
+        onPressed: _isLoading ? null : _submitOrder,
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 18),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: kPrimaryColor, 
+          backgroundColor: _isLoading ? Colors.white30 : kPrimaryColor, 
         ),
-        child: const Center(
-          child: Text("บันทึก", style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
+        child: Center(
+          child: _isLoading
+              ? const SizedBox(
+                  width: 24,
+                  height: 24,
+                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                )
+              : const Text("บันทึก", style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
         ),
       ),
     );

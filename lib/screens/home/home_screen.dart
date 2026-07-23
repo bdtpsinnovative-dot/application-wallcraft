@@ -23,6 +23,7 @@ import '../voice_chat_sceenai/ai_chat_hub_screen.dart';
 import '../settings/profile_screen.dart';
 import '../teams/teams_screen.dart'; 
 import '../image_ai/ai_image_search_screen.dart'; 
+import '../notifications/NotificationScreen.dart';
 
 const Color kDarkBg = Color(0xFF0F0F11); 
 const Color kGlowPurple = Color(0xFF4A3080); 
@@ -52,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
   late final Widget _teamsScreen;
   late final Widget _profileScreen;
   late final Widget _adminSummaryScreen;
+  late final Widget _notificationScreen;
 
   @override
   void initState() {
@@ -63,6 +65,7 @@ class _HomeScreenState extends State<HomeScreen> {
     _teamsScreen = const TeamsScreen();
     _profileScreen = const ProfileScreen();
     _adminSummaryScreen = const AdminSummaryScreen(); 
+    _notificationScreen = const NotificationScreen();
     
     // 🌟 สั่งเช็คอัปเดตทันทีที่เปิดแอป
     _checkForUpdate();
@@ -190,7 +193,7 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
     if (_isAdmin != isAdmin) {
       setState(() {
         _isAdmin = isAdmin;
-        if (!_isAdmin && _selectedIndex > 2) {
+        if (!_isAdmin && _selectedIndex > 3) {
           _selectedIndex = 0;
         }
       });
@@ -199,9 +202,9 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
 
   List<Widget> get _currentPages {
     if (_isAdmin) {
-      return [_homeDashboard, _teamsScreen, _adminSummaryScreen, _profileScreen];
+      return [_homeDashboard, _teamsScreen, _adminSummaryScreen, _notificationScreen, _profileScreen];
     } else {
-      return [_homeDashboard, _teamsScreen, _profileScreen];
+      return [_homeDashboard, _teamsScreen, _notificationScreen, _profileScreen];
     }
   }
 
@@ -211,13 +214,15 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
         _buildNavItem(Icons.grid_view_rounded, 0),
         _buildNavItem(Icons.groups_rounded, 1),
         _buildNavItem(Icons.analytics_rounded, 2), 
-        _buildNavItem(Icons.person_rounded, 3),
+        _buildNavItem(Icons.notifications_rounded, 3),
+        _buildNavItem(Icons.person_rounded, 4),
       ];
     } else {
       return [
         _buildNavItem(Icons.grid_view_rounded, 0),
         _buildNavItem(Icons.groups_rounded, 1),
-        _buildNavItem(Icons.person_rounded, 2),
+        _buildNavItem(Icons.notifications_rounded, 2),
+        _buildNavItem(Icons.person_rounded, 3),
       ];
     }
   }
@@ -252,30 +257,31 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
           ],
         ),
         
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: kDarkBg, 
-            border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))), 
-          ),
-          child: BottomNavigationBar(
-            currentIndex: _selectedIndex,
-            onTap: (index) {
-              bool wasOnHome = _selectedIndex == 0;
-              setState(() => _selectedIndex = index);
-              if (index == 0) {
-                // ถ้ากดแท็บ Home ซ้ำ (ตอนอยู่ที่ Home อยู่แล้ว) ค่อยให้ขึ้นโหลด (เหมือนตั้งใจกดรีเฟรช)
-                // แต่ถ้าสลับมาจากหน้าอื่น ให้แค่แอบรีเฟรชเงียบๆ (Silent) พอครับ
-                _homeKey.currentState?.refreshData(isSilent: !wasOnHome); 
-              }
-            },
-            backgroundColor: Colors.transparent,
-            selectedItemColor: Colors.white, 
-            unselectedItemColor: Colors.grey[600], 
-            showSelectedLabels: false,
-            showUnselectedLabels: false,
-            type: BottomNavigationBarType.fixed,
-            elevation: 0,
-            items: _navItems, 
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            decoration: BoxDecoration(
+              color: kDarkBg, 
+              border: Border(top: BorderSide(color: Colors.white.withOpacity(0.06))), 
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _selectedIndex,
+              onTap: (index) {
+                bool wasOnHome = _selectedIndex == 0;
+                setState(() => _selectedIndex = index);
+                if (index == 0) {
+                  _homeKey.currentState?.refreshData(isSilent: !wasOnHome); 
+                }
+              },
+              backgroundColor: Colors.transparent,
+              selectedItemColor: Colors.white, 
+              unselectedItemColor: Colors.grey[600], 
+              showSelectedLabels: false,
+              showUnselectedLabels: false,
+              type: BottomNavigationBarType.fixed,
+              elevation: 0,
+              items: _navItems, 
+            ),
           ),
         ),
       ),
@@ -288,12 +294,12 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
 
     return BottomNavigationBarItem(
       icon: AnimatedScale(
-        scale: isSelected ? 1.25 : 1.0, 
-        duration: const Duration(milliseconds: 350), 
-        curve: Curves.elasticOut, 
+        scale: isSelected ? 1.12 : 1.0, 
+        duration: const Duration(milliseconds: 250), 
+        curve: Curves.easeOutCubic, 
         child: Padding(
-          padding: const EdgeInsets.all(10), 
-          child: Icon(icon, size: 26, color: iconColor), 
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2), 
+          child: Icon(icon, size: 22, color: iconColor), 
         ),
       ),
       label: '',
