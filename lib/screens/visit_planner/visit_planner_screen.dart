@@ -134,9 +134,28 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
       final response = await ApiService.getWeeklyVisitPlansBoard();
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        List<dynamic> plans = data['visit_plans'] ?? [];
+        
+        final now = DateTime.now();
+        final today = DateTime(now.year, now.month, now.day);
+        
+        for (var plan in plans) {
+          if ((plan['status'] == 'pending' || plan['status'] == null) && plan['planned_date'] != null) {
+            final pDate = DateTime.parse(plan['planned_date']);
+            final planDay = DateTime(pDate.year, pDate.month, pDate.day);
+            if (planDay.isBefore(today)) {
+              plan['status'] = 'unsuccessful';
+              ApiService.patch(
+                Uri.parse('${AppConfig.baseUrl}/visit-plans/${plan['id']}'),
+                body: jsonEncode({'status': 'unsuccessful'}),
+              );
+            }
+          }
+        }
+
         if (mounted) {
           setState(() {
-            _visitPlans = data['visit_plans'] ?? [];
+            _visitPlans = plans;
             _generateWeeks(_visitPlans, ensureWeek: targetWeek);
             _isLoading = false;
           });
@@ -246,6 +265,11 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         color = Colors.lightBlueAccent;
         icon = Icons.autorenew_rounded;
         label = "ดำเนินการ";
+        break;
+      case 'unsuccessful':
+        color = Colors.redAccent;
+        icon = Icons.cancel_rounded;
+        label = "ไม่สำเร็จ";
         break;
       case 'pending':
       default:
