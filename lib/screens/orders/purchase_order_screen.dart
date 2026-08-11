@@ -57,9 +57,55 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   // 🌟 Static Cache for Dropdowns
   static Map<String, dynamic>? _cachedDropdownData;
 
+  // 🌟 State for Pipeline & Visit Plans
+  List<dynamic> _pipelineData = [];
+  List<dynamic> _visitPlanData = [];
+
   @override
   void initState() {
     super.initState();
+    _fetchInitialData();
+    _fetchPipeline(); // 🌟 Fetch pipeline on init
+    _fetchVisitPlans(); // 🌟 Fetch visit plans on init
+    
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) setState(() => _startAnimation = true);
+    });
+  }
+
+  Future<void> _fetchVisitPlans() async {
+    try {
+      final response = await ApiService.getVisitPlans();
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _visitPlanData = data['visit_plans'] ?? [];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching visit plans: $e");
+    }
+  }
+
+  Future<void> _fetchPipeline() async {
+    try {
+      final response = await ApiService.getPipeline();
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _pipelineData = data['pipeline'] ?? [];
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching pipeline: $e");
+    }
+  }
+
+  Future<void> _fetchInitialData() async {
     if (_cachedDropdownData != null) {
       _populateDropdownsFromCache(_cachedDropdownData!);
       _fetchDropdownData(isSilent: true);
@@ -98,6 +144,47 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     }
   }
   Future<List<dynamic>> _getCompanies(String filter) async {
+    List<dynamic> results = [];
+    final lowerFilter = filter.toLowerCase();
+
+    // 1. 📅 กรอง Visit Plans มาก่อนสุด
+    if (_visitPlanData.isNotEmpty) {
+      for (var vp in _visitPlanData) {
+        if (vp['companies'] != null && vp['companies']['name'] != null) {
+          final compName = vp['companies']['name'].toString().toLowerCase();
+          if (compName.contains(lowerFilter)) {
+            final Map<String, dynamic> companyData = Map<String, dynamic>.from(vp['companies']);
+            results.add({
+              ...companyData, 
+              'is_visit_plan': true,
+              'visit_plan_data': vp // แนบข้อมูลแผนงานทั้งหมดไปใช้ตอนเลือก
+            });
+          }
+        }
+      }
+    }
+
+    // 2. 🌟 กรอง Pipeline Companies
+    if (_pipelineData.isNotEmpty) {
+      for (var p in _pipelineData) {
+        if (p['company'] != null && p['company']['name'] != null) {
+          final compName = p['company']['name'].toString().toLowerCase();
+          if (compName.contains(lowerFilter)) {
+            // เช็คว่าไม่ได้เป็น Visit Plan ไปแล้ว
+            if (!results.any((r) => r['id'] == p['company']['id'])) {
+              final Map<String, dynamic> pipelineCompanyData = Map<String, dynamic>.from(p['company']);
+              results.add({
+                ...pipelineCompanyData, 
+                'is_pipeline': true,
+                'projects': p['projects']
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // 3. 🏢 ดึงบริษัททั้งหมดจาก API 
     String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
     if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
        urlStr += '&type_id=$_selectedCustomerType';
@@ -106,10 +193,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     try {
       final response = await ApiService.get(url);
       if (response.statusCode == 200) {
-        return jsonDecode(response.body); 
+        final apiCompanies = jsonDecode(response.body) as List<dynamic>;
+        
+        // กรองเอาบริษัทที่มีใน Pipeline ออกไปแล้ว จะได้ไม่ซ้ำ
+        final pipelineIds = results.map((c) => c['id']).toSet();
+        for (var ac in apiCompanies) {
+          if (!pipelineIds.contains(ac['id'])) {
+            results.add(ac);
+          }
+        }
       }
     } catch (e) { debugPrint('Error: $e'); }
-    return []; 
+
+    return results; 
   }
 
   Future<bool> _createNewProject(String projectName) async {
@@ -470,7 +566,60 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                             _selectedCustomerType = val['customer_type_id'].toString();
                                             _isTypeManuallySelected = false; 
                                           }
-                                        } else { _selectedCompany = null; }
+                                          // 📅 Visit Plan Logic: Auto-fill everything
+                                          if (val['is_visit_plan'] == true && val['visit_plan_data'] != null) {
+                                            final vp = val['visit_plan_data'];
+                                            
+                                            // Auto-select project
+                                            if (vp['projects'] != null) {
+                                              final p = vp['projects'];
+                                              if (!_projects.any((existing) => existing['id'] == p['id'])) {
+                                                _projects.add(p);
+                                              }
+                                              if (!_selectedProjects.any((sp) => sp['id'] == p['id'])) {
+                                                _selectedProjects = List.from(_selectedProjects)..add(p);
+                                              }
+                                            }
+                                            
+                                            // Auto-fill ProductItem (assuming first item)
+                                            if (_orderItems.isNotEmpty) {
+                                              final firstItem = _orderItems[0];
+                                              
+                                              if (vp['project_type_id'] != null) {
+                                                firstItem.projectTypeId = vp['project_type_id'].toString();
+                                              }
+                                              
+                                              if (vp['product_category_id'] != null) {
+                                                firstItem.categoryId = vp['product_category_id'].toString();
+                                              }
+                                              
+                                              if (vp['project_concept'] != null) {
+                                                firstItem.noteCtrl.text = vp['project_concept'];
+                                              }
+                                            }
+                                          }
+                                          // 🌟 Pipeline Logic: Load active projects (only if not a visit plan)
+                                          else if (val['is_pipeline'] == true && val['projects'] != null) {
+                                            final activeProjs = val['projects'] as List<dynamic>;
+                                            
+                                            // Add active projects to _projects list if not there
+                                            for (var ap in activeProjs) {
+                                              if (!_projects.any((p) => p['id'] == ap['id'])) {
+                                                _projects.add(ap);
+                                              }
+                                            }
+                                            
+                                            // Auto-select if there is exactly 1 active project
+                                            if (activeProjs.length == 1) {
+                                              final p = activeProjs.first;
+                                              if (!_selectedProjects.any((sp) => sp['id'] == p['id'])) {
+                                                _selectedProjects = List.from(_selectedProjects)..add(p);
+                                              }
+                                            }
+                                          }
+                                        } else { 
+                                          _selectedCompany = null; 
+                                        }
                                       });
                                     },
                                   ),

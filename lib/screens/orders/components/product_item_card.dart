@@ -63,19 +63,29 @@ class _ProductItemCardState extends State<ProductItemCard> {
     }
   }
 
+  final Set<String> _seenProjectIds = {};
+
   void _checkAutoSelectProject() {
-    if (widget.projects.length == 1) {
-      String onlyProjectId = widget.projects[0]['id'];
-      if (!widget.item.selectedProjectIds.contains(onlyProjectId)) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            setState(() {
-              widget.item.selectedProjectIds.add(onlyProjectId);
-              widget.item.projectAreaControllers.putIfAbsent(onlyProjectId, () => TextEditingController());
-            });
-          }
-        });
+    bool changed = false;
+    for (var project in widget.projects) {
+      String? projectId = project['id']?.toString();
+      if (projectId != null && !_seenProjectIds.contains(projectId)) {
+        _seenProjectIds.add(projectId);
+        // Auto-select because it's the first time we see this project in this card
+        if (!widget.item.selectedProjectIds.contains(projectId)) {
+          widget.item.selectedProjectIds.add(projectId);
+          widget.item.projectAreaControllers.putIfAbsent(projectId, () => TextEditingController());
+          changed = true;
+        }
       }
+    }
+
+    if (changed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          setState(() {});
+        }
+      });
     }
   }
 

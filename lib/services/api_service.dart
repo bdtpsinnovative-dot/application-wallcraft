@@ -61,6 +61,53 @@ class ApiService {
 
   // --- Method อื่นๆ (get, post, put, patch) คงเดิมไว้ครับ ---
 
+  static Future<http.Response> getPipeline() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/profile/pipeline');
+    return await get(url);
+  }
+
+  static Future<http.Response> getVisitPlans() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/profile/visit-plans');
+    return await get(url);
+  }
+
+  static Future<http.Response> getCompanies({String? query}) async {
+    final url = Uri.parse('${AppConfig.baseUrl}/companies${query != null && query.isNotEmpty ? '?q=$query' : ''}');
+    return await get(url);
+  }
+
+  static Future<http.Response> getProjects({String? query}) async {
+    final url = Uri.parse('${AppConfig.baseUrl}/projects${query != null && query.isNotEmpty ? '?q=$query' : ''}');
+    return await get(url);
+  }
+
+  static Future<http.Response> getProjectTypes() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/project-types');
+    return await get(url);
+  }
+
+  static Future<http.Response> getCategories() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/categories');
+    return await get(url);
+  }
+
+  // 🌟 12-Week Visit Planner Board APIs
+  static Future<http.Response> getWeeklyVisitPlansBoard() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/visit-plans');
+    return await get(url);
+  }
+
+  static Future<http.Response> addVisitPlan(Map<String, dynamic> body) async {
+    final url = Uri.parse('${AppConfig.baseUrl}/visit-plans');
+    return await post(url, body: body);
+  }
+
+  static Future<http.Response> deleteVisitPlan(String id) async {
+    final url = Uri.parse('${AppConfig.baseUrl}/visit-plans?id=$id');
+    var headers = await _getHeaders();
+    return await http.delete(url, headers: headers);
+  }
+
   static Future<http.Response> get(Uri uri) async {
     var headers = await _getHeaders();
     var response = await http.get(uri, headers: headers);

@@ -239,6 +239,74 @@ class CustomerInfoCard extends StatelessWidget {
                       style: const TextStyle(color: Colors.white),
                       decoration: _inputDecoration("พิมพ์ชื่อบริษัทเพื่อค้นหา...", Icons.search),
                     ),
+                    itemBuilder: (context, item, isSelected, isFocused) {
+                      if (item == null) return const SizedBox();
+                      
+                      bool isVisitPlan = item['is_visit_plan'] == true;
+                      bool isPipeline = item['is_pipeline'] == true;
+                      
+                      int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
+                      
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
+                          color: isVisitPlan ? Colors.green.withOpacity(0.1) : (isPipeline ? Colors.indigo.withOpacity(0.1) : Colors.transparent),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item['name'] ?? '',
+                                style: TextStyle(
+                                  color: isSelected ? kLimeGreen : Colors.white,
+                                  fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
+                                ),
+                              ),
+                            ),
+                            if (isVisitPlan)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.green.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.calendar_month, color: Colors.greenAccent, size: 12),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "แผนสัปดาห์นี้",
+                                      style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else if (isPipeline)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.amber.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.star, color: Colors.amber, size: 12),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      "$projCount โปรเจ็กต์",
+                                      style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),

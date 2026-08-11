@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../constants.dart';
@@ -21,6 +22,12 @@ const Color kTextSecondary = Color(0xFFA0A5B5);
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
 
+  static List<dynamic>? cachedNotifications;
+  
+  static void invalidateCache() {
+    cachedNotifications = null;
+  }
+
   @override
   State<NotificationScreen> createState() => _NotificationScreenState();
 }
@@ -30,20 +37,14 @@ class _NotificationScreenState extends State<NotificationScreen> {
   bool _isLoading = true;
   String? _errorMessage;
 
-  static List<dynamic>? _cachedNotifications;
-  
-  static void invalidateCache() {
-    _cachedNotifications = null;
-  }
-
   StreamSubscription<RemoteMessage>? _fcmSubscription;
 
   @override
   void initState() {
     super.initState();
 
-    if (_cachedNotifications != null) {
-      _notifications = List.from(_cachedNotifications!);
+    if (NotificationScreen.cachedNotifications != null) {
+      _notifications = List.from(NotificationScreen.cachedNotifications!);
       _isLoading = false;
       _fetchNotifications(isSilent: true);
     } else {
@@ -83,7 +84,7 @@ class _NotificationScreenState extends State<NotificationScreen> {
       if (response.statusCode == 200) {
         final List<dynamic> fetchedData = jsonDecode(response.body);
         if (mounted) {
-          _cachedNotifications = fetchedData;
+          NotificationScreen.cachedNotifications = fetchedData;
           setState(() {
             _notifications = fetchedData;
             _isLoading = false;

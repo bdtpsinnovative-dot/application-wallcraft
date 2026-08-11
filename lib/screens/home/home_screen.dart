@@ -21,7 +21,8 @@ import '../auth/login_screen.dart';
 import '../orders/purchase_order_screen.dart';
 import '../voice_chat_sceenai/ai_chat_hub_screen.dart';
 import '../settings/profile_screen.dart';
-import '../teams/teams_screen.dart'; 
+import '../visit_planner/visit_planner_screen.dart'; // 🌟 นำเข้า Visit Planner
+import '../teams/teams_screen.dart'; // เก็บไว้เผื่อใช้
 import '../image_ai/ai_image_search_screen.dart'; 
 import '../notifications/NotificationScreen.dart';
 
@@ -50,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isAdmin = false;
 
   late final Widget _homeDashboard;
-  late final Widget _teamsScreen;
+  late final Widget _visitPlannerScreen; // 🌟 เปลี่นเป็นแผนงาน
   late final Widget _profileScreen;
   late final Widget _adminSummaryScreen;
   late final Widget _notificationScreen;
@@ -62,7 +63,7 @@ class _HomeScreenState extends State<HomeScreen> {
       key: _homeKey, 
       onRoleChecked: _updateAdminStatus,
     );
-    _teamsScreen = const TeamsScreen();
+    _visitPlannerScreen = const VisitPlannerScreen(); // 🌟 หน้าแผนงาน 12 สัปดาห์
     _profileScreen = const ProfileScreen();
     _adminSummaryScreen = const AdminSummaryScreen(); 
     _notificationScreen = const NotificationScreen();
@@ -202,9 +203,9 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
 
   List<Widget> get _currentPages {
     if (_isAdmin) {
-      return [_homeDashboard, _teamsScreen, _adminSummaryScreen, _notificationScreen, _profileScreen];
+      return [_homeDashboard, _visitPlannerScreen, _adminSummaryScreen, _notificationScreen, _profileScreen];
     } else {
-      return [_homeDashboard, _teamsScreen, _notificationScreen, _profileScreen];
+      return [_homeDashboard, _visitPlannerScreen, _notificationScreen, _profileScreen];
     }
   }
 
@@ -212,7 +213,7 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
     if (_isAdmin) {
       return [
         _buildNavItem(Icons.grid_view_rounded, 0),
-        _buildNavItem(Icons.groups_rounded, 1),
+        _buildNavItem(Icons.calendar_month_rounded, 1), // 🌟 เปลี่ยนไอคอน
         _buildNavItem(Icons.analytics_rounded, 2), 
         _buildNavItem(Icons.notifications_rounded, 3),
         _buildNavItem(Icons.person_rounded, 4),
@@ -220,7 +221,7 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
     } else {
       return [
         _buildNavItem(Icons.grid_view_rounded, 0),
-        _buildNavItem(Icons.groups_rounded, 1),
+        _buildNavItem(Icons.calendar_month_rounded, 1), // 🌟 เปลี่ยนไอคอน
         _buildNavItem(Icons.notifications_rounded, 2),
         _buildNavItem(Icons.person_rounded, 3),
       ];
