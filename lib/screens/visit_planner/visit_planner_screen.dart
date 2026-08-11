@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
@@ -18,37 +19,58 @@ class VisitPlannerScreen extends StatefulWidget {
 
 class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
   bool _isLoading = true;
+  bool _isLoadingRepeated = true;
+  bool _isFirstLoad = true;
   List<dynamic> _visitPlans = [];
+  List<dynamic> _repeatedVisits = [];
+  Set<int> _expandedRepeatedVisits = {};
   late List<DateTime> _weeks;
-  final ScrollController _scrollController = ScrollController();
+  late PageController _pageController;
 
   @override
   void initState() {
     super.initState();
-    _generateWeeks();
+    _generateWeeks([]);
+    _pageController = PageController(initialPage: 1, viewportFraction: 0.85);
     _fetchVisitPlans();
+    _fetchRepeatedVisits();
   }
 
   @override
   void dispose() {
-    _scrollController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
-  void _generateWeeks() {
-    _weeks = [];
+  void _generateWeeks(List<dynamic> plans) {
     final now = DateTime.now();
     final day = now.weekday;
     final monday = now.subtract(Duration(days: day - 1));
-    final startMonday = DateTime(monday.year, monday.month, monday.day);
+    final currentMonday = DateTime(monday.year, monday.month, monday.day);
     
-    // 4 weeks ago to 7 weeks future (12 weeks total)
-    for (int i = -4; i <= 7; i++) {
-      _weeks.add(startMonday.add(Duration(days: i * 7)));
+    DateTime minWeek = currentMonday;
+    DateTime maxWeek = currentMonday;
+
+    for (var p in plans) {
+      if (p['planned_date'] != null) {
+        final date = DateTime.parse(p['planned_date']);
+        final pMonday = DateTime(date.year, date.month, date.day).subtract(Duration(days: date.weekday - 1));
+        if (pMonday.isBefore(minWeek)) minWeek = pMonday;
+        if (pMonday.isAfter(maxWeek)) maxWeek = pMonday;
+      }
+    }
+
+    final startBound = minWeek.subtract(const Duration(days: 7));
+    final endBound = maxWeek.add(const Duration(days: 7));
+
+    _weeks = [];
+    for (DateTime w = startBound; !w.isAfter(endBound); w = w.add(const Duration(days: 7))) {
+      _weeks.add(w);
     }
   }
 
-  Future<void> _fetchVisitPlans() async {
+  Future<void> _fetchVisitPlans({DateTime? targetWeek}) async {
+    ApiService.clearCache();
     setState(() => _isLoading = true);
     try {
       final response = await ApiService.getWeeklyVisitPlansBoard();
@@ -57,14 +79,29 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         if (mounted) {
           setState(() {
             _visitPlans = data['visit_plans'] ?? [];
+            _generateWeeks(_visitPlans);
             _isLoading = false;
           });
           
-          // เลื่อนหน้าจอไปสัปดาห์ปัจจุบัน (index 4) ทันทีที่โหลดเสร็จและสร้าง UI แล้ว
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (_scrollController.hasClients) {
-              double offset = 4 * (240.0 + 16.0);
-              _scrollController.jumpTo(offset);
+            if (_pageController.hasClients) {
+              if (targetWeek != null) {
+                final tMonday = DateTime(targetWeek.year, targetWeek.month, targetWeek.day).subtract(Duration(days: targetWeek.weekday - 1));
+                final targetIndex = _weeks.indexWhere((w) => w.isAtSameMomentAs(tMonday));
+                if (targetIndex != -1) {
+                  _pageController.jumpToPage(targetIndex);
+                  return;
+                }
+              }
+              if (_isFirstLoad) {
+                _isFirstLoad = false;
+                final now = DateTime.now();
+                final currentMonday = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+                final currentIndex = _weeks.indexWhere((w) => w.isAtSameMomentAs(currentMonday));
+                if (currentIndex != -1) {
+                  _pageController.jumpToPage(currentIndex);
+                }
+              }
             }
           });
         }
@@ -77,13 +114,41 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
+  Future<void> _fetchRepeatedVisits() async {
+    setState(() => _isLoadingRepeated = true);
+    try {
+      final response = await ApiService.getRepeatedVisits();
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (mounted) {
+          setState(() {
+            _repeatedVisits = data['repeatedVisits'] ?? [];
+            _isLoadingRepeated = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isLoadingRepeated = false);
+      }
+    } catch (e) {
+      debugPrint("Error fetching repeated visits: $e");
+      if (mounted) setState(() => _isLoadingRepeated = false);
+    }
+  }
+
   Future<void> _addPlan(Map<String, dynamic> data) async {
     Navigator.of(context).pop(); // close modal
     setState(() => _isLoading = true);
     try {
       final response = await ApiService.addVisitPlan(data);
       if (response.statusCode == 200 || response.statusCode == 201) {
-        await _fetchVisitPlans();
+        DateTime? targetDate;
+        if (data['planned_date'] != null) {
+          targetDate = DateTime.parse(data['planned_date']);
+        }
+        await _fetchVisitPlans(targetWeek: targetDate);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+        debugPrint("Failed to add plan: ${response.statusCode} - ${response.body}");
       }
     } catch (e) {
       debugPrint("Error adding plan: $e");
@@ -112,7 +177,14 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
       // Since it's Next.js backend, let's assume it accepts patch for updates, or post handles upsert.
       final response = await ApiService.patch(Uri.parse('${AppConfig.baseUrl}/visit-plans/${data['id']}'), body: jsonEncode(data));
       if (response.statusCode == 200 || response.statusCode == 201) {
-        await _fetchVisitPlans();
+        DateTime? targetDate;
+        if (data['planned_date'] != null) {
+          targetDate = DateTime.parse(data['planned_date']);
+        }
+        await _fetchVisitPlans(targetWeek: targetDate);
+      } else {
+        if (mounted) setState(() => _isLoading = false);
+        debugPrint("Failed to edit plan: ${response.statusCode} - ${response.body}");
       }
     } catch (e) {
       debugPrint("Error editing plan: $e");
@@ -185,151 +257,399 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: kDarkBg,
-      appBar: AppBar(
-        backgroundColor: kDarkBg,
-        title: const Text("แผนการเข้าพบลูกค้า (12 สัปดาห์)", style: TextStyle(color: Colors.white, fontSize: 18)),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _fetchVisitPlans,
-          )
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: kLimeGreen))
-          : ListView.builder(
-              controller: _scrollController,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.all(16),
-              itemCount: _weeks.length,
-              itemBuilder: (context, index) {
-                final weekStart = _weeks[index];
-                final isCurrent = _isCurrentWeek(weekStart);
-                
-                // Get plans for this week
-                final endOfWeek = weekStart.add(const Duration(days: 6, hours: 23, minutes: 59));
-                final weekPlans = _visitPlans.where((p) {
-                  if (p['planned_date'] == null) return false;
-                  final planDate = DateTime.parse(p['planned_date']);
-                  return planDate.isAfter(weekStart.subtract(const Duration(seconds: 1))) && planDate.isBefore(endOfWeek);
-                }).toList();
-
-                return Container(
-                  width: MediaQuery.of(context).size.width * 0.88, 
-                  margin: const EdgeInsets.only(right: 16),
-                  decoration: BoxDecoration(
-                    color: kCardDark,
-                    border: Border.all(color: isCurrent ? kLimeGreen : Colors.white12, width: isCurrent ? 2 : 1),
-                    borderRadius: BorderRadius.circular(12), // ปรับให้ขอบมนเข้ากับดีไซน์รวมของแอป
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+      body: Stack(
+        children: [
+          Positioned(
+            top: -50,
+            right: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: kLimeGreen.withOpacity(0.08)),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+          ),
+          SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: isCurrent ? kLimeGreen.withOpacity(0.1) : Colors.black26,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _formatWeekRange(weekStart),
-                              style: TextStyle(
-                                color: isCurrent ? kLimeGreen : Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            if (isCurrent)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                color: kLimeGreen,
-                                child: const Text("สัปดาห์นี้", style: TextStyle(color: Colors.black, fontSize: 10, fontWeight: FontWeight.bold)),
-                              ),
-                          ],
-                        ),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(color: kLimeGreen.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+                            child: const Icon(Icons.calendar_month_rounded, color: kLimeGreen, size: 22),
+                          ),
+                          const SizedBox(width: 12),
+                          const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("แผนการเข้าพบลูกค้า", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+                              Text("Weekly Visit Planner", style: TextStyle(color: Colors.white54, fontSize: 11)),
+                            ],
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: weekPlans.length,
-                          itemBuilder: (context, i) {
-                            final plan = weekPlans[i];
-                            final compName = plan['companies']?['name'] ?? 'Unknown Company';
-                            final projName = plan['projects']?['project_name'];
-                            
-                            return InkWell(
-                              onTap: () {
-                                _showEditModal(plan);
-                              },
-                              borderRadius: BorderRadius.circular(8),
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  color: Colors.black38,
-                                  border: Border.all(color: Colors.white12),
-                                  borderRadius: BorderRadius.circular(8), // ขอบมนสำหรับ item ด้านใน
-                                ),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            compName,
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                      GestureDetector(
+                        onTap: () {
+                          _fetchVisitPlans();
+                          _fetchRepeatedVisits();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(color: kCardDark, border: Border.all(color: kLimeGreen.withOpacity(0.5)), borderRadius: BorderRadius.circular(10)),
+                          child: const Icon(Icons.refresh_rounded, color: kLimeGreen, size: 18),
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator(color: kLimeGreen))
+                      : SingleChildScrollView(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                height: 440,
+                                child: PageView.builder(
+                                  controller: _pageController,
+                                  itemCount: _weeks.length,
+                                  itemBuilder: (context, index) {
+                                    final weekStart = _weeks[index];
+                                    final isCurrent = _isCurrentWeek(weekStart);
+                                    
+                                    // Get plans for this week
+                                    final endOfWeek = weekStart.add(const Duration(days: 6, hours: 23, minutes: 59));
+                                    final weekPlans = _visitPlans.where((p) {
+                                      if (p['planned_date'] == null) return false;
+                                      final planDate = DateTime.parse(p['planned_date']);
+                                      return planDate.isAfter(weekStart.subtract(const Duration(seconds: 1))) && planDate.isBefore(endOfWeek);
+                                    }).toList();
+
+                                    return AnimatedBuilder(
+                                      animation: _pageController,
+                                      builder: (context, child) {
+                                        double value = 1.0;
+                                        if (_pageController.position.haveDimensions) {
+                                          value = (_pageController.page! - index).abs();
+                                          value = (1 - (value * 0.15)).clamp(0.85, 1.0);
+                                        } else {
+                                          value = index == 4 ? 1.0 : 0.85;
+                                        }
+                                        
+                                        return Center(
+                                          child: Transform.scale(
+                                            scale: value,
+                                            child: Opacity(
+                                              opacity: value.clamp(0.5, 1.0),
+                                              child: Container(
+                                                width: double.infinity,
+                                                margin: const EdgeInsets.symmetric(horizontal: 4),
+                                                decoration: BoxDecoration(
+                                                  color: kCardDark,
+                                                  border: Border.all(color: isCurrent ? kLimeGreen : Colors.white12, width: isCurrent ? 2 : 1),
+                                                  borderRadius: BorderRadius.circular(12),
+                                                ),
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                                      decoration: BoxDecoration(
+                                                        color: isCurrent ? kLimeGreen.withAlpha(25) : Colors.black26,
+                                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+                                                      ),
+                                            child: Row(
+                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                              children: [
+                                                Text(
+                                                  _formatWeekRange(weekStart),
+                                                  style: TextStyle(
+                                                    color: isCurrent ? kLimeGreen : Colors.white,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
+                                                ),
+                                                Builder(
+                                                  builder: (context) {
+                                                    String label = "";
+                                                    Color bgColor = Colors.transparent;
+                                                    Color textColor = Colors.white;
+
+                                                    if (isCurrent) {
+                                                      label = "สัปดาห์นี้";
+                                                      bgColor = kLimeGreen;
+                                                      textColor = Colors.black;
+                                                    } else if (weekStart.isBefore(DateTime.now())) {
+                                                      label = "ที่ผ่านมา";
+                                                      bgColor = Colors.white12;
+                                                      textColor = Colors.white54;
+                                                    } else {
+                                                      label = "ล่วงหน้า";
+                                                      bgColor = Colors.blueAccent.withAlpha(25);
+                                                      textColor = Colors.blueAccent;
+                                                    }
+                                                    
+                                                    if (label.isEmpty) return const SizedBox.shrink();
+                                                    
+                                                    return Container(
+                                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                                      decoration: BoxDecoration(
+                                                        color: bgColor,
+                                                        borderRadius: BorderRadius.circular(4),
+                                                      ),
+                                                      child: Text(label, style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.bold)),
+                                                    );
+                                                  },
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        _buildStatusBadge(plan['status']?.toString()),
-                                      ],
-                                    ),
-                                    if (plan['project_concept'] != null && plan['project_concept'].toString().isNotEmpty) ...[
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        plan['project_concept'], 
-                                        style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                        maxLines: 1, // แสดงบรรทัดเดียว
-                                        overflow: TextOverflow.ellipsis,
+                                          Expanded(
+                                            child: weekPlans.isEmpty
+                                              ? Center(
+                                                  child: Text(
+                                                    index == 0 
+                                                      ? "ไม่มีแผนงานที่เก่ากว่านี้"
+                                                      : (index == _weeks.length - 1 ? "ไม่มีแผนที่ใหม่กว่านี้\nสามารถสร้างแผนใหม่ได้" : "ไม่มีแผนเข้าพบ"),
+                                                    textAlign: TextAlign.center,
+                                                    style: const TextStyle(color: Colors.white54, fontSize: 13),
+                                                  ),
+                                                )
+                                              : ListView.builder(
+                                                  padding: const EdgeInsets.all(12),
+                                                  itemCount: weekPlans.length,
+                                                  itemBuilder: (context, i) {
+                                                    final plan = weekPlans[i];
+                                                    final compName = plan['companies']?['name'] ?? 'Unknown Company';
+                                                    
+                                                    return InkWell(
+                                                      onTap: () {
+                                                        _showEditModal(plan);
+                                                      },
+                                                      borderRadius: BorderRadius.circular(8),
+                                                      child: Container(
+                                                        margin: const EdgeInsets.only(bottom: 8),
+                                                        padding: const EdgeInsets.all(12),
+                                                        decoration: BoxDecoration(
+                                                          color: Colors.black38,
+                                                          border: Border.all(color: Colors.white12),
+                                                          borderRadius: BorderRadius.circular(8),
+                                                        ),
+                                                        child: Column(
+                                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                                          children: [
+                                                            Row(
+                                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                                              children: [
+                                                                Expanded(
+                                                                  child: Text(
+                                                                    compName,
+                                                                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                                                                    maxLines: 1,
+                                                                    overflow: TextOverflow.ellipsis,
+                                                                  ),
+                                                                ),
+                                                                const SizedBox(width: 8),
+                                                                _buildStatusBadge(plan['status']?.toString()),
+                                                              ],
+                                                            ),
+                                                            if (plan['project_concept'] != null && plan['project_concept'].toString().isNotEmpty) ...[
+                                                              const SizedBox(height: 4),
+                                                              Text(
+                                                                plan['project_concept'], 
+                                                                style: const TextStyle(color: Colors.white70, fontSize: 11),
+                                                                maxLines: 1,
+                                                                overflow: TextOverflow.ellipsis,
+                                                              ),
+                                                            ],
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                          ),
+                                            InkWell(
+                                              onTap: () => _showAddModal(weekStart),
+                                              child: Container(
+                                                padding: const EdgeInsets.all(12),
+                                                decoration: const BoxDecoration(
+                                                  border: Border(top: BorderSide(color: Colors.white12)),
+                                                ),
+                                                child: const Row(
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Icon(Icons.add, color: Colors.white54, size: 18),
+                                                    SizedBox(width: 8),
+                                                    Text("เพิ่มแผนเข้าพบ", style: TextStyle(color: Colors.white54)),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ), // Ends Column
+                                      ), // Ends Container
+                                    ), // Ends Opacity
+                                  ), // Ends Transform.scale
+                                ); // Ends Center
+                              }, // Ends builder
+                            ); // Ends AnimatedBuilder
+                          }, // Ends itemBuilder
+                        ), // Ends PageView.builder
+                      ), // Ends SizedBox
+                      const SizedBox(height: 24),
+                              // --- Repeated Visits Section ---
+                              Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: kLimeGreen.withAlpha(38),
+                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                    ],
+                                      child: const Icon(Icons.autorenew_rounded, color: kLimeGreen, size: 20),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    const Text(
+                                      "ผลการเข้าพบซ้ำ (3 เช็คอินขึ้นไป)",
+                                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                                    ),
                                   ],
                                 ),
                               ),
-                            );
-                          },
-                        ),
-                      ),
-                      InkWell(
-                        onTap: () => _showAddModal(weekStart),
-                        child: Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: const BoxDecoration(
-                            border: Border(top: BorderSide(color: Colors.white12)),
-                          ),
-                          child: const Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add, color: Colors.white54, size: 18),
-                              SizedBox(width: 8),
-                              Text("เพิ่มแผนเข้าพบ", style: TextStyle(color: Colors.white54)),
+                              const SizedBox(height: 12),
+                              _isLoadingRepeated 
+                                ? const Padding(padding: EdgeInsets.all(20), child: Center(child: CircularProgressIndicator(color: kLimeGreen)))
+                                : _repeatedVisits.isEmpty
+                                  ? const Padding(padding: EdgeInsets.all(20), child: Center(child: Text("ไม่มีข้อมูลการเข้าพบซ้ำ", style: TextStyle(color: Colors.white54))))
+                                  : ListView.builder(
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      shrinkWrap: true,
+                                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                                      itemCount: _repeatedVisits.length,
+                                      itemBuilder: (context, index) {
+                                        final comp = _repeatedVisits[index];
+                                        final uniqueProjects = comp['uniqueProjects'] as Map<String, dynamic>? ?? {};
+                                        bool isExpanded = _expandedRepeatedVisits.contains(index);
+                                        final allProjects = uniqueProjects.entries.toList();
+                                        final displayProjects = isExpanded ? allProjects : allProjects.take(2).toList();
+                                        
+                                        return Container(
+                                          margin: const EdgeInsets.only(bottom: 12),
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: kCardDark,
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(color: Colors.white12),
+                                          ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Row(
+                                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                children: [
+                                                  Expanded(
+                                                    child: Text(
+                                                      comp['name'] ?? 'Unknown',
+                                                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                                                    ),
+                                                  ),
+                                                  const SizedBox(width: 12),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                                    decoration: BoxDecoration(
+                                                      color: kLimeGreen,
+                                                      borderRadius: BorderRadius.circular(20),
+                                                    ),
+                                                    child: Text(
+                                                      "${comp['count']} ครั้ง",
+                                                      style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                                                    ),
+                                                  )
+                                                ],
+                                              ),
+                                              if (uniqueProjects.isNotEmpty) ...[
+                                                const SizedBox(height: 12),
+                                                const Divider(color: Colors.white12, height: 1),
+                                                const SizedBox(height: 12),
+                                                Text("${uniqueProjects.length} โปรเจค", style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.bold)),
+                                                const SizedBox(height: 8),
+                                                ...displayProjects.map((e) {
+                                                  String dateStr = '';
+                                                  if (e.value != null) {
+                                                    final d = DateTime.parse(e.value.toString());
+                                                    final months = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+                                                    dateStr = "${d.day} ${months[d.month - 1]} ${(d.year + 543) % 100}";
+                                                  }
+                                                  
+                                                  return Padding(
+                                                    padding: const EdgeInsets.only(bottom: 6.0),
+                                                    child: Row(
+                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      children: [
+                                                        const Icon(Icons.folder_open_rounded, color: Colors.blueAccent, size: 16),
+                                                        const SizedBox(width: 8),
+                                                        Expanded(
+                                                          child: Text(
+                                                            e.key,
+                                                            style: const TextStyle(color: Colors.white70, fontSize: 13),
+                                                          ),
+                                                        ),
+                                                        if (dateStr.isNotEmpty)
+                                                          Text("($dateStr)", style: const TextStyle(color: Colors.white38, fontSize: 11)),
+                                                      ],
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                                if (allProjects.length > 2)
+                                                  InkWell(
+                                                    onTap: () {
+                                                      setState(() {
+                                                        if (isExpanded) {
+                                                          _expandedRepeatedVisits.remove(index);
+                                                        } else {
+                                                          _expandedRepeatedVisits.add(index);
+                                                        }
+                                                      });
+                                                    },
+                                                    child: Padding(
+                                                      padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                                      child: Text(
+                                                        isExpanded ? "ซ่อน" : "ดูเพิ่มเติม...",
+                                                        style: const TextStyle(color: kLimeGreen, fontSize: 11, fontWeight: FontWeight.bold),
+                                                      ),
+                                                    ),
+                                                  )
+                                              ]
+                                            ],
+                                          ),
+                                        );
+                                      },
+                                    ),
+                              const SizedBox(height: 40),
                             ],
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              },
+                ),
+              ],
             ),
+          ),
+        ],
+      ),
     );
   }
 }
