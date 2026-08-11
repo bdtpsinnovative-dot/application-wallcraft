@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:dropdown_search/dropdown_search.dart';
 import '../../../services/api_service.dart';
 import 'package:intl/intl.dart';
+import 'custom_calendar_dialog.dart';
 
 const Color kCardDark = Color(0xFF1C1C1E);
 const Color kPrimaryColor = Color(0xFFFFFFFF);
@@ -13,8 +14,9 @@ class AddVisitModal extends StatefulWidget {
   final DateTime weekStart;
   final Function(Map<String, dynamic> visitData) onSave;
   final Map<String, dynamic>? initialData;
+  final List<dynamic> allPlans;
 
-  const AddVisitModal({super.key, required this.weekStart, required this.onSave, this.initialData});
+  const AddVisitModal({super.key, required this.weekStart, required this.onSave, this.initialData, this.allPlans = const []});
 
   @override
   State<AddVisitModal> createState() => _AddVisitModalState();
@@ -131,24 +133,12 @@ class _AddVisitModalState extends State<AddVisitModal> {
   }
 
   Future<void> _pickDate() async {
-    final picked = await showDatePicker(
+    final picked = await showDialog<DateTime>(
       context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: kLimeGreen,
-              onPrimary: Colors.black,
-              surface: kCardDark,
-              onSurface: Colors.white,
-            ),
-          ),
-          child: child!,
-        );
-      },
+      builder: (context) => CustomCalendarDialog(
+        initialDate: _selectedDate,
+        allPlans: widget.allPlans,
+      ),
     );
     if (picked != null) {
       setState(() => _selectedDate = picked);

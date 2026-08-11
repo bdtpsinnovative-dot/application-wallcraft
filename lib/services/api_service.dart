@@ -61,9 +61,27 @@ class ApiService {
 
   // --- Method อื่นๆ (get, post, put, patch) คงเดิมไว้ครับ ---
 
+  // --- In-Memory Caches ---
+  static http.Response? _pipelineCache;
+  static http.Response? _companiesCache;
+  static http.Response? _projectsCache;
+  static http.Response? _projectTypesCache;
+  static http.Response? _categoriesCache;
+
+  static void clearCache() {
+    _pipelineCache = null;
+    _companiesCache = null;
+    _projectsCache = null;
+    _projectTypesCache = null;
+    _categoriesCache = null;
+  }
+
   static Future<http.Response> getPipeline() async {
+    if (_pipelineCache != null) return _pipelineCache!;
     final url = Uri.parse('${AppConfig.baseUrl}/profile/pipeline');
-    return await get(url);
+    final res = await get(url);
+    if (res.statusCode == 200) _pipelineCache = res;
+    return res;
   }
 
   static Future<http.Response> getVisitPlans() async {
@@ -72,23 +90,43 @@ class ApiService {
   }
 
   static Future<http.Response> getCompanies({String? query}) async {
-    final url = Uri.parse('${AppConfig.baseUrl}/companies${query != null && query.isNotEmpty ? '?q=$query' : ''}');
+    if (query == null || query.isEmpty) {
+      if (_companiesCache != null) return _companiesCache!;
+      final url = Uri.parse('${AppConfig.baseUrl}/companies');
+      final res = await get(url);
+      if (res.statusCode == 200) _companiesCache = res;
+      return res;
+    }
+    final url = Uri.parse('${AppConfig.baseUrl}/companies?q=$query');
     return await get(url);
   }
 
   static Future<http.Response> getProjects({String? query}) async {
-    final url = Uri.parse('${AppConfig.baseUrl}/projects${query != null && query.isNotEmpty ? '?q=$query' : ''}');
+    if (query == null || query.isEmpty) {
+      if (_projectsCache != null) return _projectsCache!;
+      final url = Uri.parse('${AppConfig.baseUrl}/projects');
+      final res = await get(url);
+      if (res.statusCode == 200) _projectsCache = res;
+      return res;
+    }
+    final url = Uri.parse('${AppConfig.baseUrl}/projects?q=$query');
     return await get(url);
   }
 
   static Future<http.Response> getProjectTypes() async {
+    if (_projectTypesCache != null) return _projectTypesCache!;
     final url = Uri.parse('${AppConfig.baseUrl}/project-types');
-    return await get(url);
+    final res = await get(url);
+    if (res.statusCode == 200) _projectTypesCache = res;
+    return res;
   }
 
   static Future<http.Response> getCategories() async {
+    if (_categoriesCache != null) return _categoriesCache!;
     final url = Uri.parse('${AppConfig.baseUrl}/categories');
-    return await get(url);
+    final res = await get(url);
+    if (res.statusCode == 200) _categoriesCache = res;
+    return res;
   }
 
   // 🌟 12-Week Visit Planner Board APIs
@@ -97,9 +135,14 @@ class ApiService {
     return await get(url);
   }
 
+  static Future<http.Response> getRepeatedVisits() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/repeated-visits');
+    return await get(url);
+  }
+
   static Future<http.Response> addVisitPlan(Map<String, dynamic> body) async {
     final url = Uri.parse('${AppConfig.baseUrl}/visit-plans');
-    return await post(url, body: body);
+    return await post(url, body: jsonEncode(body));
   }
 
   static Future<http.Response> deleteVisitPlan(String id) async {
@@ -145,5 +188,10 @@ class ApiService {
       }
     }
     return response;
+  }
+
+  static Future<http.Response> triggerDailySummaryCron() async {
+    final url = Uri.parse('${AppConfig.baseUrl}/cron/daily-summary');
+    return await get(url); // get() already handles headers and token
   }
 }

@@ -139,18 +139,21 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         final now = DateTime.now();
         final today = DateTime(now.year, now.month, now.day);
         
+        bool needsCron = false;
         for (var plan in plans) {
           if ((plan['status'] == 'pending' || plan['status'] == null) && plan['planned_date'] != null) {
             final pDate = DateTime.parse(plan['planned_date']);
             final planDay = DateTime(pDate.year, pDate.month, pDate.day);
             if (planDay.isBefore(today)) {
               plan['status'] = 'unsuccessful';
-              ApiService.patch(
-                Uri.parse('${AppConfig.baseUrl}/visit-plans/${plan['id']}'),
-                body: jsonEncode({'status': 'unsuccessful'}),
-              );
+              needsCron = true;
             }
           }
+        }
+        
+        if (needsCron) {
+          // Trigger the backend cron job to officially mark them as unsuccessful and send notifications
+          ApiService.triggerDailySummaryCron();
         }
 
         if (mounted) {
