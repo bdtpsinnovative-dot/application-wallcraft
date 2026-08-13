@@ -145,7 +145,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
             final pDate = DateTime.parse(plan['planned_date']);
             final planDay = DateTime(pDate.year, pDate.month, pDate.day);
             if (planDay.isBefore(today)) {
-              plan['status'] = 'unsuccessful';
+              plan['status'] = 'missed';
               needsCron = true;
             }
           }
@@ -269,7 +269,8 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         icon = Icons.autorenew_rounded;
         label = "ดำเนินการ";
         break;
-      case 'unsuccessful':
+      case 'cancelled':
+      case 'missed':
         color = Colors.redAccent;
         icon = Icons.cancel_rounded;
         label = "ไม่สำเร็จ";
