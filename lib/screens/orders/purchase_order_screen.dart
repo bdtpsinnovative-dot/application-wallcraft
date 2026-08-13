@@ -61,18 +61,29 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   List<dynamic> _pipelineData = [];
   List<dynamic> _visitPlanData = [];
   Position? _currentPosition; // 📍 เก็บพิกัดผู้ใช้
+  bool _isDataReady = false;
 
   @override
   void initState() {
     super.initState();
-    _fetchInitialData();
-    _fetchPipeline(); // 🌟 Fetch pipeline on init
-    _fetchVisitPlans(); // 🌟 Fetch visit plans on init
-    _fetchUserLocation(); // 📍 ดึงพิกัด GPS อัตโนมัติ
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _startAnimation = true);
-    });
+    _initAllData();
+  }
+
+  Future<void> _initAllData() async {
+    await Future.wait([
+      _fetchInitialData(),
+      _fetchPipeline(),
+      _fetchVisitPlans(),
+      _fetchUserLocation(),
+    ]);
+    if (mounted) {
+      setState(() {
+        _isDataReady = true;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _startAnimation = true);
+      });
+    }
   }
 
   Future<void> _fetchUserLocation() async {
