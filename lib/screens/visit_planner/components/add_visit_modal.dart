@@ -507,8 +507,36 @@ class _AddVisitModalState extends State<AddVisitModal> {
                               dropdownColor: kCardDark,
                               style: const TextStyle(color: Colors.white, fontSize: 14),
                               items: [
-                                const DropdownMenuItem(value: null, child: Text("ตัวเอง (Me)", overflow: TextOverflow.ellipsis)),
-                                ...widget.adminUsersList.map((u) => DropdownMenuItem(value: u['id'].toString(), child: Text(u['full_name'] ?? 'Unknown User', overflow: TextOverflow.ellipsis)))
+                                DropdownMenuItem(
+                                  value: null, 
+                                  child: Row(
+                                    children: const [
+                                      CircleAvatar(radius: 12, backgroundColor: Colors.white24, child: Icon(Icons.person, size: 16, color: Colors.white)),
+                                      SizedBox(width: 8),
+                                      Text("ตัวเอง (Me)", overflow: TextOverflow.ellipsis)
+                                    ]
+                                  )
+                                ),
+                                ...widget.adminUsersList.map((u) {
+                                  final name = u['full_name']?.toString() ?? 'Unknown User';
+                                  final shortName = name.split(' ').first;
+                                  final avatar = u['avatar_url']?.toString();
+                                  return DropdownMenuItem(
+                                    value: u['id'].toString(), 
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundColor: Colors.white24,
+                                          backgroundImage: (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
+                                          child: (avatar == null || avatar.isEmpty) ? const Icon(Icons.person, size: 16, color: Colors.white) : null,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(shortName, overflow: TextOverflow.ellipsis)
+                                      ]
+                                    )
+                                  );
+                                })
                               ],
                               onChanged: _isReadOnly ? null : (v) => setState(() => _selectedAssignToUserId = v),
                             ),
