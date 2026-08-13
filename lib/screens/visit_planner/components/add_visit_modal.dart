@@ -170,6 +170,21 @@ class _AddVisitModalState extends State<AddVisitModal> {
     
     for (var p in _pipelineData) {
       if (p['company'] == null) continue;
+      
+      // Only consider it a pipeline company if the current user has visited it
+      bool hasMine = false;
+      int myProjectCount = 0;
+      if (p['projects'] != null) {
+        for (var proj in p['projects']) {
+          if (proj['is_mine'] == true) {
+            hasMine = true;
+            myProjectCount++;
+          }
+        }
+      }
+      
+      if (!hasMine) continue;
+
       final cId = p['company']['id'].toString();
       pipelineIds.add(cId);
       final name = p['company']['name']?.toString() ?? '';
@@ -178,7 +193,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
           'id': cId,
           'name': name,
           'isPipeline': true,
-          'projectCount': p['projects'] != null ? (p['projects'] as List).length : 0,
+          'projectCount': myProjectCount,
           'projects': p['projects'] ?? [], // Pipeline projects
         });
       }
@@ -222,22 +237,31 @@ class _AddVisitModalState extends State<AddVisitModal> {
     final lowerFilter = filter.toLowerCase();
     
     final List<dynamic> options = [];
+    final List<dynamic> mineOptions = [];
+    final List<dynamic> othersOptions = [];
+    final List<dynamic> unusedOptions = [];
     final pipelineProjIds = <String>{};
     
-    // If a pipeline company is selected, show its projects first
+    // If a pipeline company is selected, categorize its projects
     if (_selectedCompany != null && _selectedCompany!['isPipeline'] == true) {
        for (var p in _selectedCompany!['projects']) {
          final pId = p['id'].toString();
          pipelineProjIds.add(pId);
          final name = p['project_name']?.toString() ?? '';
          if (name.toLowerCase().contains(lowerFilter)) {
-           options.add({
+           final projData = {
              'id': pId,
              'project_name': name,
              'isPipeline': true,
+             'isMine': p['is_mine'] == true,
              'project_type_id': p['project_type_id'],
              'product_category_id': p['product_category_id'],
-           });
+           };
+           if (p['is_mine'] == true) {
+             mineOptions.add(projData);
+           } else {
+             othersOptions.add(projData);
+           }
          }
        }
     }
@@ -266,11 +290,15 @@ class _AddVisitModalState extends State<AddVisitModal> {
       debugPrint("Error fetching projects search: $e");
     }
     
+    options.addAll(mineOptions);
+    options.addAll(othersOptions);
+    options.addAll(unusedOptions);
+    
     // Include the initial project if not present
     if (_selectedProject != null) {
       final spId = _selectedProject!['id'].toString();
       if (!options.any((o) => o['id'].toString() == spId)) {
-        options.add(_selectedProject!);
+        options.insert(0, _selectedProject!);
       }
     }
 
@@ -429,7 +457,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2)),
-                                    child: const Text("My Pipeline", style: TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
+                                    child: Text(widget.isAdmin ? "All Pipeline" : "My Pipeline", style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
                                   ),
                               ],
                             ),
@@ -471,7 +499,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                           ),
                         ),
                         itemBuilder: (context, item, isSelected, isFocused) {
-                          bool isPipe = item['isPipeline'] == true;
+                          bool isMine = item['isMine'] == true;
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
@@ -480,10 +508,21 @@ class _AddVisitModalState extends State<AddVisitModal> {
                             ),
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Expanded(child: Text(item['project_name'] ?? '', style: TextStyle(color: isSelected ? kLimeGreen : Colors.white))),
-                                if (isPipe)
-                                  const Icon(Icons.star, color: Colors.amber, size: 14),
+                                Expanded(
+                                  child: Text(
+                                    item['project_name'] ?? '', 
+                                    style: TextStyle(color: isSelected ? kLimeGreen : Colors.white),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                if (isMine)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 8.0),
+                                    child: Icon(Icons.star, color: Colors.amber, size: 16),
+                                  ),
                               ],
                             ),
                           );

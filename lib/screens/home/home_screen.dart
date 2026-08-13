@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:ui'; 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ota_update/ota_update.dart';
@@ -25,6 +26,7 @@ import '../visit_planner/visit_planner_screen.dart'; // 🌟 นำเข้า 
 import '../teams/teams_screen.dart'; // เก็บไว้เผื่อใช้
 import '../image_ai/ai_image_search_screen.dart'; 
 import '../notifications/NotificationScreen.dart';
+import '../../services/notification_service.dart';
 
 const Color kDarkBg = Color(0xFF0F0F11); 
 const Color kGlowPurple = Color(0xFF4A3080); 
@@ -59,6 +61,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    
+    // 🌟 ดักฟังกรณีเปิดแอปจาก Notification ที่ถูกแตะตอนปิดแอปไปแล้ว
+    FirebaseMessaging.instance.getInitialMessage().then((RemoteMessage? message) {
+      if (message != null) {
+        NotificationService.handleNotificationTap(message.data);
+      }
+    });
+
     _homeDashboard = _HomeDashboard(
       key: _homeKey, 
       onRoleChecked: _updateAdminStatus,

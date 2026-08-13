@@ -92,7 +92,7 @@ class ProjectSelectCard extends StatelessWidget {
               searchFieldProps: TextFieldProps(
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
-                  hintText: "🔍 พิมพ์ชื่อเพื่อค้นหา...",
+                  hintText: "พิมพ์ชื่อเพื่อค้นหา...",
                   hintStyle: TextStyle(color: Colors.grey[600]),
                   prefixIcon: const Icon(Icons.search, color: Colors.white54),
                   filled: true,
@@ -103,7 +103,12 @@ class ProjectSelectCard extends StatelessWidget {
               ),
               menuProps: const MenuProps(backgroundColor: kCardDark, borderRadius: BorderRadius.all(Radius.circular(20))),
               itemBuilder: (ctx, item, isDisabled, isSelected) => ListTile(
-                title: Text(item['project_name'], style: const TextStyle(color: Colors.white)),
+                title: Text(
+                  item['project_name'] ?? '',
+                  style: const TextStyle(color: Colors.white),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
                 trailing: isSelected ? const Icon(Icons.check, color: kPrimaryColor) : null,
               ),
               // 🌟 เพิ่ม Empty State กรณีพิมพ์หาแล้วไม่เจอ

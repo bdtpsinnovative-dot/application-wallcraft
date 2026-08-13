@@ -602,12 +602,29 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                           else if (val['is_pipeline'] == true && val['projects'] != null) {
                                             final activeProjs = val['projects'] as List<dynamic>;
                                             
-                                            // Add active projects to _projects list if not there
-                                            for (var ap in activeProjs) {
-                                              if (!_projects.any((p) => p['id'] == ap['id'])) {
-                                                _projects.add(ap);
+                                            // Sort _projects so that activeProjs are at the top
+                                            List<dynamic> sortedProjects = [];
+                                            List<dynamic> activeList = [];
+                                            List<dynamic> otherList = [];
+                                            
+                                            for (var p in _projects) {
+                                              if (activeProjs.any((ap) => ap['id'] == p['id'])) {
+                                                activeList.add(p);
+                                              } else {
+                                                otherList.add(p);
                                               }
                                             }
+                                            
+                                            // Ensure all activeProjs are included even if they weren't in _projects
+                                            for (var ap in activeProjs) {
+                                              if (!activeList.any((p) => p['id'] == ap['id'])) {
+                                                activeList.add(ap);
+                                              }
+                                            }
+                                            
+                                            sortedProjects.addAll(activeList);
+                                            sortedProjects.addAll(otherList);
+                                            _projects = sortedProjects;
                                             
                                             // Auto-select if there is exactly 1 active project
                                             if (activeProjs.length == 1) {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
@@ -29,7 +30,10 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
   late PageController _pageController;
   DateTime? _pendingTargetWeek;
 
-  bool _sortByProjectCount = false;
+  bool _sortByProjectCount = true;
+  bool _isCalendarView = false;
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _selectedDay;
 
   bool _isAdmin = false;
   String _selectedUserId = 'all';
@@ -66,6 +70,14 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
+  List<dynamic> _getEventsForDay(DateTime day) {
+    return _visitPlans.where((plan) {
+      if (plan['planned_date'] == null) return false;
+      final pDate = DateTime.parse(plan['planned_date']);
+      return pDate.year == day.year && pDate.month == day.month && pDate.day == day.day;
+    }).toList();
+  }
+
   void _sortRepeatedVisits() {
     if (_sortByProjectCount) {
       _repeatedVisits.sort((a, b) {
@@ -82,9 +94,18 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
+  Future<void> _loadSortPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _sortByProjectCount = prefs.getBool('sortByProjectCount') ?? true;
+    });
+    _sortRepeatedVisits();
+  }
+
   @override
   void initState() {
     super.initState();
+    _loadSortPreference();
     _checkAdminAndFetchUsers();
     _generateWeeks([]);
     _pageController = PageController(initialPage: 1, viewportFraction: 0.85);
@@ -314,6 +335,133 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
+  Widget _buildCalendarView() {
+    return Column(
+      children: [
+        TableCalendar(
+          firstDay: DateTime.utc(2020, 1, 1),
+          lastDay: DateTime.utc(2030, 12, 31),
+          focusedDay: _focusedDay,
+          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+          onDaySelected: (selectedDay, focusedDay) {
+            setState(() {
+              _selectedDay = selectedDay;
+              _focusedDay = focusedDay;
+            });
+          },
+          onPageChanged: (focusedDay) { _focusedDay = focusedDay; },
+          eventLoader: _getEventsForDay,
+          calendarBuilders: CalendarBuilders(
+            markerBuilder: (context, date, events) {
+              if (events.isEmpty) return const SizedBox();
+              return Positioned(
+                bottom: 8,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: events.take(4).map((event) {
+                    final plan = event as Map<String, dynamic>;
+                    final status = plan['status']?.toString();
+                    Color markerColor = kLimeGreen;
+                    if (status == 'completed' || status == 'success') {
+                      markerColor = Colors.green;
+                    } else if (status == 'missed' || status == 'failed' || status == 'canceled' || status == 'cancelled') {
+                      markerColor = Colors.redAccent;
+                    }
+                    return Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: markerColor,
+                      ),
+                    );
+                  }).toList(),
+                ),
+              );
+            },
+          ),
+          calendarStyle: const CalendarStyle(
+            selectedDecoration: BoxDecoration(color: kLimeGreen, shape: BoxShape.circle),
+            todayDecoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+            defaultTextStyle: TextStyle(color: Colors.white),
+            weekendTextStyle: TextStyle(color: Colors.white70),
+            outsideTextStyle: TextStyle(color: Colors.white38),
+          ),
+          headerStyle: const HeaderStyle(
+            formatButtonVisible: false,
+            titleCentered: true,
+            titleTextStyle: TextStyle(color: Colors.white, fontSize: 16),
+            leftChevronIcon: Icon(Icons.chevron_left, color: Colors.white),
+            rightChevronIcon: Icon(Icons.chevron_right, color: Colors.white),
+          ),
+          daysOfWeekStyle: const DaysOfWeekStyle(
+            weekdayStyle: TextStyle(color: Colors.white54),
+            weekendStyle: TextStyle(color: Colors.white54),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _selectedDay == null 
+              ? const Center(child: Text("เลือกวันที่เพื่อดูแผนงาน", style: TextStyle(color: Colors.white54)))
+              : Builder(
+                  builder: (context) {
+                    final dayPlans = _getEventsForDay(_selectedDay!);
+                    if (dayPlans.isEmpty) {
+                       return const Center(child: Text("ไม่มีแผนงานในวันนี้", style: TextStyle(color: Colors.white54)));
+                    }
+                    return ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: dayPlans.length,
+                      itemBuilder: (context, index) {
+                        final plan = dayPlans[index];
+                        final company = plan['companies'] ?? {};
+                        final project = plan['projects'] ?? {};
+                        final profile = plan['profiles'] ?? {};
+                        
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF1A1A1C),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white12),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 16,
+                                backgroundColor: kLimeGreen.withOpacity(0.2),
+                                backgroundImage: profile['avatar_url'] != null ? NetworkImage(profile['avatar_url']) : null,
+                                child: profile['avatar_url'] == null 
+                                  ? const Icon(Icons.person, size: 16, color: kLimeGreen) 
+                                  : null,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(company['name'] ?? 'Unknown Company', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                                    const SizedBox(height: 4),
+                                    Text(project['project_name'] ?? 'No Project', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildStatusBadge(plan['status']),
+                            ],
+                          ),
+                        );
+                      }
+                    );
+                  }
+                ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildStatusBadge(String? status) {
     Color color;
     IconData icon;
@@ -485,26 +633,72 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                           ),
                         ],
                       ),
-                      GestureDetector(
-                        onTap: () {
-                          _fetchVisitPlans();
-                          _fetchRepeatedVisits();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: kCardDark,
-                            border: Border.all(
-                              color: kLimeGreen.withOpacity(0.5),
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              setState(() {
+                                if (!_isCalendarView) {
+                                  if (_pageController.hasClients) {
+                                    final currentIndex = _pageController.page?.round() ?? 0;
+                                    if (currentIndex >= 0 && currentIndex < _weeks.length) {
+                                      _focusedDay = _weeks[currentIndex];
+                                      _selectedDay = _focusedDay;
+                                    }
+                                  }
+                                } else {
+                                  final targetWeek = _weekStart(_focusedDay);
+                                  final targetIndex = _weeks.indexWhere((w) => w.year == targetWeek.year && w.month == targetWeek.month && w.day == targetWeek.day);
+                                  if (targetIndex != -1) {
+                                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                                      if (_pageController.hasClients) {
+                                        _pageController.jumpToPage(targetIndex);
+                                      }
+                                    });
+                                  }
+                                }
+                                _isCalendarView = !_isCalendarView;
+                              });
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: kCardDark,
+                                border: Border.all(
+                                  color: Colors.white24,
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Icon(
+                                _isCalendarView ? Icons.view_carousel_rounded : Icons.calendar_month_rounded,
+                                color: Colors.white70,
+                                size: 18,
+                              ),
                             ),
-                            borderRadius: BorderRadius.circular(10),
                           ),
-                          child: const Icon(
-                            Icons.refresh_rounded,
-                            color: kLimeGreen,
-                            size: 18,
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () {
+                              _fetchVisitPlans();
+                              _fetchRepeatedVisits();
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: kCardDark,
+                                border: Border.all(
+                                  color: kLimeGreen.withOpacity(0.5),
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                Icons.refresh_rounded,
+                                color: kLimeGreen,
+                                size: 18,
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
                     ],
                   ),
@@ -514,13 +708,13 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                       ? const Center(
                           child: CircularProgressIndicator(color: kLimeGreen),
                         )
-                      : SingleChildScrollView(
-                          child: Column(
+                      : _isCalendarView
+                          ? _buildCalendarView()
+                          : Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const SizedBox(height: 12),
-                              SizedBox(
-                                height: 440,
+                              Expanded(
                                 child: PageView.builder(
                                   controller: _pageController,
                                   itemCount: _weeks.length,
@@ -917,8 +1111,9 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                   }, // Ends itemBuilder
                                 ), // Ends PageView.builder
                               ), // Ends SizedBox
+                              /* 
+                              // --- Repeated Visits Section (Hidden for now) ---
                               const SizedBox(height: 24),
-                              // --- Repeated Visits Section ---
                               Padding(
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 16.0,
@@ -926,13 +1121,14 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                 child: Row(
                                   children: [
                                     Container(
-                                      padding: const EdgeInsets.all(6),
+                                      padding: const EdgeInsets.all(8),
                                       decoration: BoxDecoration(
-                                        color: kLimeGreen.withAlpha(38),
-                                        borderRadius: BorderRadius.circular(8),
+                                        color: kLimeGreen.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(color: kLimeGreen.withOpacity(0.3)),
                                       ),
                                       child: const Icon(
-                                        Icons.autorenew_rounded,
+                                        Icons.apartment_rounded,
                                         color: kLimeGreen,
                                         size: 20,
                                       ),
@@ -943,24 +1139,73 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                         "ผลการเข้าพบซ้ำ",
                                         style: TextStyle(
                                           color: Colors.white,
-                                          fontSize: 16,
+                                          fontSize: 18,
                                           fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
                                         ),
                                       ),
                                     ),
-                                    IconButton(
-                                      icon: Icon(
-                                        _sortByProjectCount ? Icons.sort_by_alpha_rounded : Icons.sort_rounded,
-                                        color: Colors.white70,
-                                        size: 20,
+                                    Tooltip(
+                                      message: _sortByProjectCount ? "เรียงตามจำนวนครั้ง (ค่าเริ่มต้น)" : "เรียงตามจำนวนโปรเจค",
+                                      child: GestureDetector(
+                                        onTap: () async {
+                                          final prefs = await SharedPreferences.getInstance();
+                                          setState(() {
+                                            _sortByProjectCount = !_sortByProjectCount;
+                                            _sortRepeatedVisits();
+                                          });
+                                          prefs.setBool('sortByProjectCount', _sortByProjectCount);
+                                        },
+                                        child: Container(
+                                          width: 80,
+                                          height: 36,
+                                          decoration: BoxDecoration(
+                                            color: Colors.white.withOpacity(0.05),
+                                            borderRadius: BorderRadius.circular(20),
+                                            border: Border.all(color: Colors.white.withOpacity(0.1)),
+                                          ),
+                                          child: Stack(
+                                            children: [
+                                              AnimatedAlign(
+                                                duration: const Duration(milliseconds: 250),
+                                                curve: Curves.easeInOut,
+                                                alignment: _sortByProjectCount ? Alignment.centerRight : Alignment.centerLeft,
+                                                child: Container(
+                                                  width: 40,
+                                                  height: 36,
+                                                  decoration: BoxDecoration(
+                                                    color: kLimeGreen.withOpacity(0.2),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: kLimeGreen.withOpacity(0.5)),
+                                                  ),
+                                                ),
+                                              ),
+                                              Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Center(
+                                                      child: Icon(
+                                                        Icons.sort_rounded,
+                                                        color: !_sortByProjectCount ? kLimeGreen : Colors.white54,
+                                                        size: 18,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    child: Center(
+                                                      child: Icon(
+                                                        Icons.sort_by_alpha_rounded,
+                                                        color: _sortByProjectCount ? kLimeGreen : Colors.white54,
+                                                        size: 18,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       ),
-                                      tooltip: _sortByProjectCount ? "เรียงตามจำนวนครั้ง (ค่าเริ่มต้น)" : "เรียงตามจำนวนโปรเจค",
-                                      onPressed: () {
-                                        setState(() {
-                                          _sortByProjectCount = !_sortByProjectCount;
-                                          _sortRepeatedVisits();
-                                        });
-                                      },
                                     ),
                                   ],
                                 ),
@@ -1171,9 +1416,9 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                       },
                                     ),
                               const SizedBox(height: 40),
+                              */
                             ],
                           ),
-                        ),
                 ),
               ],
             ),

@@ -11,6 +11,8 @@ import 'screens/home/home_screen.dart';
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kLimeGreen = Color(0xFFD2E862);
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
@@ -39,6 +41,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'Wallcraft', //
       theme: ThemeData(

@@ -1,10 +1,14 @@
 // lib/services/notification_service.dart
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/api_service.dart';
+import '../main.dart' as main_app;
+import '../constants.dart';
+import '../screens/pool_project/pool_project_detail_screen.dart';
 
 class NotificationService {
   static final FirebaseMessaging _fcm = FirebaseMessaging.instance;
@@ -41,6 +45,14 @@ class NotificationService {
       initSettings,
       onDidReceiveNotificationResponse: (NotificationResponse response) {
         print("Notification Payload: ${response.payload}");
+        if (response.payload != null) {
+          try {
+            final data = jsonDecode(response.payload!);
+            handleNotificationTap(data);
+          } catch (e) {
+            print("Error parsing payload: $e");
+          }
+        }
       },
     );
 
@@ -59,6 +71,11 @@ class NotificationService {
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
       print("🔔 แจ้งเตือนเข้า: ${message.notification?.title}");
       _showLocalNotification(message);
+    });
+
+    // 6. ดักฟังการแท็บตอนอยู่ Background
+    FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      handleNotificationTap(message.data);
     });
   }
 
@@ -117,7 +134,48 @@ class NotificationService {
           sound: 'notification_sound.mp3',
         ),
       ),
+      payload: jsonEncode(message.data),
     );
+  }
+
+  static Future<void> handleNotificationTap(Map<String, dynamic> data) async {
+    final orderId = data['orderId'];
+    if (orderId == null) return;
+
+    final context = main_app.navigatorKey.currentContext;
+    if (context == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) => const Center(child: CircularProgressIndicator(color: Color(0xFFD2E862))),
+    );
+
+    try {
+      final url = Uri.parse('${AppConfig.baseUrl}/orders/detail?order_id=$orderId'); 
+      final response = await ApiService.get(url).timeout(const Duration(seconds: 10));
+
+      Navigator.pop(context); // Close loading
+
+      if (response.statusCode == 200) {
+        final dataStr = jsonDecode(response.body);
+        final Map<String, dynamic> groupedData = {
+          'order_data': dataStr,
+          'order_items': dataStr['order_items'] ?? [],
+        };
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => PoolProjectDetailScreen(groupedOrderData: groupedData),
+          ),
+        );
+      } else {
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ไม่พบข้อมูลออเดอร์นี้')));
+      }
+    } catch (e) {
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('โหลดข้อมูลล้มเหลว')));
+    }
   }
 
   static Future<String?> getFcmToken() async {
