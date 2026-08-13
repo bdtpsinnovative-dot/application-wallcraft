@@ -103,11 +103,22 @@ class ProjectSelectCard extends StatelessWidget {
               ),
               menuProps: const MenuProps(backgroundColor: kCardDark, borderRadius: BorderRadius.all(Radius.circular(20))),
               itemBuilder: (ctx, item, isDisabled, isSelected) => ListTile(
-                title: Text(
-                  item['project_name'] ?? '',
-                  style: const TextStyle(color: Colors.white),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                title: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item['project_name'] ?? '',
+                        style: const TextStyle(color: Colors.white),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (item['is_mine'] == true)
+                      const Padding(
+                        padding: EdgeInsets.only(left: 8.0),
+                        child: Icon(Icons.star, color: Colors.amber, size: 16),
+                      ),
+                  ],
                 ),
                 trailing: isSelected ? const Icon(Icons.check, color: kPrimaryColor) : null,
               ),

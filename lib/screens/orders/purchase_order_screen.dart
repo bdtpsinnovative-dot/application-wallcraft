@@ -621,6 +621,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                             
                                             for (var p in _projects) {
                                               if (activeProjs.any((ap) => ap['id'] == p['id'])) {
+                                                p['is_mine'] = true;
                                                 activeList.add(p);
                                               } else {
                                                 otherList.add(p);
