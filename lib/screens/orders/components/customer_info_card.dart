@@ -244,6 +244,7 @@ class CustomerInfoCard extends StatelessWidget {
                       
                       bool isVisitPlan = item['is_visit_plan'] == true;
                       bool isPipeline = item['is_pipeline'] == true;
+                      bool isNearby = item['is_nearby'] == true;
                       
                       int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
                       
@@ -265,44 +266,69 @@ class CustomerInfoCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            if (isVisitPlan)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.green.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.calendar_month, color: Colors.greenAccent, size: 12),
-                                    SizedBox(width: 4),
-                                    Text(
-                                      "แผนสัปดาห์นี้",
-                                      style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (isNearby)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 6),
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.blueAccent.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                  ],
-                                ),
-                              )
-                            else if (isPipeline)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: Colors.amber.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.star, color: Colors.amber, size: 12),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      "$projCount",
-                                      style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.location_on, color: Colors.blueAccent, size: 12),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          "ใกล้ฉัน",
+                                          style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
-                              ),
+                                  ),
+                                if (isVisitPlan)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.calendar_month, color: Colors.greenAccent, size: 12),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          "แผนสัปดาห์นี้",
+                                          style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  )
+                                else if (isPipeline)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star, color: Colors.amber, size: 12),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          "$projCount",
+                                          style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       );
