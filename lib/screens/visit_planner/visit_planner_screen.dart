@@ -140,11 +140,15 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         final today = DateTime(now.year, now.month, now.day);
         
         bool needsCron = false;
+        final currentWeekStart = _weekStart(today);
+        
         for (var plan in plans) {
           if ((plan['status'] == 'pending' || plan['status'] == null) && plan['planned_date'] != null) {
             final pDate = DateTime.parse(plan['planned_date']);
-            final planDay = DateTime(pDate.year, pDate.month, pDate.day);
-            if (planDay.isBefore(today)) {
+            final planWeekStart = _weekStart(pDate);
+            
+            // Only auto-cancel if the entire week has passed (plan's week is strictly before current week)
+            if (planWeekStart.isBefore(currentWeekStart)) {
               plan['status'] = 'missed';
               needsCron = true;
             }
