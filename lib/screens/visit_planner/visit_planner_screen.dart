@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
 import '../../constants.dart';
 import 'components/add_visit_modal.dart';
@@ -30,6 +31,41 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
 
   bool _sortByProjectCount = false;
 
+  bool _isAdmin = false;
+  String _selectedUserId = 'all';
+  List<dynamic> _adminUsersList = [];
+
+  Future<void> _checkAdminAndFetchUsers() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token');
+      if (token == null) return;
+      final response = await ApiService.post(
+        Uri.parse('${AppConfig.baseUrl}/profile'),
+        body: jsonEncode({'token': token})
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body)['profile'];
+        if (data != null && data['role'] == 'admin') {
+          _isAdmin = true;
+          final usersRes = await ApiService.getUsers();
+          if (usersRes.statusCode == 200) {
+            final usersData = jsonDecode(usersRes.body);
+            if (mounted) {
+              setState(() {
+                _adminUsersList = usersData['users'] ?? [];
+              });
+            }
+          } else {
+             if (mounted) setState((){}); 
+          }
+        }
+      }
+    } catch(e) {
+      debugPrint('Admin check error: $e');
+    }
+  }
+
   void _sortRepeatedVisits() {
     if (_sortByProjectCount) {
       _repeatedVisits.sort((a, b) {
@@ -49,6 +85,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
   @override
   void initState() {
     super.initState();
+    _checkAdminAndFetchUsers();
     _generateWeeks([]);
     _pageController = PageController(initialPage: 1, viewportFraction: 0.85);
     _fetchVisitPlans();
@@ -317,10 +354,13 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => AddVisitModal(
+      builder: (context) => AddVisitModal(
         weekStart: weekStart,
         onSave: _addPlan,
         allPlans: _visitPlans,
+        isAdmin: _isAdmin,
+        adminUsersList: _adminUsersList,
+        initialData: null,
       ),
     );
   }
@@ -338,6 +378,8 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         onSave: _editPlan,
         initialData: plan,
         allPlans: _visitPlans,
+        isAdmin: _isAdmin,
+        adminUsersList: _adminUsersList,
       ),
     );
   }
@@ -467,6 +509,37 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                     ],
                   ),
                 ),
+                if (_isAdmin && _adminUsersList.isNotEmpty)
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: kCardDark,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.white12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        dropdownColor: kDarkBg,
+                        icon: const Icon(Icons.people_outline, color: kLimeGreen),
+                        value: _selectedUserId,
+                        items: [
+                          const DropdownMenuItem(value: 'all', child: Text('แผนงานของทุกคน (All Users)', style: TextStyle(color: Colors.white))),
+                          ..._adminUsersList.map((u) => DropdownMenuItem(
+                            value: u['id'].toString(), 
+                            child: Text(u['full_name'] ?? 'Unknown User', style: const TextStyle(color: Colors.white)),
+                          ))
+                        ],
+                        onChanged: (v) {
+                          if (v != null) {
+                            setState(() => _selectedUserId = v);
+                            _fetchVisitPlans();
+                          }
+                        },
+                      ),
+                    ),
+                  ),
                 Expanded(
                   child: _isLoading
                       ? const Center(

@@ -15,8 +15,18 @@ class AddVisitModal extends StatefulWidget {
   final Function(Map<String, dynamic> visitData) onSave;
   final Map<String, dynamic>? initialData;
   final List<dynamic> allPlans;
+  final bool isAdmin;
+  final List<dynamic> adminUsersList;
 
-  const AddVisitModal({super.key, required this.weekStart, required this.onSave, this.initialData, this.allPlans = const []});
+  const AddVisitModal({
+    super.key,
+    required this.weekStart,
+    required this.onSave,
+    this.initialData,
+    this.allPlans = const [],
+    this.isAdmin = false,
+    this.adminUsersList = const [],
+  });
 
   @override
   State<AddVisitModal> createState() => _AddVisitModalState();
@@ -38,10 +48,15 @@ class _AddVisitModalState extends State<AddVisitModal> {
   String? _selectedProjectType;
   String? _selectedCategory;
   final _conceptCtrl = TextEditingController();
+  
+  String? _selectedAssignToUserId;
 
   @override
   void initState() {
     super.initState();
+    if (widget.isAdmin && widget.initialData != null) {
+      _selectedAssignToUserId = widget.initialData!['user_id'];
+    }
     if (widget.initialData != null) {
       if (widget.initialData!['status'] == 'completed') {
         _isReadOnly = true;
@@ -516,6 +531,27 @@ class _AddVisitModalState extends State<AddVisitModal> {
                             children: [
                               const Text("หมวดหมู่สินค้า", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
+                              if (widget.isAdmin && widget.adminUsersList.isNotEmpty) ...[
+                                const SizedBox(height: 12),
+                                DropdownButtonFormField<String>(
+                                  value: _selectedAssignToUserId,
+                                  decoration: InputDecoration(
+                                    labelText: 'มอบหมายให้ (Assign To)',
+                                    labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                                    filled: true,
+                                    fillColor: Colors.black26,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                  ),
+                                  dropdownColor: kCardDark,
+                                  style: const TextStyle(color: Colors.white, fontSize: 14),
+                                  items: [
+                                    const DropdownMenuItem(value: null, child: Text("ตัวเอง (Me)")),
+                                    ...widget.adminUsersList.map((u) => DropdownMenuItem(value: u['id'].toString(), child: Text(u['full_name'] ?? 'Unknown User')))
+                                  ],
+                                  onChanged: _isReadOnly ? null : (v) => setState(() => _selectedAssignToUserId = v),
+                                ),
+                              ],
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
                                 value: _productCategories.any((c) => c['id'] == _selectedCategory) ? _selectedCategory : null,
@@ -589,6 +625,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                   'project_concept': _conceptCtrl.text.trim(),
                   'project_type_id': _selectedProjectType,
                   'product_category_id': _selectedCategory,
+                  if (widget.isAdmin && _selectedAssignToUserId != null) 'user_id': _selectedAssignToUserId,
                 };
                 if (widget.initialData != null) {
                   data['id'] = widget.initialData!['id'];

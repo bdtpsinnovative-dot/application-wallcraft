@@ -129,6 +129,11 @@ class ApiService {
     return res;
   }
 
+  static Future<http.Response> getUsers() async {
+    final url = Uri.parse('/users');
+    return await get(url);
+  }
+
   // 🌟 12-Week Visit Planner Board APIs
   static Future<http.Response> getWeeklyVisitPlansBoard() async {
     final url = Uri.parse('${AppConfig.baseUrl}/visit-plans');
