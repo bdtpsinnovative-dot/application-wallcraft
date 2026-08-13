@@ -1029,7 +1029,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                         Expanded(
                                                           child: Text(
                                                             e.key,
-                                                            style:
+                                                            maxLines: 1, overflow: TextOverflow.ellipsis, style:
                                                                 const TextStyle(
                                                                   color: Colors
                                                                       .white70,
