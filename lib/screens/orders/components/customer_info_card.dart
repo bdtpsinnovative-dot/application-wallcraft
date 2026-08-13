@@ -297,7 +297,7 @@ class CustomerInfoCard extends StatelessWidget {
                                     const Icon(Icons.star, color: Colors.amber, size: 12),
                                     const SizedBox(width: 4),
                                     Text(
-                                      "$projCount โปรเจ็กต์",
+                                      "$projCount",
                                       style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
                                     ),
                                   ],
