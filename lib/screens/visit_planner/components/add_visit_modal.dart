@@ -491,6 +491,29 @@ class _AddVisitModalState extends State<AddVisitModal> {
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                          if (widget.isAdmin && widget.adminUsersList.isNotEmpty) ...[
+                            DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: _selectedAssignToUserId,
+                              decoration: InputDecoration(
+                                labelText: 'มอบหมายให้ (Assign To)',
+                                labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                                filled: true,
+                                fillColor: Colors.black26,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              dropdownColor: kCardDark,
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              items: [
+                                const DropdownMenuItem(value: null, child: Text("ตัวเอง (Me)", overflow: TextOverflow.ellipsis)),
+                                ...widget.adminUsersList.map((u) => DropdownMenuItem(value: u['id'].toString(), child: Text(u['full_name'] ?? 'Unknown User', overflow: TextOverflow.ellipsis)))
+                              ],
+                              onChanged: _isReadOnly ? null : (v) => setState(() => _selectedAssignToUserId = v),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
         
                     // --- Type & Category ---
                     Row(
@@ -531,27 +554,6 @@ class _AddVisitModalState extends State<AddVisitModal> {
                             children: [
                               const Text("หมวดหมู่สินค้า", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
-                              if (widget.isAdmin && widget.adminUsersList.isNotEmpty) ...[
-                                const SizedBox(height: 12),
-                                DropdownButtonFormField<String>(
-                                  value: _selectedAssignToUserId,
-                                  decoration: InputDecoration(
-                                    labelText: 'มอบหมายให้ (Assign To)',
-                                    labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
-                                    filled: true,
-                                    fillColor: Colors.black26,
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  ),
-                                  dropdownColor: kCardDark,
-                                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                                  items: [
-                                    const DropdownMenuItem(value: null, child: Text("ตัวเอง (Me)")),
-                                    ...widget.adminUsersList.map((u) => DropdownMenuItem(value: u['id'].toString(), child: Text(u['full_name'] ?? 'Unknown User')))
-                                  ],
-                                  onChanged: _isReadOnly ? null : (v) => setState(() => _selectedAssignToUserId = v),
-                                ),
-                              ],
                               DropdownButtonFormField<String>(
                                 isExpanded: true,
                                 value: _productCategories.any((c) => c['id'] == _selectedCategory) ? _selectedCategory : null,
