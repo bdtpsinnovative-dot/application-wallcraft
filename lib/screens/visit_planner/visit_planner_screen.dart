@@ -867,7 +867,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                     const SizedBox(width: 12),
                                     const Expanded(
                                       child: Text(
-                                        "ผลการเข้าพบซ้ำ (3 เช็คอินขึ้นไป)",
+                                        "ผลการเข้าพบซ้ำ",
                                         style: TextStyle(
                                           color: Colors.white,
                                           fontSize: 16,
@@ -966,35 +966,12 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                   Expanded(
                                                     child: Text(
                                                       comp['name'] ?? 'Unknown',
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                       style: const TextStyle(
                                                         color: Colors.white,
-                                                        fontWeight:
-                                                            FontWeight.bold,
+                                                        fontWeight: FontWeight.bold,
                                                         fontSize: 15,
-                                                      ),
-                                                    ),
-                                                  ),
-                                                  const SizedBox(width: 12),
-                                                  Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 10,
-                                                          vertical: 4,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      color: kLimeGreen,
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            20,
-                                                          ),
-                                                    ),
-                                                    child: Text(
-                                                      "${comp['count']} ครั้ง",
-                                                      style: const TextStyle(
-                                                        color: Colors.black,
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        fontSize: 12,
                                                       ),
                                                     ),
                                                   ),
