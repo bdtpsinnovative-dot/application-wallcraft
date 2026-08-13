@@ -509,37 +509,6 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                     ],
                   ),
                 ),
-                if (_isAdmin && _adminUsersList.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    decoration: BoxDecoration(
-                      color: kCardDark,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.white12),
-                    ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        dropdownColor: kDarkBg,
-                        icon: const Icon(Icons.people_outline, color: kLimeGreen),
-                        value: _selectedUserId,
-                        items: [
-                          const DropdownMenuItem(value: 'all', child: Text('แผนงานของทุกคน (All Users)', style: TextStyle(color: Colors.white))),
-                          ..._adminUsersList.map((u) => DropdownMenuItem(
-                            value: u['id'].toString(), 
-                            child: Text(u['full_name'] ?? 'Unknown User', style: const TextStyle(color: Colors.white)),
-                          ))
-                        ],
-                        onChanged: (v) {
-                          if (v != null) {
-                            setState(() => _selectedUserId = v);
-                            _fetchVisitPlans();
-                          }
-                        },
-                      ),
-                    ),
-                  ),
                 Expanded(
                   child: _isLoading
                       ? const Center(
