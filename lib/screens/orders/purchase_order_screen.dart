@@ -172,11 +172,23 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           if (compName.contains(lowerFilter)) {
             // เช็คว่าไม่ได้เป็น Visit Plan ไปแล้ว
             if (!results.any((r) => r['id'] == p['company']['id'])) {
+              
+              List<dynamic> myProjects = [];
+              if (p['projects'] != null) {
+                for (var proj in p['projects']) {
+                  if (proj['is_mine'] == true) {
+                    myProjects.add(proj);
+                  }
+                }
+              }
+              
+              if (myProjects.isEmpty) continue; // Skip companies that are not mine
+              
               final Map<String, dynamic> pipelineCompanyData = Map<String, dynamic>.from(p['company']);
               results.add({
                 ...pipelineCompanyData, 
                 'is_pipeline': true,
-                'projects': p['projects']
+                'projects': myProjects
               });
             }
           }
