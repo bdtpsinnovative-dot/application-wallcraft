@@ -130,7 +130,7 @@ class ApiService {
   }
 
   static Future<http.Response> getUsers() async {
-    final url = Uri.parse('/users');
+    final url = Uri.parse('${AppConfig.baseUrl}/users');
     return await get(url);
   }
 
