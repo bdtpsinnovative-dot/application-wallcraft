@@ -174,11 +174,20 @@ class _AddVisitModalState extends State<AddVisitModal> {
       // Only consider it a pipeline company if the current user has visited it
       bool hasMine = false;
       int myProjectCount = 0;
-      if (p['projects'] != null) {
-        for (var proj in p['projects']) {
-          if (proj['is_mine'] == true) {
-            hasMine = true;
-            myProjectCount++;
+      
+      if (widget.isAdmin && _selectedAssignToUserId != null) {
+        final List<dynamic> userIds = p['user_ids'] ?? [];
+        if (userIds.contains(_selectedAssignToUserId)) {
+          hasMine = true;
+          myProjectCount = (p['projects'] as List).length;
+        }
+      } else {
+        if (p['projects'] != null) {
+          for (var proj in p['projects']) {
+            if (proj['is_mine'] == true) {
+              hasMine = true;
+              myProjectCount++;
+            }
           }
         }
       }
@@ -400,6 +409,62 @@ class _AddVisitModalState extends State<AddVisitModal> {
                     ),
                     const SizedBox(height: 16),
                     
+                          if (widget.isAdmin && widget.adminUsersList.isNotEmpty) ...[
+                            DropdownButtonFormField<String>(
+                              isExpanded: true,
+                              value: _selectedAssignToUserId,
+                              decoration: InputDecoration(
+                                labelText: 'มอบหมายให้ (Assign To)',
+                                labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
+                                filled: true,
+                                fillColor: Colors.black26,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              ),
+                              dropdownColor: kCardDark,
+                              style: const TextStyle(color: Colors.white, fontSize: 14),
+                              items: [
+                                DropdownMenuItem(
+                                  value: null, 
+                                  child: Row(
+                                    children: const [
+                                      CircleAvatar(radius: 12, backgroundColor: Colors.white24, child: Icon(Icons.person, size: 16, color: Colors.white)),
+                                      SizedBox(width: 8),
+                                      Text("ตัวเอง (Me)", overflow: TextOverflow.ellipsis)
+                                    ]
+                                  )
+                                ),
+                                ...widget.adminUsersList.map((u) {
+                                  final name = u['full_name']?.toString() ?? 'Unknown User';
+                                  final shortName = name.split(' ')[0];
+                                  final avatar = u['avatar_url']?.toString();
+                                  return DropdownMenuItem(
+                                    value: u['id'].toString(), 
+                                    child: Row(
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 12,
+                                          backgroundColor: Colors.white24,
+                                          backgroundImage: (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
+                                          child: (avatar == null || avatar.isEmpty) ? const Icon(Icons.person, size: 16, color: Colors.white) : null,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(shortName, overflow: TextOverflow.ellipsis)
+                                      ]
+                                    )
+                                  );
+                                })
+                              ],
+                              onChanged: _isReadOnly ? null : (v) {
+                                setState(() {
+                                  _selectedAssignToUserId = v;
+                                  _selectedCompany = null;
+                                  _selectedProject = null;
+                                });
+                              },
+                            ),
+                            const SizedBox(height: 16),
+                          ],
                     // --- Company ---
                     const Text("บริษัท *", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
@@ -531,57 +596,6 @@ class _AddVisitModalState extends State<AddVisitModal> {
                     ),
                     const SizedBox(height: 16),
 
-                          if (widget.isAdmin && widget.adminUsersList.isNotEmpty) ...[
-                            DropdownButtonFormField<String>(
-                              isExpanded: true,
-                              value: _selectedAssignToUserId,
-                              decoration: InputDecoration(
-                                labelText: 'มอบหมายให้ (Assign To)',
-                                labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
-                                filled: true,
-                                fillColor: Colors.black26,
-                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                              ),
-                              dropdownColor: kCardDark,
-                              style: const TextStyle(color: Colors.white, fontSize: 14),
-                              items: [
-                                DropdownMenuItem(
-                                  value: null, 
-                                  child: Row(
-                                    children: const [
-                                      CircleAvatar(radius: 12, backgroundColor: Colors.white24, child: Icon(Icons.person, size: 16, color: Colors.white)),
-                                      SizedBox(width: 8),
-                                      Text("ตัวเอง (Me)", overflow: TextOverflow.ellipsis)
-                                    ]
-                                  )
-                                ),
-                                ...widget.adminUsersList.map((u) {
-                                  final name = u['full_name']?.toString() ?? 'Unknown User';
-                                  final shortName = name.split(' ').first;
-                                  final avatar = u['avatar_url']?.toString();
-                                  return DropdownMenuItem(
-                                    value: u['id'].toString(), 
-                                    child: Row(
-                                      children: [
-                                        CircleAvatar(
-                                          radius: 12,
-                                          backgroundColor: Colors.white24,
-                                          backgroundImage: (avatar != null && avatar.isNotEmpty) ? NetworkImage(avatar) : null,
-                                          child: (avatar == null || avatar.isEmpty) ? const Icon(Icons.person, size: 16, color: Colors.white) : null,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(shortName, overflow: TextOverflow.ellipsis)
-                                      ]
-                                    )
-                                  );
-                                })
-                              ],
-                              onChanged: _isReadOnly ? null : (v) => setState(() => _selectedAssignToUserId = v),
-                            ),
-                            const SizedBox(height: 16),
-                          ],
-        
                     // --- Type & Category ---
                     Row(
                       children: [
