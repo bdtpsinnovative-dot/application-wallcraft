@@ -784,6 +784,37 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                                 TextOverflow.ellipsis,
                                                                           ),
                                                                         ],
+                                                                        if (plan['profiles'] != null) ...[
+                                                                          const SizedBox(height: 8),
+                                                                          const Divider(color: Colors.white12, height: 1),
+                                                                          const SizedBox(height: 8),
+                                                                          Row(
+                                                                            children: [
+                                                                              CircleAvatar(
+                                                                                radius: 10,
+                                                                                backgroundColor: Colors.white12,
+                                                                                backgroundImage: plan['profiles']['avatar_url'] != null
+                                                                                    ? NetworkImage(plan['profiles']['avatar_url'])
+                                                                                    : null,
+                                                                                child: plan['profiles']['avatar_url'] == null
+                                                                                    ? const Icon(Icons.person, size: 12, color: Colors.white54)
+                                                                                    : null,
+                                                                              ),
+                                                                              const SizedBox(width: 6),
+                                                                              Expanded(
+                                                                                child: Text(
+                                                                                  plan['profiles']['full_name'] ?? 'Unknown User',
+                                                                                  style: const TextStyle(
+                                                                                    color: Colors.white54,
+                                                                                    fontSize: 11,
+                                                                                  ),
+                                                                                  maxLines: 1,
+                                                                                  overflow: TextOverflow.ellipsis,
+                                                                                ),
+                                                                              ),
+                                                                            ],
+                                                                          ),
+                                                                        ],
                                                                       ],
                                                                     ),
                                                                   ),
