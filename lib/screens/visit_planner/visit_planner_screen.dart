@@ -963,6 +963,12 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                     MainAxisAlignment
                                                         .spaceBetween,
                                                 children: [
+                                                  const Icon(
+                                                    Icons.domain_rounded,
+                                                    color: Colors.orangeAccent,
+                                                    size: 18,
+                                                  ),
+                                                  const SizedBox(width: 8),
                                                   Expanded(
                                                     child: Text(
                                                       comp['name'] ?? 'Unknown',
