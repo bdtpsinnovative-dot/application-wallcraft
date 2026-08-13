@@ -28,6 +28,24 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
   late PageController _pageController;
   DateTime? _pendingTargetWeek;
 
+  bool _sortByProjectCount = false;
+
+  void _sortRepeatedVisits() {
+    if (_sortByProjectCount) {
+      _repeatedVisits.sort((a, b) {
+        final aCount = (a['uniqueProjects'] as Map?)?.length ?? 0;
+        final bCount = (b['uniqueProjects'] as Map?)?.length ?? 0;
+        return bCount.compareTo(aCount);
+      });
+    } else {
+      _repeatedVisits.sort((a, b) {
+        final aCount = a['visit_count'] as int? ?? 0;
+        final bCount = b['visit_count'] as int? ?? 0;
+        return bCount.compareTo(aCount);
+      });
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -186,6 +204,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
         if (mounted) {
           setState(() {
             _repeatedVisits = data['repeatedVisits'] ?? [];
+            _sortRepeatedVisits();
             _isLoadingRepeated = false;
           });
         }
@@ -846,13 +865,29 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                       ),
                                     ),
                                     const SizedBox(width: 12),
-                                    const Text(
-                                      "ผลการเข้าพบซ้ำ (3 เช็คอินขึ้นไป)",
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
+                                    const Expanded(
+                                      child: Text(
+                                        "ผลการเข้าพบซ้ำ (3 เช็คอินขึ้นไป)",
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        _sortByProjectCount ? Icons.sort_by_alpha_rounded : Icons.sort_rounded,
+                                        color: Colors.white70,
+                                        size: 20,
+                                      ),
+                                      tooltip: _sortByProjectCount ? "เรียงตามจำนวนครั้ง (ค่าเริ่มต้น)" : "เรียงตามจำนวนโปรเจค",
+                                      onPressed: () {
+                                        setState(() {
+                                          _sortByProjectCount = !_sortByProjectCount;
+                                          _sortRepeatedVisits();
+                                        });
+                                      },
                                     ),
                                   ],
                                 ),
