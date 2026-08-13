@@ -639,13 +639,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                             sortedProjects.addAll(otherList);
                                             _projects = sortedProjects;
                                             
-                                            // Auto-select if there is exactly 1 active project
-                                            if (activeProjs.length == 1) {
-                                              final p = activeProjs.first;
-                                              if (!_selectedProjects.any((sp) => sp['id'] == p['id'])) {
-                                                _selectedProjects = List.from(_selectedProjects)..add(p);
-                                              }
-                                            }
+
                                           }
                                         } else { 
                                           _selectedCompany = null; 
