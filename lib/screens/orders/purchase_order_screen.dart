@@ -60,6 +60,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   // 🌟 State for Pipeline & Visit Plans
   List<dynamic> _pipelineData = [];
   List<dynamic> _visitPlanData = [];
+  Position? _currentPosition; // 📍 เก็บพิกัดผู้ใช้
 
   @override
   void initState() {
@@ -67,10 +68,35 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     _fetchInitialData();
     _fetchPipeline(); // 🌟 Fetch pipeline on init
     _fetchVisitPlans(); // 🌟 Fetch visit plans on init
+    _fetchUserLocation(); // 📍 ดึงพิกัด GPS อัตโนมัติ
     
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _startAnimation = true);
     });
+  }
+
+  Future<void> _fetchUserLocation() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) return; // ไม่ได้เปิด GPS
+      
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) return; // ไม่อนุญาต
+      }
+      
+      if (permission == LocationPermission.deniedForever) return; // ไม่อนุญาตถาวร
+      
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      if (mounted) {
+        setState(() {
+          _currentPosition = position;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error getting location: ');
+    }
   }
 
   Future<void> _fetchVisitPlans() async {
@@ -143,6 +169,10 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       if (!isSilent) setState(() => _isLoading = false);
     }
   }
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    return Geolocator.distanceBetween(lat1, lon1, lat2, lon2); // returns meters
+  }
+
   Future<List<dynamic>> _getCompanies(String filter) async {
     List<dynamic> results = [];
     final lowerFilter = filter.toLowerCase();
@@ -166,6 +196,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
 
     // 2. 🌟 กรอง Pipeline Companies
     if (_pipelineData.isNotEmpty) {
+      List<dynamic> pipelineResults = [];
       for (var p in _pipelineData) {
         if (p['company'] != null && p['company']['name'] != null) {
           final compName = p['company']['name'].toString().toLowerCase();
@@ -185,15 +216,44 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
               if (myProjects.isEmpty) continue; // Skip companies that are not mine
               
               final Map<String, dynamic> pipelineCompanyData = Map<String, dynamic>.from(p['company']);
-              results.add({
+              
+              bool isNearby = false;
+              if (_currentPosition != null && pipelineCompanyData['lat'] != null && pipelineCompanyData['lng'] != null) {
+                double distance = Geolocator.distanceBetween(
+                  _currentPosition!.latitude, 
+                  _currentPosition!.longitude, 
+                  (pipelineCompanyData['lat'] as num).toDouble(), 
+                  (pipelineCompanyData['lng'] as num).toDouble()
+                );
+                if (distance <= 1000) { // 1 km
+                  isNearby = true;
+                  pipelineCompanyData['distance_m'] = distance;
+                }
+              }
+              
+              pipelineResults.add({
                 ...pipelineCompanyData, 
                 'is_pipeline': true,
+                'is_nearby': isNearby,
                 'projects': myProjects
               });
             }
           }
         }
       }
+      
+      // Sort: nearby first, then alphabetical
+      pipelineResults.sort((a, b) {
+        if (a['is_nearby'] == true && b['is_nearby'] != true) return -1;
+        if (a['is_nearby'] != true && b['is_nearby'] == true) return 1;
+        // if both nearby, sort by distance
+        if (a['is_nearby'] == true && b['is_nearby'] == true) {
+           return (a['distance_m'] ?? 0).compareTo(b['distance_m'] ?? 0);
+        }
+        return a['name'].toString().compareTo(b['name'].toString());
+      });
+      
+      results.addAll(pipelineResults);
     }
 
     // 3. 🏢 ดึงบริษัททั้งหมดจาก API 
