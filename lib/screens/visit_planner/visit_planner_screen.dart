@@ -984,16 +984,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                   color: Colors.white12,
                                                   height: 1,
                                                 ),
-                                                const SizedBox(height: 12),
-                                                Text(
-                                                  "${uniqueProjects.length} โปรเจค",
-                                                  style: const TextStyle(
-                                                    color: Colors.white54,
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 8),
+
                                                 ...displayProjects.map((e) {
                                                   String dateStr = '';
                                                   if (e.value != null) {
