@@ -133,10 +133,51 @@ class _NotificationScreenState extends State<NotificationScreen> {
       }
     }
 
-    // 3. เด้งป๊อปอัพดูรายละเอียดออเดอร์
+    // 3. เด้งป๊อปอัพดูรายละเอียดออเดอร์ หรือ ดูแจ้งเตือนเต็มๆ
     if (orderId != null && mounted) {
       _showOrderDetailsDialog(orderId.toString());
+    } else if (mounted) {
+      _showGeneralNotificationDialog(notif);
     }
+  }
+
+  // 📝 ป๊อปอัพอ่านแจ้งเตือนทั่วไป (เช่น สรุปงานประจำวัน)
+  void _showGeneralNotificationDialog(Map<String, dynamic> notif) {
+    final title = notif['title'] ?? 'ระบบ';
+    final body = notif['body'] ?? 'ไม่มีเนื้อหา';
+    
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: kCardSurface,
+          contentPadding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16), 
+            side: BorderSide(color: kPremiumGold.withOpacity(0.3))
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.notifications_active_rounded, color: kPremiumGold, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title, style: const TextStyle(color: kTextPrimary, fontSize: 16, fontWeight: FontWeight.bold))
+              ),
+            ],
+          ),
+          content: Text(
+            body,
+            style: const TextStyle(color: kTextPrimary, fontSize: 14, height: 1.5),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('ปิด', style: TextStyle(color: kTextSecondary, fontSize: 14, fontWeight: FontWeight.bold)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   // 🌟 ฟังก์ชันดึงและโชว์ป๊อปอัพ
