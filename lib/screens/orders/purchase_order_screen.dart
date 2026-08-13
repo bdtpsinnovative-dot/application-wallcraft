@@ -208,6 +208,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     // 2. 🌟 กรอง Pipeline Companies
     if (_pipelineData.isNotEmpty) {
       List<dynamic> pipelineResults = [];
+      int apiIndex = 0;
       for (var p in _pipelineData) {
         if (p['company'] != null && p['company']['name'] != null) {
           final compName = p['company']['name'].toString().toLowerCase();
@@ -236,7 +237,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                   (pipelineCompanyData['lat'] as num).toDouble(), 
                   (pipelineCompanyData['lng'] as num).toDouble()
                 );
-                if (distance <= 1000) { // 1 km
+                if (distance <= 5000) { // 5 km
                   isNearby = true;
                   pipelineCompanyData['distance_m'] = distance;
                 }
@@ -246,7 +247,8 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                 ...pipelineCompanyData, 
                 'is_pipeline': true,
                 'is_nearby': isNearby,
-                'projects': myProjects
+                'projects': myProjects,
+                'api_index': apiIndex++
               });
             }
           }
@@ -261,7 +263,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         if (a['is_nearby'] == true && b['is_nearby'] == true) {
            return (a['distance_m'] ?? 0).compareTo(b['distance_m'] ?? 0);
         }
-        return a['name'].toString().compareTo(b['name'].toString());
+        return (a['api_index'] as int? ?? 0).compareTo(b['api_index'] as int? ?? 0);
       });
       
       results.addAll(pipelineResults);
