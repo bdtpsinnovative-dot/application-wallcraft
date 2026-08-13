@@ -237,7 +237,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                   (pipelineCompanyData['lat'] as num).toDouble(), 
                   (pipelineCompanyData['lng'] as num).toDouble()
                 );
-                if (distance <= 5000) { // 5 km
+                if (distance <= 500) { // 500 meters
                   isNearby = true;
                   pipelineCompanyData['distance_m'] = distance;
                 }
