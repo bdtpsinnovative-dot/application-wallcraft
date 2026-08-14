@@ -266,8 +266,9 @@ class CustomerInfoCard extends StatelessWidget {
                     bool isVisitPlan = item['is_visit_plan'] == true;
                     bool isPipeline = item['is_pipeline'] == true;
                     bool isNearby = item['is_nearby'] == true;
-                    bool isTeam = item['is_team'] == true;
-                    bool isGlobal = item['is_global'] == true;
+                    bool isTeam = item['is_team'] == true && item['is_mine'] != true;
+                    bool isGlobal = item['is_global'] == true && item['is_mine'] != true;
+                    bool isMine = item['is_mine'] == true || (isPipeline && !isTeam && !isGlobal);
                     
                     int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
 
@@ -277,15 +278,15 @@ class CustomerInfoCard extends StatelessWidget {
                     if (isVisitPlan) {
                       leadingIcon = Icons.calendar_month_rounded;
                       leadingColor = Colors.greenAccent;
+                    } else if (isMine) {
+                      leadingIcon = Icons.business_rounded;
+                      leadingColor = Colors.amber;
                     } else if (isTeam) {
                       leadingIcon = Icons.people_alt_rounded;
                       leadingColor = Colors.orangeAccent;
                     } else if (isGlobal) {
                       leadingIcon = Icons.public_rounded;
                       leadingColor = Colors.tealAccent;
-                    } else if (isPipeline) {
-                      leadingIcon = Icons.business_rounded;
-                      leadingColor = Colors.amber;
                     }
                     
                     return Container(

@@ -244,8 +244,9 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                 }
               }
 
-              bool isTeam = p['is_team'] == true;
-              bool isGlobal = p['is_global'] == true;
+              bool isMine = p['is_mine'] == true;
+              bool isTeam = p['is_team'] == true && !isMine;
+              bool isGlobal = p['is_global'] == true && !isMine && !isTeam;
               bool isTeamOrGlobal = isTeam || isGlobal;
               
               List<dynamic> targetProjects = [];
@@ -263,6 +264,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                 ...pipelineCompanyData, 
                 'is_pipeline': true,
                 'is_nearby': isNearby,
+                'is_mine': isMine,
                 'is_team': isTeam,
                 'is_global': isGlobal,
                 'projects': targetProjects,
