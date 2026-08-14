@@ -583,6 +583,24 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       
       if (response.statusCode == 200 || response.statusCode == 201) { 
         if (mounted) {
+          // 🧹 เคลียร์แคชเฉพาะแผนการเข้าพบ (Visit Plan) ของบริษัทนี้ออกทันทีเมื่อเช็คอิน/บันทึกสำเร็จ
+          if (_selectedCompany != null) {
+            final compId = _selectedCompany?['id']?.toString();
+            if (compId != null) {
+              _cachedVisitPlanData?.removeWhere((vp) => 
+                vp['company_id']?.toString() == compId || 
+                vp['companies']?['id']?.toString() == compId
+              );
+              _visitPlanData.removeWhere((vp) => 
+                vp['company_id']?.toString() == compId || 
+                vp['companies']?['id']?.toString() == compId
+              );
+            }
+          }
+
+          // ซิงค์แผนงานล่าสุดจากเซิร์ฟเวอร์เบื้องหลัง
+          _fetchVisitPlans();
+
           NotificationScreen.invalidateCache();
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ'), backgroundColor: Colors.green));
           _formKey.currentState?.reset();
