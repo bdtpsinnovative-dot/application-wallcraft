@@ -54,8 +54,12 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   List<dynamic> _projects = [];
   bool _isLoading = true;
 
-  // 🌟 Static Cache for Dropdowns
+  // 🌟 Static Cache for Dropdowns, Pipeline & Visit Plans (Instant 0ms Load!)
   static Map<String, dynamic>? _cachedDropdownData;
+  static List<dynamic>? _cachedPipelineData;
+  static List<dynamic>? _cachedVisitPlanData;
+  static Position? _cachedLastPosition;
+  static Future<void>? _activeInitFuture;
 
   // 🌟 State for Pipeline & Visit Plans
   List<dynamic> _pipelineData = [];
@@ -66,7 +70,23 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   @override
   void initState() {
     super.initState();
-    _initAllData();
+    // 1. โหลดข้อมูลจาก Static Cache ทันที (0ms ไม่ต้องรอโหลดใหม่)
+    if (_cachedDropdownData != null) {
+      _populateDropdownsFromCache(_cachedDropdownData!);
+    }
+    if (_cachedPipelineData != null) {
+      _pipelineData = List.from(_cachedPipelineData!);
+      _isDataReady = true;
+    }
+    if (_cachedVisitPlanData != null) {
+      _visitPlanData = List.from(_cachedVisitPlanData!);
+    }
+    if (_cachedLastPosition != null) {
+      _currentPosition = _cachedLastPosition;
+    }
+
+    // 2. ซิงค์ข้อมูลล่าสุดจากเซิร์ฟเวอร์แบบเบื้องหลัง
+    _activeInitFuture = _initAllData();
   }
 
   Future<void> _initAllData() async {
@@ -79,6 +99,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     if (mounted) {
       setState(() {
         _isDataReady = true;
+        _isLoading = false;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) setState(() => _startAnimation = true);
@@ -88,6 +109,15 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
 
   Future<void> _fetchUserLocation() async {
     try {
+      // 1. ดึง Last Known Position ก่อนทันที
+      Position? lastPos = await Geolocator.getLastKnownPosition();
+      if (lastPos != null) {
+        _cachedLastPosition = lastPos;
+        if (mounted && _currentPosition == null) {
+          setState(() => _currentPosition = lastPos);
+        }
+      }
+
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return; // ไม่ได้เปิด GPS
       
@@ -99,14 +129,18 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       
       if (permission == LocationPermission.deniedForever) return; // ไม่อนุญาตถาวร
       
-      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      Position position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 3),
+      );
+      _cachedLastPosition = position;
       if (mounted) {
         setState(() {
           _currentPosition = position;
         });
       }
     } catch (e) {
-      debugPrint('Error getting location: ');
+      debugPrint('Error getting location: $e');
     }
   }
 
@@ -115,9 +149,11 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       final response = await ApiService.getVisitPlans();
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final list = (data['visit_plans'] ?? []) as List<dynamic>;
+        _cachedVisitPlanData = list;
         if (mounted) {
           setState(() {
-            _visitPlanData = data['visit_plans'] ?? [];
+            _visitPlanData = list;
           });
         }
       }
@@ -131,9 +167,11 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       final response = await ApiService.getPipeline();
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
+        final list = (data['pipeline'] ?? []) as List<dynamic>;
+        _cachedPipelineData = list;
         if (mounted) {
           setState(() {
-            _pipelineData = data['pipeline'] ?? [];
+            _pipelineData = list;
           });
         }
       }
@@ -185,17 +223,22 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   }
 
   Future<List<dynamic>> _getCompanies(String filter) async {
+    // 🌟 ถ้าระบบกำลังโหลดครั้งแรกและยังไม่มีข้อมูลในแคช ให้รอตัว Future ให้พร้อมก่อนเปิดเมนู
+    if ((_pipelineData.isEmpty || _visitPlanData.isEmpty) && _activeInitFuture != null) {
+      try {
+        await _activeInitFuture!.timeout(const Duration(milliseconds: 1500));
+      } catch (_) {}
+    }
+
     List<dynamic> results = [];
     final lowerFilter = filter.toLowerCase();
 
+    if (_currentPosition == null && _cachedLastPosition != null) {
+      _currentPosition = _cachedLastPosition;
+    }
     if (_currentPosition == null) {
       try {
         _currentPosition = await Geolocator.getLastKnownPosition();
-        if (_currentPosition == null) {
-          _currentPosition = await Geolocator.getCurrentPosition(
-            timeLimit: const Duration(seconds: 2),
-          );
-        }
       } catch (_) {}
     }
 
