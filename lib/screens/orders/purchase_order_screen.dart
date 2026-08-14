@@ -237,6 +237,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                   (pipelineCompanyData['lat'] as num).toDouble(), 
                   (pipelineCompanyData['lng'] as num).toDouble()
                 );
+                debugPrint("[GPS Debug] Company: ${pipelineCompanyData['name']}, User: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}, Comp: ${pipelineCompanyData['lat']}, ${pipelineCompanyData['lng']}, Distance: ${distance}m");
                 if (distance <= 500) { // 500 meters
                   isNearby = true;
                   pipelineCompanyData['distance_m'] = distance;
