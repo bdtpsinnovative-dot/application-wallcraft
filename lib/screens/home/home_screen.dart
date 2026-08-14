@@ -79,6 +79,9 @@ class _HomeScreenState extends State<HomeScreen> {
     _adminSummaryScreen = const AdminSummaryScreen(); 
     _notificationScreen = const NotificationScreen();
     
+    // ⚡ 1. Prefetch Pipeline เก็บในแรมทันทีที่เปิดแอป (ทำให้หน้า New Record & Visit Planner เปิดได้ทันใจ 0ms!)
+    ApiService.getPipeline();
+
     // 🌟 สั่งเช็คอัปเดตทันทีที่เปิดแอป
     _checkForUpdate();
   }
