@@ -602,103 +602,128 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                 ),
               ),
               const Divider(color: Colors.white12, height: 1),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  children: [
-                    ListTile(
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: _selectedUserId == 'all' ? kLimeGreen.withOpacity(0.2) : Colors.white10,
-                          shape: BoxShape.circle,
+              Builder(
+                builder: (context) {
+                  final namedUsers = _usersList.where((u) {
+                    final name = (u['full_name'] ?? u['username'] ?? '').toString().trim();
+                    return name.isNotEmpty && name != 'ไม่มีชื่อ';
+                  }).toList();
+
+                  final namelessCount = _usersList.length - namedUsers.length;
+
+                  return Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      children: [
+                        ListTile(
+                          leading: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: _selectedUserId == 'all' ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              Icons.groups_rounded,
+                              color: _selectedUserId == 'all' ? kLimeGreen : Colors.white70,
+                              size: 20,
+                            ),
+                          ),
+                          title: const Text(
+                            'ทั้งหมด (ทุกคน)',
+                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                          ),
+                          trailing: _selectedUserId == 'all'
+                              ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
+                              : null,
+                          onTap: () {
+                            setState(() {
+                              _selectedUserId = 'all';
+                            });
+                            Navigator.pop(context);
+                          },
                         ),
-                        child: Icon(
-                          Icons.groups_rounded,
-                          color: _selectedUserId == 'all' ? kLimeGreen : Colors.white70,
-                          size: 20,
-                        ),
-                      ),
-                      title: const Text(
-                        'ทั้งหมด (ทุกคน)',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                      trailing: _selectedUserId == 'all'
-                          ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
-                          : null,
-                      onTap: () {
-                        setState(() {
-                          _selectedUserId = 'all';
-                        });
-                        Navigator.pop(context);
-                      },
-                    ),
-                    ..._usersList.map((user) {
-                      final uId = user['id']?.toString() ?? '';
-                      final fullName = user['full_name'] ?? user['username'] ?? 'ไม่มีชื่อ';
-                      final avatarUrl = user['avatar_url'];
-                      final isSelected = _selectedUserId == uId;
-                      
-                      return ListTile(
-                        leading: avatarUrl != null && avatarUrl.toString().trim().isNotEmpty
-                            ? Container(
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected ? kLimeGreen : Colors.white24,
-                                    width: isSelected ? 2 : 1,
+                        ...namedUsers.map((user) {
+                          final uId = user['id']?.toString() ?? '';
+                          final fullName = (user['full_name'] ?? user['username'] ?? '').toString().trim();
+                          final avatarUrl = user['avatar_url'];
+                          final isSelected = _selectedUserId == uId;
+                          
+                          return ListTile(
+                            leading: avatarUrl != null && avatarUrl.toString().trim().isNotEmpty
+                                ? Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected ? kLimeGreen : Colors.white24,
+                                        width: isSelected ? 2 : 1,
+                                      ),
+                                    ),
+                                    child: CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: Colors.white10,
+                                      backgroundImage: NetworkImage(avatarUrl.toString()),
+                                      onBackgroundImageError: (_, __) {},
+                                    ),
+                                  )
+                                : Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      color: isSelected ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: isSelected ? kLimeGreen : Colors.transparent,
+                                        width: 1.5,
+                                      ),
+                                    ),
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      fullName.isNotEmpty ? fullName.substring(0, 1).toUpperCase() : '?',
+                                      style: TextStyle(
+                                        color: isSelected ? kLimeGreen : Colors.white70,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                                child: CircleAvatar(
-                                  radius: 18,
-                                  backgroundColor: Colors.white10,
-                                  backgroundImage: NetworkImage(avatarUrl.toString()),
-                                  onBackgroundImageError: (_, __) {},
-                                ),
-                              )
-                            : Container(
-                                width: 36,
-                                height: 36,
-                                decoration: BoxDecoration(
-                                  color: isSelected ? kLimeGreen.withOpacity(0.2) : Colors.white10,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: isSelected ? kLimeGreen : Colors.transparent,
-                                    width: 1.5,
-                                  ),
-                                ),
-                                alignment: Alignment.center,
-                                child: Text(
-                                  fullName.isNotEmpty ? fullName.substring(0, 1).toUpperCase() : '?',
-                                  style: TextStyle(
-                                    color: isSelected ? kLimeGreen : Colors.white70,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14,
-                                  ),
+                            title: Text(
+                              fullName,
+                              style: TextStyle(
+                                color: isSelected ? kLimeGreen : Colors.white,
+                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 14,
+                              ),
+                            ),
+                            trailing: isSelected
+                                ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
+                                : null,
+                            onTap: () {
+                              setState(() {
+                                _selectedUserId = uId;
+                              });
+                              Navigator.pop(context);
+                            },
+                          );
+                        }).toList(),
+                        if (namelessCount > 0)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                            child: Center(
+                              child: Text(
+                                "(ซ่อนบัญชีไม่มีชื่อ $namelessCount บัญชี)",
+                                style: const TextStyle(
+                                  color: Colors.white30,
+                                  fontSize: 11,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
-                        title: Text(
-                          fullName,
-                          style: TextStyle(
-                            color: isSelected ? kLimeGreen : Colors.white,
-                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                            fontSize: 14,
+                            ),
                           ),
-                        ),
-                        trailing: isSelected
-                            ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
-                            : null,
-                        onTap: () {
-                          setState(() {
-                            _selectedUserId = uId;
-                          });
-                          Navigator.pop(context);
-                        },
-                      );
-                    }).toList(),
-                  ],
-                ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
           ),
