@@ -16,10 +16,10 @@ class VisitPlannerScreen extends StatefulWidget {
   const VisitPlannerScreen({super.key});
 
   @override
-  State<VisitPlannerScreen> createState() => _VisitPlannerScreenState();
+  State<VisitPlannerScreen> createState() => VisitPlannerScreenState();
 }
 
-class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
+class VisitPlannerScreenState extends State<VisitPlannerScreen> {
   bool _isLoading = true;
   bool _isLoadingRepeated = true;
   bool _isFirstLoad = true;
@@ -109,7 +109,7 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
     _checkAdminAndFetchUsers();
     _generateWeeks([]);
     _pageController = PageController(initialPage: 1, viewportFraction: 0.85);
-    _fetchVisitPlans();
+    refreshVisitPlans();
     _fetchRepeatedVisits();
   }
 
@@ -202,10 +202,10 @@ class _VisitPlannerScreenState extends State<VisitPlannerScreen> {
     });
   }
 
-  Future<void> _fetchVisitPlans({DateTime? targetWeek}) async {
+  Future<void> refreshVisitPlans({DateTime? targetWeek, bool isSilent = false}) async {
     if (!mounted) return;
     ApiService.clearCache();
-    setState(() => _isLoading = true);
+    if (!isSilent) setState(() => _isLoading = true);
     try {
       final response = await ApiService.getWeeklyVisitPlansBoard();
       if (response.statusCode == 200) {

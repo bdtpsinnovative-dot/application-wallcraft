@@ -49,6 +49,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
   final GlobalKey<_HomeDashboardState> _homeKey = GlobalKey();
+  final GlobalKey<VisitPlannerScreenState> _visitPlannerKey = GlobalKey();
 
   bool _isAdmin = false;
 
@@ -73,7 +74,7 @@ class _HomeScreenState extends State<HomeScreen> {
       key: _homeKey, 
       onRoleChecked: _updateAdminStatus,
     );
-    _visitPlannerScreen = const VisitPlannerScreen(); // 🌟 หน้าแผนงาน 12 สัปดาห์
+    _visitPlannerScreen = VisitPlannerScreen(key: _visitPlannerKey); // 🌟 หน้าแผนงาน 12 สัปดาห์ พร้อม Key สำหรับ auto-refresh
     _profileScreen = const ProfileScreen();
     _adminSummaryScreen = const AdminSummaryScreen(); 
     _notificationScreen = const NotificationScreen();
@@ -279,9 +280,13 @@ void _showUpdateDialog(String latestVersion, String downloadUrl) {
               currentIndex: _selectedIndex,
               onTap: (index) {
                 bool wasOnHome = _selectedIndex == 0;
+                bool wasOnVisitPlanner = _selectedIndex == 1;
                 setState(() => _selectedIndex = index);
                 if (index == 0) {
                   _homeKey.currentState?.refreshData(isSilent: !wasOnHome); 
+                } else if (index == 1) {
+                  // 🚀 แอบดึงข้อมูลแผนงานล่าสุดสดๆ จากเซิร์ฟเวอร์ทันทีที่กดสลับมาแท็บแผนงาน
+                  _visitPlannerKey.currentState?.refreshVisitPlans(isSilent: !wasOnVisitPlanner);
                 }
               },
               backgroundColor: Colors.transparent,
@@ -487,7 +492,15 @@ class _HomeDashboardState extends State<_HomeDashboard> with SingleTickerProvide
             crossAxisSpacing: 16, mainAxisSpacing: 16,
             childAspectRatio: 1.1, 
             children: [
-              _buildGlassMenuCard(0, 'Lead&Checkin', 'ลีด&เช็คอิน', Icons.add_circle_outline_rounded, Colors.blueAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseOrderScreen()))),
+              _buildGlassMenuCard(0, 'Lead&Checkin', 'ลีด&เช็คอิน', Icons.add_circle_outline_rounded, Colors.blueAccent, () async {
+                await Navigator.push(context, MaterialPageRoute(builder: (_) => const PurchaseOrderScreen()));
+                if (mounted) {
+                  refreshData(isSilent: true);
+                  // ถ้ากลับออกมา ให้สั่งแอบรีเฟรชหน้าแผนงานด้วยทันที
+                  final homeState = context.findAncestorStateOfType<_HomeScreenState>();
+                  homeState?._visitPlannerKey.currentState?.refreshVisitPlans(isSilent: true);
+                }
+              }),
               _buildGlassMenuCard(1, 'Price Check', 'เช็คราคาสินค้า', Icons.price_check_rounded, Colors.orangeAccent, () => Navigator.push(context, MaterialPageRoute(builder: (context) => const PriceCheckScreen()))),
               _buildGlassMenuCard(2, 'AI Expert', 'AIผู้เชี่ยวชาญ', Icons.auto_awesome_rounded, Colors.purpleAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AiChatHubScreen()))),
               _buildGlassMenuCard(3, 'AI Search', 'ค้นหารูปด้วยAI', Icons.image_search_rounded, Colors.cyanAccent, () => Navigator.push(context, MaterialPageRoute(builder: (_) => AiSearchScreen()))),
