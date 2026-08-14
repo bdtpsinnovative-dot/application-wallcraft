@@ -316,35 +316,70 @@ class CustomerInfoCard extends StatelessWidget {
                           Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (isNearby)
+                              if (isNearby && isPipeline && projCount > 0)
                                 Container(
-                                  margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: Colors.redAccent.withOpacity(0.2),
+                                    color: Colors.amber.withOpacity(0.18),
                                     borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Icon(Icons.location_on, color: Colors.redAccent, size: 12),
-                                ),
-                              if (isPipeline && projCount > 0)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.amber.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(color: Colors.amber.withOpacity(0.35), width: 1),
                                   ),
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.star, color: Colors.amber, size: 11),
-                                      const SizedBox(width: 2),
+                                      const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Icon(Icons.star, color: Colors.amber, size: 16),
+                                            Positioned(
+                                              top: 2,
+                                              child: Icon(Icons.location_on, color: Colors.redAccent, size: 9),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 3),
                                       Text(
                                         "$projCount",
-                                        style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                        style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
-                                ),
+                                )
+                              else ...[
+                                if (isNearby)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Icon(Icons.location_on, color: Colors.redAccent, size: 12),
+                                  ),
+                                if (isPipeline && projCount > 0)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star, color: Colors.amber, size: 11),
+                                        const SizedBox(width: 2),
+                                        Text(
+                                          "$projCount",
+                                          style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ],
                           ),
                         ],
