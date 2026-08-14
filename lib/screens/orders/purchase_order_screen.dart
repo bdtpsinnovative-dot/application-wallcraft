@@ -290,26 +290,28 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       results.addAll(pipelineResults);
     }
 
-    // 3. 🏢 ดึงบริษัททั้งหมดจาก API 
-    String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
-    if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
-       urlStr += '&type_id=$_selectedCustomerType';
-    }
-    final url = Uri.parse(urlStr);
-    try {
-      final response = await ApiService.get(url);
-      if (response.statusCode == 200) {
-        final apiCompanies = jsonDecode(response.body) as List<dynamic>;
-        
-        // กรองเอาบริษัทที่มีใน Pipeline ออกไปแล้ว จะได้ไม่ซ้ำ
-        final pipelineIds = results.map((c) => c['id']).toSet();
-        for (var ac in apiCompanies) {
-          if (!pipelineIds.contains(ac['id'])) {
-            results.add(ac);
+    // 3. 🏢 ดึงบริษัททั้งหมดจาก API (เฉพาะเมื่อมีการพิมพ์ค้นหา filter เท่านั้น)
+    if (filter.trim().isNotEmpty) {
+      String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
+      if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
+         urlStr += '&type_id=$_selectedCustomerType';
+      }
+      final url = Uri.parse(urlStr);
+      try {
+        final response = await ApiService.get(url);
+        if (response.statusCode == 200) {
+          final apiCompanies = jsonDecode(response.body) as List<dynamic>;
+          
+          // กรองเอาบริษัทที่มีใน Pipeline ออกไปแล้ว จะได้ไม่ซ้ำ
+          final pipelineIds = results.map((c) => c['id']).toSet();
+          for (var ac in apiCompanies) {
+            if (!pipelineIds.contains(ac['id'])) {
+              results.add(ac);
+            }
           }
         }
-      }
-    } catch (e) { debugPrint('Error: $e'); }
+      } catch (e) { debugPrint('Error: $e'); }
+    }
 
     return results; 
   }
