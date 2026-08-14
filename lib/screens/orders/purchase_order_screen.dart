@@ -54,25 +54,13 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   List<dynamic> _projects = [];
   bool _isLoading = true;
 
-  // 🌟 Static Cache for Dropdowns, Pipeline & Visit Plans (Instant 0ms Load!)
-  static String? _cachedUserId;
-  static Map<String, dynamic>? _cachedDropdownData;
-  static List<dynamic>? _cachedPipelineData;
-  static List<dynamic>? _cachedVisitPlanData;
-  static Position? _cachedLastPosition;
-  static Future<void>? _activeInitFuture;
+  // 🔄 Always fresh live data loader
+  Future<void>? _activeInitFuture;
 
-  // 🧹 ล้างแคชทั้งหมดเมื่อออกจากระบบหรือเปลี่ยนผู้ใช้
-  static void clearCache() {
-    _cachedUserId = null;
-    _cachedDropdownData = null;
-    _cachedPipelineData = null;
-    _cachedVisitPlanData = null;
-    _cachedLastPosition = null;
-    _activeInitFuture = null;
-  }
+  // 🧹 Compatibility helper (kept so callers don't fail)
+  static void clearCache() {}
 
-  // 🌟 State for Pipeline & Visit Plans
+  // 🌟 State for Pipeline & Visit Plans (Always Live!)
   List<dynamic> _pipelineData = [];
   List<dynamic> _visitPlanData = [];
   Position? _currentPosition; // 📍 เก็บพิกัดผู้ใช้
@@ -81,67 +69,39 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   @override
   void initState() {
     super.initState();
-    _checkUserAndLoadData();
-  }
-
-  Future<void> _checkUserAndLoadData() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final currentUserId = prefs.getString('user_id');
-
-      // 🔒 ถ้าตรวจพบว่ามีการสลับคนล็อกอิน (User ID ไม่ตรงกับแคชเดิม) ให้เคลียร์แคชเก่าทิ้งทันที!
-      if (_cachedUserId != null && _cachedUserId != currentUserId) {
-        clearCache();
-      }
-      _cachedUserId = currentUserId;
-    } catch (_) {}
-
-    // 1. โหลดข้อมูลจาก Static Cache ทันที (0ms ไม่ต้องรอโหลดใหม่)
-    if (_cachedDropdownData != null) {
-      _populateDropdownsFromCache(_cachedDropdownData!);
-    }
-    if (_cachedPipelineData != null) {
-      _pipelineData = List.from(_cachedPipelineData!);
-      _isDataReady = true;
-    }
-    if (_cachedVisitPlanData != null) {
-      _visitPlanData = List.from(_cachedVisitPlanData!);
-    }
-    if (_cachedLastPosition != null) {
-      _currentPosition = _cachedLastPosition;
-    }
-
-    // 2. ซิงค์ข้อมูลล่าสุดจากเซิร์ฟเวอร์แบบเบื้องหลัง
+    // 🚀 โหลดข้อมูลสดใหม่ทุกครั้งที่เปิดหน้า New Record
     _activeInitFuture = _initAllData();
   }
 
   Future<void> _initAllData() async {
-    await Future.wait([
-      _fetchInitialData(),
-      _fetchPipeline(),
-      _fetchVisitPlans(),
-      _fetchUserLocation(),
-    ]);
-    if (mounted) {
-      setState(() {
-        _isDataReady = true;
-        _isLoading = false;
-      });
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) setState(() => _startAnimation = true);
-      });
+    setState(() => _isLoading = true);
+    try {
+      await Future.wait([
+        _fetchDropdownData(),
+        _fetchPipeline(),
+        _fetchVisitPlans(),
+        _fetchUserLocation(),
+      ]);
+    } catch (e) {
+      debugPrint("Error initializing New Record data: $e");
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDataReady = true;
+          _isLoading = false;
+        });
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _startAnimation = true);
+        });
+      }
     }
   }
 
   Future<void> _fetchUserLocation() async {
     try {
-      // 1. ดึง Last Known Position ก่อนทันที
       Position? lastPos = await Geolocator.getLastKnownPosition();
-      if (lastPos != null) {
-        _cachedLastPosition = lastPos;
-        if (mounted && _currentPosition == null) {
-          setState(() => _currentPosition = lastPos);
-        }
+      if (lastPos != null && mounted && _currentPosition == null) {
+        setState(() => _currentPosition = lastPos);
       }
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
@@ -159,7 +119,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 3),
       );
-      _cachedLastPosition = position;
       if (mounted) {
         setState(() {
           _currentPosition = position;
@@ -176,7 +135,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list = (data['visit_plans'] ?? []) as List<dynamic>;
-        _cachedVisitPlanData = list;
         if (mounted) {
           setState(() {
             _visitPlanData = list;
@@ -194,7 +152,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final list = (data['pipeline'] ?? []) as List<dynamic>;
-        _cachedPipelineData = list;
         if (mounted) {
           setState(() {
             _pipelineData = list;
@@ -206,74 +163,52 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     }
   }
 
-  Future<void> _fetchInitialData() async {
-    if (_cachedDropdownData != null) {
-      _populateDropdownsFromCache(_cachedDropdownData!);
-      _fetchDropdownData(isSilent: true);
-    } else {
-      _fetchDropdownData();
-    }
-    
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) setState(() => _startAnimation = true);
-    });
-  }
-
-  void _populateDropdownsFromCache(Map<String, dynamic> data) {
-    if (!mounted) return;
-    final rawProjects = (data['projects'] ?? []) as List<dynamic>;
-    setState(() {
-      _customerTypes = data['customer_types'] ?? [];
-      _productCategories = data['product_categories'] ?? [];
-      _projects = rawProjects.where((p) {
-        final name = (p['project_name'] ?? '').toString().trim();
-        if (name.isEmpty || name == '-') return false;
-        final lower = name.toLowerCase();
-        if (lower.contains('ไม่ระบุโครงการ') ||
-            lower.contains('ไม่มีการระบุโครงการ') ||
-            lower.contains('ไม่ระบุชื่อโครงการ') ||
-            lower == 'ไม่ระบุ') {
-          return false;
-        }
-        return true;
-      }).toList();
-      _projectTypes = data['project_types'] ?? [];
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _fetchDropdownData({bool isSilent = false}) async {
-    if (!isSilent) setState(() => _isLoading = true);
+  Future<void> _fetchDropdownData() async {
     final url = Uri.parse('${AppConfig.baseUrl}/orders');
     try {
       final response = await ApiService.get(url);
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        _cachedDropdownData = data;
-        _populateDropdownsFromCache(data);
+        if (!mounted) return;
+        final rawProjects = (data['projects'] ?? []) as List<dynamic>;
+        setState(() {
+          _customerTypes = data['customer_types'] ?? [];
+          _productCategories = data['product_categories'] ?? [];
+          _projects = rawProjects.where((p) {
+            final name = (p['project_name'] ?? '').toString().trim();
+            if (name.isEmpty || name == '-') return false;
+            final lower = name.toLowerCase();
+            if (lower.contains('ไม่ระบุโครงการ') ||
+                lower.contains('ไม่มีการระบุโครงการ') ||
+                lower.contains('ไม่ระบุชื่อโครงการ') ||
+                lower == 'ไม่ระบุ') {
+              return false;
+            }
+            return true;
+          }).toList();
+          _projectTypes = data['project_types'] ?? [];
+        });
       }
     } catch (e) {
-      if (!isSilent) setState(() => _isLoading = false);
+      debugPrint("Error fetching dropdown data: $e");
     }
   }
+
   double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
     return Geolocator.distanceBetween(lat1, lon1, lat2, lon2); // returns meters
   }
 
   Future<List<dynamic>> _getCompanies(String filter) async {
-    // 🌟 ถ้าระบบกำลังโหลดครั้งแรกและยังไม่มีข้อมูลในแคช ให้รอตัว Future ให้พร้อมก่อนเปิดเมนู
-    if ((_pipelineData.isEmpty || _visitPlanData.isEmpty) && _activeInitFuture != null) {
+    // 🌟 ถ้าระบบกำลังโหลดอยู่ ให้รอจนกว่าจะโหลดสดใหม่จากเซิร์ฟเวอร์เสร็จ
+    if (_activeInitFuture != null && !_isDataReady) {
       try {
-        await _activeInitFuture!.timeout(const Duration(milliseconds: 1500));
+        await _activeInitFuture!.timeout(const Duration(seconds: 4));
       } catch (_) {}
     }
 
     List<dynamic> results = [];
     final lowerFilter = filter.toLowerCase();
 
-    if (_currentPosition == null && _cachedLastPosition != null) {
-      _currentPosition = _cachedLastPosition;
-    }
     if (_currentPosition == null) {
       try {
         _currentPosition = await Geolocator.getLastKnownPosition();
