@@ -188,6 +188,17 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     List<dynamic> results = [];
     final lowerFilter = filter.toLowerCase();
 
+    if (_currentPosition == null) {
+      try {
+        _currentPosition = await Geolocator.getLastKnownPosition();
+        if (_currentPosition == null) {
+          _currentPosition = await Geolocator.getCurrentPosition(
+            timeLimit: const Duration(seconds: 2),
+          );
+        }
+      } catch (_) {}
+    }
+
     // 1. 📅 กรอง Visit Plans มาก่อนสุด
     if (_visitPlanData.isNotEmpty) {
       for (var vp in _visitPlanData) {
