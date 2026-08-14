@@ -298,66 +298,37 @@ class CustomerInfoCard extends StatelessWidget {
                               if (isNearby)
                                 Container(
                                   margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: Colors.blueAccent.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.location_on, color: Colors.blueAccent, size: 10),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        "ใกล้ฉัน",
-                                        style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
+                                  child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 12),
                                 ),
                               if (isTeam)
                                 Container(
                                   margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: Colors.orangeAccent.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.people_rounded, color: Colors.orangeAccent, size: 10),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        "ในทีม",
-                                        style: TextStyle(color: Colors.orangeAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
+                                  child: const Icon(Icons.people_alt_rounded, color: Colors.orangeAccent, size: 12),
                                 ),
                               if (isGlobal)
                                 Container(
                                   margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: Colors.tealAccent.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.public_rounded, color: Colors.tealAccent, size: 10),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        "ยอดฮิต",
-                                        style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
+                                  child: const Icon(Icons.public, color: Colors.tealAccent, size: 12),
                                 ),
                               if (isVisitPlan)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  margin: const EdgeInsets.only(right: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: Colors.green.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
@@ -365,18 +336,18 @@ class CustomerInfoCard extends StatelessWidget {
                                   child: const Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      Icon(Icons.calendar_month, color: Colors.greenAccent, size: 10),
+                                      Icon(Icons.calendar_month, color: Colors.greenAccent, size: 11),
                                       SizedBox(width: 2),
                                       Text(
-                                        "แผนสัปดาห์นี้",
+                                        "แผน",
                                         style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
-                                )
-                              else if (isPipeline)
+                                ),
+                              if (isPipeline && projCount > 0)
                                 Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                   decoration: BoxDecoration(
                                     color: Colors.amber.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
@@ -384,7 +355,7 @@ class CustomerInfoCard extends StatelessWidget {
                                   child: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      const Icon(Icons.star, color: Colors.amber, size: 10),
+                                      const Icon(Icons.star, color: Colors.amber, size: 11),
                                       const SizedBox(width: 2),
                                       Text(
                                         "$projCount",
