@@ -637,20 +637,47 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                     ..._usersList.map((user) {
                       final uId = user['id']?.toString() ?? '';
                       final fullName = user['full_name'] ?? user['username'] ?? 'ไม่มีชื่อ';
+                      final avatarUrl = user['avatar_url'];
                       final isSelected = _selectedUserId == uId;
+                      
                       return ListTile(
-                        leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: isSelected ? kLimeGreen.withOpacity(0.2) : Colors.white10,
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            Icons.person_rounded,
-                            color: isSelected ? kLimeGreen : Colors.white70,
-                            size: 20,
-                          ),
-                        ),
+                        leading: avatarUrl != null && avatarUrl.toString().trim().isNotEmpty
+                            ? Container(
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected ? kLimeGreen : Colors.white24,
+                                    width: isSelected ? 2 : 1,
+                                  ),
+                                ),
+                                child: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: Colors.white10,
+                                  backgroundImage: NetworkImage(avatarUrl.toString()),
+                                  onBackgroundImageError: (_, __) {},
+                                ),
+                              )
+                            : Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: isSelected ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected ? kLimeGreen : Colors.transparent,
+                                    width: 1.5,
+                                  ),
+                                ),
+                                alignment: Alignment.center,
+                                child: Text(
+                                  fullName.isNotEmpty ? fullName.substring(0, 1).toUpperCase() : '?',
+                                  style: TextStyle(
+                                    color: isSelected ? kLimeGreen : Colors.white70,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ),
                         title: Text(
                           fullName,
                           style: TextStyle(
@@ -844,20 +871,51 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                           const SizedBox(width: 8),
                           GestureDetector(
                             onTap: _showUserFilterDialog,
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: _selectedUserId != 'all' ? kLimeGreen.withOpacity(0.2) : kCardDark,
-                                border: Border.all(
-                                  color: _selectedUserId != 'all' ? kLimeGreen : Colors.white24,
-                                ),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Icon(
-                                Icons.filter_list_rounded,
-                                color: _selectedUserId != 'all' ? kLimeGreen : Colors.white70,
-                                size: 18,
-                              ),
+                            child: Builder(
+                              builder: (context) {
+                                final selectedUser = _selectedUserId != 'all'
+                                    ? _usersList.firstWhere(
+                                        (u) => u['id']?.toString() == _selectedUserId,
+                                        orElse: () => null,
+                                      )
+                                    : null;
+                                final avatarUrl = selectedUser?['avatar_url'];
+
+                                if (selectedUser != null && avatarUrl != null && avatarUrl.toString().trim().isNotEmpty) {
+                                  return Container(
+                                    width: 36,
+                                    height: 36,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: kLimeGreen,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child: CircleAvatar(
+                                      backgroundColor: Colors.white10,
+                                      backgroundImage: NetworkImage(avatarUrl.toString()),
+                                      onBackgroundImageError: (_, __) {},
+                                    ),
+                                  );
+                                }
+
+                                return Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _selectedUserId != 'all' ? kLimeGreen.withOpacity(0.2) : kCardDark,
+                                    border: Border.all(
+                                      color: _selectedUserId != 'all' ? kLimeGreen : Colors.white24,
+                                    ),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Icon(
+                                    Icons.filter_list_rounded,
+                                    color: _selectedUserId != 'all' ? kLimeGreen : Colors.white70,
+                                    size: 18,
+                                  ),
+                                );
+                              },
                             ),
                           ),
                         ],
