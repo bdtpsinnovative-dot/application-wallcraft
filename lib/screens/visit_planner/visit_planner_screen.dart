@@ -253,6 +253,8 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
+  Future<void> _fetchVisitPlans({DateTime? targetWeek}) => refreshVisitPlans(targetWeek: targetWeek);
+
   Future<void> _fetchRepeatedVisits() async {
     setState(() => _isLoadingRepeated = true);
     try {
