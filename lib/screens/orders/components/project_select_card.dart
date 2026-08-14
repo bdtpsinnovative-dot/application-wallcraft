@@ -20,6 +20,20 @@ class ProjectSelectCard extends StatelessWidget {
     required this.onAddProject,
   });
 
+  IconData _getIconForProjectType(String? projectTypeName) {
+    if (projectTypeName == null || projectTypeName.isEmpty) return Icons.apartment_rounded;
+    final name = projectTypeName.toLowerCase();
+    if (name.contains('condominium') || name.contains('condo')) return Icons.apartment_rounded;
+    if (name.contains('shopping') || name.contains('mall')) return Icons.shopping_bag_rounded;
+    if (name.contains('hospital')) return Icons.local_hospital_rounded;
+    if (name.contains('private resident') || name.contains('house') || name.contains('home')) return Icons.home_rounded;
+    if (name.contains('office building') || name.contains('office')) return Icons.business_rounded;
+    if (name.contains('housing estate') || name.contains('housing')) return Icons.cottage_rounded;
+    if (name.contains('resort')) return Icons.holiday_village_rounded;
+    if (name.contains('hotel')) return Icons.hotel_rounded;
+    return Icons.domain_rounded;
+  }
+
   InputDecoration _inputDecoration(String hint, IconData? icon) {
     return InputDecoration(
       hintText: hint,
@@ -105,26 +119,31 @@ class ProjectSelectCard extends StatelessWidget {
                 ),
               ),
               menuProps: const MenuProps(backgroundColor: kCardDark, borderRadius: BorderRadius.all(Radius.circular(20))),
-              itemBuilder: (ctx, item, isDisabled, isSelected) => ListTile(
-                title: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        item['project_name'] ?? '',
-                        style: const TextStyle(color: Colors.white, fontSize: 13),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
+              itemBuilder: (ctx, item, isDisabled, isSelected) {
+                final ptName = item['project_type_name'] ?? item['project_types']?['name'];
+                final icon = _getIconForProjectType(ptName);
+                return ListTile(
+                  leading: Icon(icon, color: Colors.white70, size: 18),
+                  title: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          item['project_name'] ?? '',
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                    ),
-                    if (item['is_mine'] == true)
-                      const Padding(
-                        padding: EdgeInsets.only(left: 8.0),
-                        child: Icon(Icons.star, color: Colors.amber, size: 15),
-                      ),
-                  ],
-                ),
-                trailing: isSelected ? const Icon(Icons.check, color: kPrimaryColor, size: 18) : null,
-              ),
+                      if (item['is_mine'] == true)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 8.0),
+                          child: Icon(Icons.star, color: Colors.amber, size: 15),
+                        ),
+                    ],
+                  ),
+                  trailing: isSelected ? const Icon(Icons.check, color: kPrimaryColor, size: 18) : null,
+                );
+              },
               // 🌟 เพิ่ม Empty State กรณีพิมพ์หาแล้วไม่เจอ
               emptyBuilder: (context, searchEntry) => const Center(
                 child: Padding(
@@ -137,17 +156,22 @@ class ProjectSelectCard extends StatelessWidget {
               if (selectedItems.isEmpty) return const SizedBox.shrink();
               return Wrap(
                 spacing: 8, runSpacing: 8,
-                children: selectedItems.map((e) => Chip(
-                  label: Text(e['project_name'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: kCardDark)),
-                  backgroundColor: kPrimaryColor,
-                  padding: EdgeInsets.zero,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  onDeleted: () {
-                    final newList = List<dynamic>.from(selectedProjects)..remove(e);
-                    onProjectsChanged(newList);
-                  },
-                  deleteIcon: const Icon(Icons.cancel, size: 16, color: Colors.black54),
-                )).toList(),
+                children: selectedItems.map((e) {
+                  final ptName = e['project_type_name'] ?? e['project_types']?['name'];
+                  final icon = _getIconForProjectType(ptName);
+                  return Chip(
+                    avatar: Icon(icon, size: 14, color: kCardDark),
+                    label: Text(e['project_name'], style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: kCardDark)),
+                    backgroundColor: kPrimaryColor,
+                    padding: EdgeInsets.zero,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    onDeleted: () {
+                      final newList = List<dynamic>.from(selectedProjects)..remove(e);
+                      onProjectsChanged(newList);
+                    },
+                    deleteIcon: const Icon(Icons.cancel, size: 16, color: Colors.black54),
+                  );
+                }).toList(),
               );
             },
           ),

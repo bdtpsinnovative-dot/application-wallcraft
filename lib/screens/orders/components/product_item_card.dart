@@ -188,6 +188,20 @@ InputDecoration _inputDecoration(String label, IconData icon) {
     );
   }
 
+  IconData _getIconForProjectType(String? projectTypeName) {
+    if (projectTypeName == null || projectTypeName.isEmpty) return Icons.apartment_rounded;
+    final name = projectTypeName.toLowerCase();
+    if (name.contains('condominium') || name.contains('condo')) return Icons.apartment_rounded;
+    if (name.contains('shopping') || name.contains('mall')) return Icons.shopping_bag_rounded;
+    if (name.contains('hospital')) return Icons.local_hospital_rounded;
+    if (name.contains('private resident') || name.contains('house') || name.contains('home')) return Icons.home_rounded;
+    if (name.contains('office building') || name.contains('office')) return Icons.business_rounded;
+    if (name.contains('housing estate') || name.contains('housing')) return Icons.cottage_rounded;
+    if (name.contains('resort')) return Icons.holiday_village_rounded;
+    if (name.contains('hotel')) return Icons.hotel_rounded;
+    return Icons.domain_rounded;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -245,26 +259,42 @@ InputDecoration _inputDecoration(String label, IconData icon) {
         ),
         const SizedBox(height: 16),
 
-        // 🌟 3. เพิ่ม Dropdown ประเภทโครงการ (Project Type) ตรงนี้ครับ
+        // 🌟 3. เพิ่ม Dropdown ประเภทโครงการ (Project Type) พร้อมไอคอนจาก Pool Project
         if (widget.projectTypes.isNotEmpty) ...[
-                  DropdownButtonFormField<String>(
-                    value: widget.item.projectTypeId,
-                    autovalidateMode: AutovalidateMode.onUserInteraction,
-                    isExpanded: true,
-                    decoration: _inputDecoration("ประเภทโครงการ *", Icons.domain_rounded),
-                    dropdownColor: kCardDark,
-                    style: const TextStyle(color: Colors.white, fontSize: 13),
-                    items: widget.projectTypes.map((item) => DropdownMenuItem<String>(
-                      value: item['id'], 
-                      child: Text(item['name'] ?? '-', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)
-                    )).toList(),
-                    onChanged: (val) => setState(() => widget.item.projectTypeId = val),
-                    validator: (v) => v == null ? 'กรุณาระบุประเภทโครงการด้วยครับ' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  Divider(color: Colors.white.withOpacity(0.1)), // เส้นคั่นแบ่งโซนให้ดูเนียนตา
-                  const SizedBox(height: 16),
-                ],
+          DropdownButtonFormField<String>(
+            value: widget.item.projectTypeId,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
+            isExpanded: true,
+            decoration: _inputDecoration("ประเภทโครงการ *", Icons.domain_rounded),
+            dropdownColor: kCardDark,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            items: widget.projectTypes.map((item) {
+              final typeName = item['name'] ?? '-';
+              final icon = _getIconForProjectType(typeName);
+              return DropdownMenuItem<String>(
+                value: item['id']?.toString(), 
+                child: Row(
+                  children: [
+                    Icon(icon, size: 16, color: kPrimaryColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        typeName, 
+                        style: const TextStyle(fontSize: 13, color: Colors.white), 
+                        overflow: TextOverflow.ellipsis
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+            onChanged: (val) => setState(() => widget.item.projectTypeId = val),
+            validator: (v) => v == null ? 'กรุณาระบุประเภทโครงการด้วยครับ' : null,
+          ),
+          const SizedBox(height: 16),
+          Divider(color: Colors.white.withOpacity(0.1)),
+          const SizedBox(height: 16),
+        ],
 
         TextFormField(
           controller: widget.item.noteCtrl,
@@ -313,6 +343,8 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                   String pid = p['id'];
                   bool isChecked = widget.item.selectedProjectIds.contains(pid);
                   widget.item.projectAreaControllers.putIfAbsent(pid, () => TextEditingController());
+                  final ptName = p['project_type_name'] ?? p['project_types']?['name'];
+                  final icon = _getIconForProjectType(ptName);
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
@@ -344,7 +376,9 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                           },
                         )
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
+                      Icon(icon, size: 16, color: isChecked ? kPrimaryColor : Colors.white38),
+                      const SizedBox(width: 8),
                       Expanded(child: Text(
                         p['project_name'],
                         style: TextStyle(fontSize: 13, color: isChecked ? kPrimaryColor : Colors.grey, fontWeight: isChecked ? FontWeight.bold : FontWeight.normal),
