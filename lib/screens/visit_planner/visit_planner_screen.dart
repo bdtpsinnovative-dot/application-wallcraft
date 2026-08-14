@@ -553,6 +553,20 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     return "${start.day} ${thaiMonths[start.month - 1]} - ${end.day} ${thaiMonths[end.month - 1]}";
   }
 
+  String _formatPlanDate(dynamic dateValue) {
+    if (dateValue == null) return "";
+    final date = _parseDate(dateValue);
+    if (date == null) return "";
+    const thaiDays = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."];
+    const thaiMonths = [
+      "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
+      "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+    ];
+    final dayName = thaiDays[date.weekday - 1];
+    final monthName = thaiMonths[date.month - 1];
+    return "$dayName ${date.day} $monthName";
+  }
+
   bool _isCurrentWeek(DateTime start) {
     final now = DateTime.now();
     final day = now.weekday;
@@ -1022,37 +1036,44 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                                 TextOverflow.ellipsis,
                                                                           ),
                                                                         ],
-                                                                        if (plan['profiles'] != null) ...[
-                                                                          const SizedBox(height: 8),
-                                                                          const Divider(color: Colors.white12, height: 1),
-                                                                          const SizedBox(height: 8),
-                                                                          Row(
-                                                                            children: [
-                                                                              CircleAvatar(
-                                                                                radius: 10,
-                                                                                backgroundColor: Colors.white12,
-                                                                                backgroundImage: plan['profiles']['avatar_url'] != null
-                                                                                    ? NetworkImage(plan['profiles']['avatar_url'])
-                                                                                    : null,
-                                                                                child: plan['profiles']['avatar_url'] == null
-                                                                                    ? const Icon(Icons.person, size: 12, color: Colors.white54)
-                                                                                    : null,
-                                                                              ),
-                                                                              const SizedBox(width: 6),
-                                                                              Expanded(
-                                                                                child: Text(
-                                                                                  plan['profiles']['full_name'] ?? 'Unknown User',
+                                                                        const SizedBox(height: 8),
+                                                                        const Divider(color: Colors.white12, height: 1),
+                                                                        const SizedBox(height: 8),
+                                                                        Row(
+                                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                          children: [
+                                                                            Row(
+                                                                              children: [
+                                                                                const Icon(
+                                                                                  Icons.calendar_today_rounded,
+                                                                                  size: 12,
+                                                                                  color: kLimeGreen,
+                                                                                ),
+                                                                                const SizedBox(width: 5),
+                                                                                Text(
+                                                                                  _formatPlanDate(plan['planned_date']),
                                                                                   style: const TextStyle(
-                                                                                    color: Colors.white54,
+                                                                                    color: kLimeGreen,
                                                                                     fontSize: 11,
+                                                                                    fontWeight: FontWeight.w600,
+                                                                                  ),
+                                                                                ),
+                                                                              ],
+                                                                            ),
+                                                                            if (plan['profiles'] != null && plan['profiles']['full_name'] != null)
+                                                                              Flexible(
+                                                                                child: Text(
+                                                                                  plan['profiles']['full_name'],
+                                                                                  style: const TextStyle(
+                                                                                    color: Colors.white38,
+                                                                                    fontSize: 10,
                                                                                   ),
                                                                                   maxLines: 1,
                                                                                   overflow: TextOverflow.ellipsis,
                                                                                 ),
                                                                               ),
-                                                                            ],
-                                                                          ),
-                                                                        ],
+                                                                          ],
+                                                                        ),
                                                                       ],
                                                                     ),
                                                                   ),
