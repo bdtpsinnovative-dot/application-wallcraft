@@ -76,11 +76,12 @@ class ApiService {
     _categoriesCache = null;
   }
 
-  static Future<http.Response> getPipeline() async {
-    if (_pipelineCache != null) return _pipelineCache!;
-    final url = Uri.parse('${AppConfig.baseUrl}/profile/pipeline');
+  static Future<http.Response> getPipeline({String? userId}) async {
+    if (userId == null && _pipelineCache != null) return _pipelineCache!;
+    final query = (userId != null && userId.isNotEmpty) ? '?user_id=$userId' : '';
+    final url = Uri.parse('${AppConfig.baseUrl}/profile/pipeline$query');
     final res = await get(url);
-    if (res.statusCode == 200) _pipelineCache = res;
+    if (userId == null && res.statusCode == 200) _pipelineCache = res;
     return res;
   }
 

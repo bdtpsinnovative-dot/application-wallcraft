@@ -34,6 +34,7 @@ class AddVisitModal extends StatefulWidget {
 
 class _AddVisitModalState extends State<AddVisitModal> {
   bool _isLoading = true;
+  bool _isLoadingPipeline = false;
   bool _isReadOnly = false;
   
   List<dynamic> _pipelineData = [];
@@ -160,8 +161,30 @@ class _AddVisitModalState extends State<AddVisitModal> {
     }
   }
 
+  Future<void> _fetchPipelineForUser(String? userId) async {
+    setState(() => _isLoadingPipeline = true);
+    try {
+      final res = await ApiService.getPipeline(userId: userId);
+      if (res.statusCode == 200) {
+        var decoded = jsonDecode(res.body);
+        _pipelineData = decoded is List ? decoded : (decoded['pipeline'] ?? []);
+      }
+    } catch (e) {
+      debugPrint("Error fetching pipeline for user: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingPipeline = false);
+      }
+    }
+  }
+
   // Helper to merge pipeline and search companies for DropdownSearch
   Future<List<dynamic>> _getCompanyOptions(String filter) async {
+    // 🌟 ถ้าระบบกำลังโหลด Pipeline ของเซลส์คนใหม่อยู่ ให้รอก่อนเปิดรายการ
+    while (_isLoadingPipeline) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
     final lowerFilter = filter.toLowerCase();
     
     // Convert Pipeline to uniform company object with an indicator flag
@@ -171,28 +194,25 @@ class _AddVisitModalState extends State<AddVisitModal> {
     for (var p in _pipelineData) {
       if (p['company'] == null) continue;
       
-      // Only consider it a pipeline company if the current user has visited it
-      bool hasMine = false;
+      bool isMine = p['is_mine'] == true;
       int myProjectCount = 0;
       
-      if (widget.isAdmin && _selectedAssignToUserId != null) {
-        final List<dynamic> userIds = p['user_ids'] ?? [];
-        if (userIds.contains(_selectedAssignToUserId)) {
-          hasMine = true;
-          myProjectCount = (p['projects'] as List).length;
-        }
-      } else {
-        if (p['projects'] != null) {
-          for (var proj in p['projects']) {
-            if (proj['is_mine'] == true) {
-              hasMine = true;
-              myProjectCount++;
-            }
+      if (p['projects'] != null) {
+        for (var proj in p['projects']) {
+          final pName = (proj['project_name'] ?? '').toString().trim();
+          if (pName.isEmpty || pName == '-' || 
+              pName.contains('ไม่ระบุโครงการ') || 
+              pName.contains('ไม่มีการระบุโครงการ')) {
+            continue;
+          }
+          if (proj['is_mine'] == true) {
+            isMine = true;
+            myProjectCount++;
           }
         }
       }
       
-      if (!hasMine) continue;
+      if (!isMine) continue;
 
       final cId = p['company']['id'].toString();
       pipelineIds.add(cId);
@@ -230,7 +250,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
       debugPrint("Error fetching companies search: $e");
     }
 
-    // Include the initial company if not present (to ensure the dropdown can show the selected item properly on load if no search yet)
+    // Include the initial company if not present
     if (_selectedCompany != null) {
       final scId = _selectedCompany!['id'].toString();
       if (!options.any((o) => o['id'].toString() == scId)) {
@@ -461,6 +481,8 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                   _selectedCompany = null;
                                   _selectedProject = null;
                                 });
+                                // 🚀 ดึง Pipeline บริษัทและโครงการของเซลส์คนนั้นมาเตรียมไว้ทันที
+                                _fetchPipelineForUser(v);
                               },
                             ),
                             const SizedBox(height: 16),
@@ -503,6 +525,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                         ),
                         itemBuilder: (context, item, isSelected, isFocused) {
                           bool isPipe = item['isPipeline'] == true;
+                          int projCount = (item['projectCount'] as int?) ?? 0;
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
@@ -510,19 +533,32 @@ class _AddVisitModalState extends State<AddVisitModal> {
                               color: isSelected ? kLimeGreen.withOpacity(0.1) : Colors.transparent,
                             ),
                             child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
+                                if (isPipe) ...[
+                                  const Icon(Icons.star_rounded, color: Colors.amber, size: 16),
+                                  const SizedBox(width: 6),
+                                ],
                                 Expanded(
                                   child: Text(
                                     item['name'] ?? '', 
-                                    style: TextStyle(color: isSelected ? kLimeGreen : Colors.white, fontWeight: isPipe ? FontWeight.bold : FontWeight.normal),
+                                    style: TextStyle(
+                                      color: isSelected ? kLimeGreen : (isPipe ? Colors.amber[100] : Colors.white), 
+                                      fontWeight: isPipe ? FontWeight.bold : FontWeight.normal,
+                                      fontSize: 13,
+                                    ),
                                   ),
                                 ),
-                                if (isPipe)
+                                if (isPipe && projCount > 0)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(color: Colors.amber.withOpacity(0.2)),
-                                    child: Text(widget.isAdmin ? "All Pipeline" : "My Pipeline", style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold)),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      "⭐ $projCount", 
+                                      style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                    ),
                                   ),
                               ],
                             ),
