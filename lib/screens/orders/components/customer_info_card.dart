@@ -270,16 +270,34 @@ class CustomerInfoCard extends StatelessWidget {
                     bool isGlobal = item['is_global'] == true;
                     
                     int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
+
+                    // 🌟 ไอคอนนำหน้าบอกประเภทบริษัททันที (ของเรา / ของทีม / ส่วนกลาง / แผนงาน)
+                    IconData leadingIcon = Icons.business_rounded;
+                    Color leadingColor = Colors.white54;
+                    if (isVisitPlan) {
+                      leadingIcon = Icons.calendar_month_rounded;
+                      leadingColor = Colors.greenAccent;
+                    } else if (isTeam) {
+                      leadingIcon = Icons.people_alt_rounded;
+                      leadingColor = Colors.orangeAccent;
+                    } else if (isGlobal) {
+                      leadingIcon = Icons.public_rounded;
+                      leadingColor = Colors.tealAccent;
+                    } else if (isPipeline) {
+                      leadingIcon = Icons.business_rounded;
+                      leadingColor = Colors.amber;
+                    }
                     
                     return Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                       decoration: BoxDecoration(
                         border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
-                        color: isVisitPlan ? Colors.green.withOpacity(0.1) : (isPipeline ? Colors.indigo.withOpacity(0.1) : Colors.transparent),
+                        color: isVisitPlan ? Colors.green.withOpacity(0.1) : (isPipeline ? Colors.indigo.withOpacity(0.08) : Colors.transparent),
                       ),
                       child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
+                          Icon(leadingIcon, color: leadingColor, size: 16),
+                          const SizedBox(width: 8),
                           Expanded(
                             child: Text(
                               item['name'] ?? '',
@@ -287,7 +305,8 @@ class CustomerInfoCard extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: isSelected ? kLimeGreen : Colors.white,
-                                  fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
+                                fontSize: 13,
                               ),
                             ),
                           ),
@@ -304,46 +323,6 @@ class CustomerInfoCard extends StatelessWidget {
                                     borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 12),
-                                ),
-                              if (isTeam)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.orangeAccent.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Icon(Icons.people_alt_rounded, color: Colors.orangeAccent, size: 12),
-                                ),
-                              if (isGlobal)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.tealAccent.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Icon(Icons.public, color: Colors.tealAccent, size: 12),
-                                ),
-                              if (isVisitPlan)
-                                Container(
-                                  margin: const EdgeInsets.only(right: 4),
-                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: const Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(Icons.calendar_month, color: Colors.greenAccent, size: 11),
-                                      SizedBox(width: 2),
-                                      Text(
-                                        "แผน",
-                                        style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                                      ),
-                                    ],
-                                  ),
                                 ),
                               if (isPipeline && projCount > 0)
                                 Container(
