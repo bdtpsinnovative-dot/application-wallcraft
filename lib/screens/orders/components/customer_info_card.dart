@@ -221,134 +221,147 @@ class CustomerInfoCard extends StatelessWidget {
           ),
           const SizedBox(height: 20),
           
-          Row(
+          Stack(
+            alignment: Alignment.centerRight,
             children: [
-              Expanded(
-                child: DropdownSearch<dynamic>(
-                  key: companyDropdownKey,
-                  items: (filter, loadProps) => getCompanies(filter), 
-                  itemAsString: (item) => item['name'] ?? '',
-                  selectedItem: selectedCompany,
-                  onChanged: (val) => onCompanyChanged(val),
-                  compareFn: (i1, i2) => i1?['id'] == i2?['id'],
-                  decoratorProps: DropDownDecoratorProps(decoration: _inputDecoration("ค้นหาชื่อบริษัท...", Icons.business_rounded)),
-                  popupProps: PopupProps.menu(
-                    showSearchBox: true, // 🌟 ช่องค้นหาสำหรับบริษัทจำนวนมาก
-                    constraints: BoxConstraints(
-                      minWidth: MediaQuery.of(context).size.width - 60,
-                      maxWidth: MediaQuery.of(context).size.width - 60,
-                      maxHeight: 350,
-                    ),
-                    menuProps: const MenuProps(
-                      backgroundColor: kCardDark, 
-                      borderRadius: BorderRadius.all(Radius.circular(20)),
-                    ),
-                    searchFieldProps: TextFieldProps(
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration("พิมพ์ชื่อบริษัทเพื่อค้นหา...", Icons.search),
-                    ),
-                    itemBuilder: (context, item, isSelected, isFocused) {
-                      if (item == null) return const SizedBox();
-                      
-                      bool isVisitPlan = item['is_visit_plan'] == true;
-                      bool isPipeline = item['is_pipeline'] == true;
-                      bool isNearby = item['is_nearby'] == true;
-                      
-                      int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
-                      
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        decoration: BoxDecoration(
-                          border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
-                          color: isVisitPlan ? Colors.green.withOpacity(0.1) : (isPipeline ? Colors.indigo.withOpacity(0.1) : Colors.transparent),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item['name'] ?? '',
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: isSelected ? kLimeGreen : Colors.white,
-                                  fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (isNearby)
-                                  Container(
-                                    margin: const EdgeInsets.only(right: 4),
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.blueAccent.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.location_on, color: Colors.blueAccent, size: 10),
-                                        SizedBox(width: 2),
-                                        Text(
-                                          "ใกล้ฉัน",
-                                          style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                if (isVisitPlan)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.green.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: const Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.calendar_month, color: Colors.greenAccent, size: 10),
-                                        SizedBox(width: 2),
-                                        Text(
-                                          "แผนสัปดาห์นี้",
-                                          style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                  )
-                                else if (isPipeline)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.amber.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.star, color: Colors.amber, size: 10),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          "$projCount",
-                                          style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+              DropdownSearch<dynamic>(
+                key: companyDropdownKey,
+                items: (filter, loadProps) => getCompanies(filter), 
+                itemAsString: (item) => item['name'] ?? '',
+                selectedItem: selectedCompany,
+                onChanged: (val) => onCompanyChanged(val),
+                compareFn: (i1, i2) => i1?['id'] == i2?['id'],
+                suffixProps: const DropdownSuffixProps(
+                  dropdownButtonProps: DropdownButtonProps(
+                    padding: EdgeInsets.only(right: 68),
+                  ),
+                  clearButtonProps: ClearButtonProps(
+                    padding: EdgeInsets.only(right: 68),
                   ),
                 ),
+                decoratorProps: DropDownDecoratorProps(
+                  decoration: _inputDecoration("ค้นหาชื่อบริษัท...", Icons.business_rounded).copyWith(
+                    contentPadding: const EdgeInsets.only(left: 12, right: 110, top: 16, bottom: 16),
+                  ),
+                ),
+                popupProps: PopupProps.menu(
+                  showSearchBox: true, // 🌟 ช่องค้นหาสำหรับบริษัทจำนวนมาก
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width - 60,
+                    maxWidth: MediaQuery.of(context).size.width - 60,
+                    maxHeight: 350,
+                  ),
+                  menuProps: const MenuProps(
+                    backgroundColor: kCardDark, 
+                    borderRadius: BorderRadius.all(Radius.circular(20)),
+                  ),
+                  searchFieldProps: TextFieldProps(
+                    style: const TextStyle(color: Colors.white),
+                    decoration: _inputDecoration("พิมพ์ชื่อบริษัทเพื่อค้นหา...", Icons.search),
+                  ),
+                  itemBuilder: (context, item, isSelected, isFocused) {
+                    if (item == null) return const SizedBox();
+                    
+                    bool isVisitPlan = item['is_visit_plan'] == true;
+                    bool isPipeline = item['is_pipeline'] == true;
+                    bool isNearby = item['is_nearby'] == true;
+                    
+                    int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
+                    
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
+                        color: isVisitPlan ? Colors.green.withOpacity(0.1) : (isPipeline ? Colors.indigo.withOpacity(0.1) : Colors.transparent),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item['name'] ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: isSelected ? kLimeGreen : Colors.white,
+                                  fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isNearby)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.blueAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.location_on, color: Colors.blueAccent, size: 10),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        "ใกล้ฉัน",
+                                        style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (isVisitPlan)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.calendar_month, color: Colors.greenAccent, size: 10),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        "แผนสัปดาห์นี้",
+                                        style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else if (isPipeline)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.amber.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      const Icon(Icons.star, color: Colors.amber, size: 10),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        "$projCount",
+                                        style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               ),
-              const SizedBox(width: 12),
-              _buildAddBtn(onAddCompany),
+              Positioned(
+                right: 0,
+                child: _buildAddBtn(onAddCompany),
+              ),
             ],
           ),
           const SizedBox(height: 16),
