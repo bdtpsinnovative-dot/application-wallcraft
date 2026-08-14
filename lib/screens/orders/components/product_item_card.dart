@@ -154,8 +154,8 @@ class _ProductItemCardState extends State<ProductItemCard> {
 InputDecoration _inputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.grey),
-      prefixIcon: Icon(icon, size: 22, color: kPrimaryColor),
+      labelStyle: const TextStyle(color: Colors.grey, fontSize: 13),
+      prefixIcon: Icon(icon, size: 20, color: kPrimaryColor),
       filled: true, 
       fillColor: kInputBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -166,7 +166,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
       // 👇 3 บรรทัดที่เพิ่มเข้ามาเพื่อให้ขอบแดงทำงานได้สมบูรณ์
       errorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent, width: 1.5)),
       focusedErrorBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: const BorderSide(color: Colors.redAccent, width: 2.0)),
-      errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 13, fontWeight: FontWeight.bold),
+      errorStyle: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.bold),
     );
   }
   Widget _buildPickIcon(IconData icon, String label, VoidCallback onTap) {
@@ -180,10 +180,10 @@ InputDecoration _inputDecoration(String label, IconData icon) {
             shape: BoxShape.circle,
             border: Border.all(color: kPrimaryColor),
           ),
-          child: Icon(icon, color: kPrimaryColor, size: 30),
+          child: Icon(icon, color: kPrimaryColor, size: 26),
         ),
         const SizedBox(height: 8),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white))
+        Text(label, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white))
       ]),
     );
   }
@@ -199,11 +199,11 @@ InputDecoration _inputDecoration(String label, IconData icon) {
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text("สินค้าที่ #${widget.index + 1}", style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryColor, fontSize: 18)),
+          Text("สินค้าที่ #${widget.index + 1}", style: const TextStyle(fontWeight: FontWeight.bold, color: kPrimaryColor, fontSize: 16)),
           if (widget.index > 0) 
             IconButton(
               onPressed: widget.onDelete, 
-              icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 28)
+              icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 24)
             )
         ]),
         const SizedBox(height: 16),
@@ -214,10 +214,10 @@ InputDecoration _inputDecoration(String label, IconData icon) {
           isExpanded: true,
           decoration: _inputDecoration("หมวดหมู่สินค้า *", Icons.shopping_bag_outlined),
           dropdownColor: kCardDark,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
           items: widget.productCategories.map((item) => DropdownMenuItem<String>(
             value: item['id'], 
-            child: Text(item['name'] ?? '-', overflow: TextOverflow.ellipsis)
+            child: Text(item['name'] ?? '-', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)
           )).toList(),
           onChanged: (val) => setState(() => widget.item.categoryId = val),
           validator: (v) => v == null ? 'กรุณาระบุหมวดหมู่สินค้าด้วยครับ' : null,
@@ -229,7 +229,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
           isExpanded: true,
           decoration: _inputDecoration("ระดับความชอบ", Icons.star_border_rounded),
           dropdownColor: kCardDark,
-          style: const TextStyle(color: Colors.white, fontSize: 16),
+          style: const TextStyle(color: Colors.white, fontSize: 13),
           items: [
             "สนใจมาก (มีโครงการที่อยากใช้)",
             "สนใจมาก (แต่ยังไม่มีโครงการ)",
@@ -239,7 +239,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
             "สนใจน้อย (โครงการที่ทำมีงบจำกัด)",
           ].map((level) => DropdownMenuItem<String>(
             value: level,
-            child: Text(level, style: const TextStyle(fontSize: 16), overflow: TextOverflow.ellipsis),
+            child: Text(level, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
           )).toList(),
           onChanged: (val) => setState(() => widget.item.interestLevel = val),
         ),
@@ -253,10 +253,10 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                     isExpanded: true,
                     decoration: _inputDecoration("ประเภทโครงการ *", Icons.domain_rounded),
                     dropdownColor: kCardDark,
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                     items: widget.projectTypes.map((item) => DropdownMenuItem<String>(
                       value: item['id'], 
-                      child: Text(item['name'] ?? '-', overflow: TextOverflow.ellipsis)
+                      child: Text(item['name'] ?? '-', style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)
                     )).toList(),
                     onChanged: (val) => setState(() => widget.item.projectTypeId = val),
                     validator: (v) => v == null ? 'กรุณาระบุประเภทโครงการด้วยครับ' : null,
@@ -271,16 +271,16 @@ InputDecoration _inputDecoration(String label, IconData icon) {
           minLines: 3,
           maxLines: 5,
           keyboardType: TextInputType.multiline,
-          style: const TextStyle(fontSize: 16, height: 1.4, color: Colors.white),
+          style: const TextStyle(fontSize: 13, height: 1.4, color: Colors.white),
           decoration: InputDecoration(
             labelText: "โน๊ต",
-            labelStyle: const TextStyle(color: Colors.grey),
+            labelStyle: const TextStyle(color: Colors.grey, fontSize: 13),
             hintText: "พิมพ์รายละเอียดเพิ่มเติม...",
-            hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+            hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 13),
             alignLabelWithHint: true,
             prefixIcon: const Padding(
               padding: EdgeInsets.only(bottom: 45), 
-              child: Icon(Icons.edit_note_rounded, size: 24, color: kPrimaryColor),
+              child: Icon(Icons.edit_note_rounded, size: 20, color: kPrimaryColor),
             ),
             filled: true,
             fillColor: kInputBg,
@@ -304,8 +304,8 @@ InputDecoration _inputDecoration(String label, IconData icon) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: const [
-                  Text("การใช้งานในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white)),
-                  Text("จำนวน / ตร.ม.", style: TextStyle(fontSize: 13, color: Colors.grey)),
+                  Text("การใช้งานในโครงการ", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white)),
+                  Text("จำนวน / ตร.ม.", style: TextStyle(fontSize: 12, color: Colors.grey)),
                 ]),
                 const SizedBox(height: 16),
 
@@ -347,7 +347,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                       const SizedBox(width: 12),
                       Expanded(child: Text(
                         p['project_name'],
-                        style: TextStyle(fontSize: 15, color: isChecked ? kPrimaryColor : Colors.grey, fontWeight: isChecked ? FontWeight.bold : FontWeight.normal),
+                        style: TextStyle(fontSize: 13, color: isChecked ? kPrimaryColor : Colors.grey, fontWeight: isChecked ? FontWeight.bold : FontWeight.normal),
                       )),
                       const SizedBox(width: 10),
                       SizedBox(
@@ -357,10 +357,10 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                           enabled: isChecked,
                           keyboardType: TextInputType.number,
                           textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.white, fontSize: 16),
+                          style: const TextStyle(color: Colors.white, fontSize: 13),
                           decoration: InputDecoration(
                             hintText: "0", 
-                            hintStyle: TextStyle(color: Colors.grey.shade700),
+                            hintStyle: TextStyle(color: Colors.grey.shade700, fontSize: 13),
                             contentPadding: const EdgeInsets.symmetric(vertical: 8),
                             filled: true, 
                             fillColor: isChecked ? kInputBg : Colors.transparent,

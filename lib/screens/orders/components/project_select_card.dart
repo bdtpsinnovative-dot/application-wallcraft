@@ -23,8 +23,8 @@ class ProjectSelectCard extends StatelessWidget {
   InputDecoration _inputDecoration(String hint, IconData? icon) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(fontSize: 15, color: Colors.grey[600]),
-      prefixIcon: icon != null ? Icon(icon, size: 22, color: kPrimaryColor) : null,
+      hintStyle: TextStyle(fontSize: 13, color: Colors.grey[600]),
+      prefixIcon: icon != null ? Icon(icon, size: 20, color: kPrimaryColor) : null,
       filled: true,
       fillColor: kDarkBg,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
@@ -53,10 +53,10 @@ class ProjectSelectCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.map_rounded, color: kPrimaryColor, size: 22),
+                child: const Icon(Icons.map_rounded, color: kPrimaryColor, size: 20),
               ),
               const SizedBox(width: 12),
-              const Expanded(child: Text("โครงการ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white))),
+              const Expanded(child: Text("โครงการ", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
               
               // ปุ่มกดเพิ่มโปรเจกต์ (+)
               Material(
@@ -71,7 +71,7 @@ class ProjectSelectCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: kPrimaryColor.withOpacity(0.3)),
                     ),
-                    child: const Icon(Icons.add_rounded, color: kPrimaryColor, size: 22),
+                    child: const Icon(Icons.add_rounded, color: kPrimaryColor, size: 20),
                   ),
                 ),
               )
@@ -85,16 +85,19 @@ class ProjectSelectCard extends StatelessWidget {
             itemAsString: (item) => item['project_name'],
             onChanged: (val) => onProjectsChanged(val),
             compareFn: (i, s) => i['id'] == s['id'],
-            decoratorProps: DropDownDecoratorProps(decoration: _inputDecoration("เลือก โครงการ...", null)),
+            decoratorProps: DropDownDecoratorProps(
+              baseStyle: const TextStyle(color: Colors.white, fontSize: 13),
+              decoration: _inputDecoration("เลือก โครงการ...", null),
+            ),
             popupProps: PopupPropsMultiSelection.menu(
               // 🚀 เปิดช่องค้นหาตรงนี้เลยครับ!
               showSearchBox: true,
               searchFieldProps: TextFieldProps(
-                style: const TextStyle(color: Colors.white),
+                style: const TextStyle(color: Colors.white, fontSize: 13),
                 decoration: InputDecoration(
                   hintText: "พิมพ์ชื่อเพื่อค้นหา...",
-                  hintStyle: TextStyle(color: Colors.grey[600]),
-                  prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                  hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
+                  prefixIcon: const Icon(Icons.search, color: Colors.white54, size: 20),
                   filled: true,
                   fillColor: kDarkBg, // ใช้สีดำกลืนไปกับ UI
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -108,7 +111,7 @@ class ProjectSelectCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         item['project_name'] ?? '',
-                        style: const TextStyle(color: Colors.white),
+                        style: const TextStyle(color: Colors.white, fontSize: 13),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -116,17 +119,17 @@ class ProjectSelectCard extends StatelessWidget {
                     if (item['is_mine'] == true)
                       const Padding(
                         padding: EdgeInsets.only(left: 8.0),
-                        child: Icon(Icons.star, color: Colors.amber, size: 16),
+                        child: Icon(Icons.star, color: Colors.amber, size: 15),
                       ),
                   ],
                 ),
-                trailing: isSelected ? const Icon(Icons.check, color: kPrimaryColor) : null,
+                trailing: isSelected ? const Icon(Icons.check, color: kPrimaryColor, size: 18) : null,
               ),
               // 🌟 เพิ่ม Empty State กรณีพิมพ์หาแล้วไม่เจอ
               emptyBuilder: (context, searchEntry) => const Center(
                 child: Padding(
                   padding: EdgeInsets.all(20),
-                  child: Text("ไม่พบโครงการ (กด + ด้านบนเพื่อสร้างใหม่)", style: TextStyle(color: Colors.white54)),
+                  child: Text("ไม่พบโครงการ (กด + ด้านบนเพื่อสร้างใหม่)", style: TextStyle(color: Colors.white54, fontSize: 13)),
                 ),
               ),
             ),

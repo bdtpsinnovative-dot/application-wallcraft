@@ -214,9 +214,9 @@ class CustomerInfoCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.person_pin_rounded, color: kPrimaryColor, size: 22)),
+              Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.person_pin_rounded, color: kPrimaryColor, size: 20)),
               const SizedBox(width: 12),
-              const Expanded(child: Text("ข้อมูลการติดต่อ", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white))),
+              const Expanded(child: Text("ข้อมูลการติดต่อ", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
             ],
           ),
           const SizedBox(height: 20),
@@ -240,6 +240,7 @@ class CustomerInfoCard extends StatelessWidget {
                   ),
                 ),
                 decoratorProps: DropDownDecoratorProps(
+                  baseStyle: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: _inputDecoration("ค้นหาชื่อบริษัท...", Icons.business_rounded).copyWith(
                     contentPadding: const EdgeInsets.only(left: 12, right: 110, top: 16, bottom: 16),
                   ),
@@ -257,7 +258,7 @@ class CustomerInfoCard extends StatelessWidget {
                     borderRadius: BorderRadius.all(Radius.circular(20)),
                   ),
                   searchFieldProps: TextFieldProps(
-                    style: const TextStyle(color: Colors.white),
+                    style: const TextStyle(color: Colors.white, fontSize: 13),
                     decoration: _inputDecoration("พิมพ์ชื่อบริษัทเพื่อค้นหา...", Icons.search),
                   ),
                   itemBuilder: (context, item, isSelected, isFocused) {
@@ -402,13 +403,13 @@ class CustomerInfoCard extends StatelessWidget {
                 child: DropdownButtonFormField<String>(
                   value: customerTypes.any((item) => item['id'].toString() == selectedCustomerType) ? selectedCustomerType : null,
                   isExpanded: true,
-                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kPrimaryColor, size: 28),
+                  icon: const Icon(Icons.keyboard_arrow_down_rounded, color: kPrimaryColor, size: 24),
                   decoration: _inputDecoration("ประเภทลูกค้า (ระบุหรือไม่ก็ได้)", Icons.category_rounded),
                   dropdownColor: kCardDark,
-                  style: const TextStyle(color: Colors.white, fontSize: 16),
+                  style: const TextStyle(color: Colors.white, fontSize: 13),
                   items: customerTypes.map((item) => DropdownMenuItem<String>(
                     value: item['id'].toString(), 
-                    child: Text(item['name'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w500)),
+                    child: Text(item['name'] ?? '-', style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
                   )).toList(),
                   onChanged: onCustomerTypeChanged,
                 ),
@@ -418,9 +419,9 @@ class CustomerInfoCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          TextFormField(controller: nameCtrl, style: const TextStyle(color: Colors.white), decoration: _inputDecoration("ชื่อลูกค้า", Icons.badge_rounded)),
+          TextFormField(controller: nameCtrl, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDecoration("ชื่อลูกค้า", Icons.badge_rounded)),
           const SizedBox(height: 16),
-          TextFormField(controller: contactCtrl, style: const TextStyle(color: Colors.white), decoration: _inputDecoration("เบอร์โทรศัพท์", Icons.phone_iphone_rounded)),
+          TextFormField(controller: contactCtrl, style: const TextStyle(color: Colors.white, fontSize: 13), decoration: _inputDecoration("เบอร์โทรศัพท์", Icons.phone_iphone_rounded)),
         ],
       ),
     );
@@ -438,8 +439,8 @@ class CustomerInfoCard extends StatelessWidget {
 // 🎨 Helper Decoration
 InputDecoration _inputDecoration(String hint, IconData icon) {
   return InputDecoration(
-    hintText: hint, hintStyle: TextStyle(fontSize: 15, color: Colors.grey[600]),
-    prefixIcon: Icon(icon, size: 22, color: kPrimaryColor),
+    hintText: hint, hintStyle: TextStyle(fontSize: 13, color: Colors.grey[600]),
+    prefixIcon: Icon(icon, size: 20, color: kPrimaryColor),
     filled: true, fillColor: kDarkBg,
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),

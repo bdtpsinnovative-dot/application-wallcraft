@@ -877,7 +877,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         borderRadius: BorderRadius.circular(16),
         child: Container(
           width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
             border: Border.all(color: kPrimaryColor.withOpacity(0.5), width: 1.5),
             borderRadius: BorderRadius.circular(16),
@@ -886,9 +886,9 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           child: const Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.add_circle_rounded, color: kPrimaryColor),
+              Icon(Icons.add_circle_rounded, color: kPrimaryColor, size: 20),
               SizedBox(width: 8),
-              Text("เพิ่มรายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: kPrimaryColor)),
+              Text("เพิ่มรายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: kPrimaryColor)),
             ],
           ),
         ),
@@ -902,18 +902,18 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       child: ElevatedButton(
         onPressed: _isLoading ? null : _submitOrder,
         style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 18),
+          padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           backgroundColor: _isLoading ? Colors.white30 : kPrimaryColor, 
         ),
         child: Center(
           child: _isLoading
               ? const SizedBox(
-                  width: 24,
-                  height: 24,
+                  width: 22,
+                  height: 22,
                   child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                 )
-              : const Text("บันทึก", style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
+              : const Text("บันทึก", style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold)),
         ),
       ),
     );
@@ -921,19 +921,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
 
   Widget _buildHeader(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(20, 60, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
       color: kDarkBg.withOpacity(0.95), 
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20)),
+            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18)),
           ),
-          const Text("New Record", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.white)),
+          const Text("New Record", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
           GestureDetector(
             onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrderHistoryScreen())),
-            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.history_rounded, color: Colors.white, size: 24)),
+            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.history_rounded, color: Colors.white, size: 22)),
           ),
         ],
       ),
@@ -960,9 +960,9 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: kPrimaryColor, size: 22)),
+            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: kPrimaryColor, size: 20)),
             const SizedBox(width: 12),
-            Expanded(child: Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white))),
+            Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
           ]),
           Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1, color: Colors.white.withOpacity(0.1))),
           ...content,
