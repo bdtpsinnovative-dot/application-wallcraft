@@ -320,10 +320,10 @@ class CustomerInfoCard extends StatelessWidget {
                                   margin: const EdgeInsets.only(right: 4),
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
                                   decoration: BoxDecoration(
-                                    color: Colors.blueAccent.withOpacity(0.2),
+                                    color: Colors.redAccent.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(6),
                                   ),
-                                  child: const Icon(Icons.location_on, color: Colors.blueAccent, size: 12),
+                                  child: const Icon(Icons.location_on, color: Colors.redAccent, size: 12),
                                 ),
                               if (isPipeline && projCount > 0)
                                 Container(

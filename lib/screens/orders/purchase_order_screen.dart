@@ -275,22 +275,35 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         }
       }
       
-      // Sort: Personal companies (🏢) ALWAYS come first, Team companies (👥) ALWAYS stay at the bottom!
+      // Sort logic:
+      // 1. ALL NEARBY companies (both ours 🏢 and team 👥) that are in proximity come FIRST at the very top! (sorted closest distance first)
+      // 2. Below nearby: Our personal companies (🏢) sorted by frequency (api_index)
+      // 3. Below our personal: Team recommended companies (👥) sorted by frequency (api_index)
       pipelineResults.sort((a, b) {
+        bool aNear = a['is_nearby'] == true;
+        bool bNear = b['is_nearby'] == true;
+
+        // 1. Nearby companies (within area <= 750m) always come to the VERY TOP!
+        if (aNear && !bNear) return -1;
+        if (!aNear && bNear) return 1;
+        if (aNear && bNear) {
+          // Within nearby: Ours before team, then by closest distance
+          bool aTeam = a['is_team'] == true || a['is_global'] == true;
+          bool bTeam = b['is_team'] == true || b['is_global'] == true;
+          if (!aTeam && bTeam) return -1;
+          if (aTeam && !bTeam) return 1;
+
+          double distA = (a['distance_m'] as num?)?.toDouble() ?? 999999.0;
+          double distB = (b['distance_m'] as num?)?.toDouble() ?? 999999.0;
+          return distA.compareTo(distB);
+        }
+
+        // 2. Non-nearby companies: Personal companies (🏢) come before Team companies (👥)
         bool aTeam = a['is_team'] == true || a['is_global'] == true;
         bool bTeam = b['is_team'] == true || b['is_global'] == true;
         if (!aTeam && bTeam) return -1; // ของเรามาก่อนของทีมเสมอ
         if (aTeam && !bTeam) return 1;  // ของทีมไปอยู่ท้ายเสมอ
 
-        bool aNear = a['is_nearby'] == true;
-        bool bNear = b['is_nearby'] == true;
-        if (aNear && !bNear) return -1;
-        if (!aNear && bNear) return 1;
-        if (aNear && bNear) {
-          double distA = (a['distance_m'] as num?)?.toDouble() ?? 999999.0;
-          double distB = (b['distance_m'] as num?)?.toDouble() ?? 999999.0;
-          return distA.compareTo(distB);
-        }
         return (a['api_index'] as int? ?? 0).compareTo(b['api_index'] as int? ?? 0);
       });
       
