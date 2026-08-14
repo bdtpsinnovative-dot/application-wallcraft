@@ -234,7 +234,15 @@ class CustomerInfoCard extends StatelessWidget {
                   decoratorProps: DropDownDecoratorProps(decoration: _inputDecoration("ค้นหาชื่อบริษัท...", Icons.business_rounded)),
                   popupProps: PopupProps.menu(
                     showSearchBox: true, // 🌟 ช่องค้นหาสำหรับบริษัทจำนวนมาก
-                    menuProps: const MenuProps(backgroundColor: kCardDark, borderRadius: BorderRadius.all(Radius.circular(20))),
+                    menuProps: MenuProps(
+                      backgroundColor: kCardDark, 
+                      borderRadius: const BorderRadius.all(Radius.circular(20)),
+                      constraints: BoxConstraints(
+                        minWidth: MediaQuery.of(context).size.width - 60,
+                        maxWidth: MediaQuery.of(context).size.width - 60,
+                        maxHeight: 350,
+                      ),
+                    ),
                     searchFieldProps: TextFieldProps(
                       style: const TextStyle(color: Colors.white),
                       decoration: _inputDecoration("พิมพ์ชื่อบริษัทเพื่อค้นหา...", Icons.search),
