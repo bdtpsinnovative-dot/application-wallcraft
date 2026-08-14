@@ -87,6 +87,20 @@ class ProjectSelectCard extends StatelessWidget {
     );
   }
 
+  bool _isValidProject(dynamic project) {
+    if (project == null) return false;
+    final name = (project['project_name'] ?? '').toString().trim();
+    if (name.isEmpty || name == '-') return false;
+    final lower = name.toLowerCase();
+    if (lower.contains('ไม่ระบุโครงการ') ||
+        lower.contains('ไม่มีการระบุโครงการ') ||
+        lower.contains('ไม่ระบุชื่อโครงการ') ||
+        lower == 'ไม่ระบุ') {
+      return false;
+    }
+    return true;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -133,7 +147,7 @@ class ProjectSelectCard extends StatelessWidget {
           Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1, color: Colors.white.withOpacity(0.1))),
           
           DropdownSearch<dynamic>.multiSelection(
-            items: (f, l) => projects,
+            items: (f, l) => projects.where(_isValidProject).toList(),
             selectedItems: selectedProjects,
             itemAsString: (item) => item['project_name'],
             onChanged: (val) => onProjectsChanged(val),

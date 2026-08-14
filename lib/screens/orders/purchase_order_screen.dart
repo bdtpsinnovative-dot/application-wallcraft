@@ -195,10 +195,22 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
 
   void _populateDropdownsFromCache(Map<String, dynamic> data) {
     if (!mounted) return;
+    final rawProjects = (data['projects'] ?? []) as List<dynamic>;
     setState(() {
       _customerTypes = data['customer_types'] ?? [];
       _productCategories = data['product_categories'] ?? [];
-      _projects = data['projects'] ?? [];
+      _projects = rawProjects.where((p) {
+        final name = (p['project_name'] ?? '').toString().trim();
+        if (name.isEmpty || name == '-') return false;
+        final lower = name.toLowerCase();
+        if (lower.contains('ไม่ระบุโครงการ') ||
+            lower.contains('ไม่มีการระบุโครงการ') ||
+            lower.contains('ไม่ระบุชื่อโครงการ') ||
+            lower == 'ไม่ระบุ') {
+          return false;
+        }
+        return true;
+      }).toList();
       _projectTypes = data['project_types'] ?? [];
       _isLoading = false;
     });
@@ -772,7 +784,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                                           }
                                           // 🌟 Pipeline Logic: Load active projects (only if not a visit plan)
                                           else if (val['is_pipeline'] == true && val['projects'] != null) {
-                                            final activeProjs = val['projects'] as List<dynamic>;
+                                            final rawActiveProjs = val['projects'] as List<dynamic>;
+                                            final activeProjs = rawActiveProjs.where((ap) {
+                                               final name = (ap['project_name'] ?? '').toString().trim();
+                                               if (name.isEmpty || name == '-') return false;
+                                               final lower = name.toLowerCase();
+                                               if (lower.contains('ไม่ระบุโครงการ') ||
+                                                   lower.contains('ไม่มีการระบุโครงการ') ||
+                                                   lower.contains('ไม่ระบุชื่อโครงการ') ||
+                                                   lower == 'ไม่ระบุ') {
+                                                 return false;
+                                               }
+                                               return true;
+                                             }).toList();
                                             
                                             // Sort _projects so that activeProjs are at the top
                                             List<dynamic> sortedProjects = [];
