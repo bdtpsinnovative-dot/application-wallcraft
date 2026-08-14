@@ -188,17 +188,54 @@ InputDecoration _inputDecoration(String label, IconData icon) {
     );
   }
 
+  IconData _getIconForProject(dynamic project) {
+    if (project == null) return Icons.apartment_rounded;
+    
+    // 1. ถ้ามีชื่อประเภทโครงการส่งมาตรงๆ
+    String? typeName = project['project_type_name'] ?? project['project_types']?['name'];
+    
+    // 2. ถ้าไม่มี ให้หาจาก project_type_id ที่ตรงกับ projectTypes list
+    if (typeName == null || typeName.isEmpty) {
+      final typeId = project['project_type_id']?.toString();
+      if (typeId != null && widget.projectTypes.isNotEmpty) {
+        final match = widget.projectTypes.firstWhere(
+          (pt) => pt['id']?.toString() == typeId,
+          orElse: () => null,
+        );
+        if (match != null) {
+          typeName = match['name']?.toString();
+        }
+      }
+    }
+
+    // 3. ถ้ายังไม่มี ให้ตรวจจับจาก Keyword ในชื่อโครงการ
+    if (typeName == null || typeName.isEmpty) {
+      final pName = (project['project_name'] ?? '').toString().toLowerCase();
+      if (pName.contains('condominium') || pName.contains('condo') || pName.contains('คอนโด')) return Icons.apartment_rounded;
+      if (pName.contains('mall') || pName.contains('shopping') || pName.contains('ห้าง') || pName.contains('เซ็นทรัล') || pName.contains('central') || pName.contains('เดอะมอลล์')) return Icons.shopping_bag_rounded;
+      if (pName.contains('hospital') || pName.contains('รพ') || pName.contains('โรงพยาบาล')) return Icons.local_hospital_rounded;
+      if (pName.contains('hotel') || pName.contains('โรงแรม') || pName.contains('อินน์') || pName.contains('inn')) return Icons.hotel_rounded;
+      if (pName.contains('resort') || pName.contains('รีสอร์ท')) return Icons.holiday_village_rounded;
+      if (pName.contains('house') || pName.contains('home') || pName.contains('บ้าน') || pName.contains('resident') || pName.contains('เรสซิเดนซ์')) return Icons.home_rounded;
+      if (pName.contains('office') || pName.contains('สำนักงาน') || pName.contains('ตึก') || pName.contains('tower') || pName.contains('ทาวเวอร์')) return Icons.business_rounded;
+      if (pName.contains('village') || pName.contains('หมู่บ้าน') || pName.contains('estate')) return Icons.cottage_rounded;
+      return Icons.apartment_rounded;
+    }
+
+    return _getIconForProjectType(typeName);
+  }
+
   IconData _getIconForProjectType(String? projectTypeName) {
     if (projectTypeName == null || projectTypeName.isEmpty) return Icons.apartment_rounded;
     final name = projectTypeName.toLowerCase();
-    if (name.contains('condominium') || name.contains('condo')) return Icons.apartment_rounded;
-    if (name.contains('shopping') || name.contains('mall')) return Icons.shopping_bag_rounded;
-    if (name.contains('hospital')) return Icons.local_hospital_rounded;
-    if (name.contains('private resident') || name.contains('house') || name.contains('home')) return Icons.home_rounded;
-    if (name.contains('office building') || name.contains('office')) return Icons.business_rounded;
-    if (name.contains('housing estate') || name.contains('housing')) return Icons.cottage_rounded;
-    if (name.contains('resort')) return Icons.holiday_village_rounded;
-    if (name.contains('hotel')) return Icons.hotel_rounded;
+    if (name.contains('condominium') || name.contains('condo') || name.contains('คอนโด')) return Icons.apartment_rounded;
+    if (name.contains('shopping') || name.contains('mall') || name.contains('ห้าง')) return Icons.shopping_bag_rounded;
+    if (name.contains('hospital') || name.contains('พยาบาล')) return Icons.local_hospital_rounded;
+    if (name.contains('private resident') || name.contains('resident') || name.contains('house') || name.contains('home') || name.contains('บ้าน')) return Icons.home_rounded;
+    if (name.contains('office building') || name.contains('office') || name.contains('สำนักงาน')) return Icons.business_rounded;
+    if (name.contains('housing estate') || name.contains('housing') || name.contains('หมู่บ้าน')) return Icons.cottage_rounded;
+    if (name.contains('resort') || name.contains('รีสอร์ท')) return Icons.holiday_village_rounded;
+    if (name.contains('hotel') || name.contains('โรงแรม')) return Icons.hotel_rounded;
     return Icons.domain_rounded;
   }
 
@@ -343,8 +380,7 @@ InputDecoration _inputDecoration(String label, IconData icon) {
                   String pid = p['id'];
                   bool isChecked = widget.item.selectedProjectIds.contains(pid);
                   widget.item.projectAreaControllers.putIfAbsent(pid, () => TextEditingController());
-                  final ptName = p['project_type_name'] ?? p['project_types']?['name'];
-                  final icon = _getIconForProjectType(ptName);
+                  final icon = _getIconForProject(p);
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 16.0),
