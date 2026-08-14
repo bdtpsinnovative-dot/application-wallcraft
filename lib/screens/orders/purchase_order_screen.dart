@@ -29,6 +29,11 @@ const Color kLimeGreen = Color(0xFFD2E862);
 class PurchaseOrderScreen extends StatefulWidget {
   const PurchaseOrderScreen({super.key});
 
+  /// 🧹 ล้างแคชข้อมูลทั้งหมดเมื่อ Logout หรือเปลี่ยน User
+  static void clearCache() {
+    _PurchaseOrderScreenState.clearCache();
+  }
+
   @override
   State<PurchaseOrderScreen> createState() => _PurchaseOrderScreenState();
 }
