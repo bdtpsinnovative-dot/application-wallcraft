@@ -11,6 +11,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart'; 
 import '../../constants.dart';
 import '../auth/login_screen.dart';
+import '../orders/purchase_order_screen.dart';
 import '../../services/api_service.dart';
 import 'package:path_provider/path_provider.dart'; 
 import 'custom_crop_screen.dart';
@@ -345,6 +346,7 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   }
 
   Future<void> _logout() async {
+    PurchaseOrderScreen.clearCache();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear(); 
     

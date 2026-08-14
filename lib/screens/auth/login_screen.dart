@@ -13,6 +13,7 @@ import '../../services/notification_service.dart';
 
 import '../../constants.dart';
 import '../home/home_screen.dart';
+import '../orders/purchase_order_screen.dart';
 
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kGlowPurple = Color(0xFF2A2A35); 
@@ -98,6 +99,9 @@ class _LoginScreenState extends State<LoginScreen> {
           } else if (data['session']['user'] != null && data['session']['user']['id'] != null) {
             await prefs.setString('user_id', data['session']['user']['id']);
           }
+
+          // 🧹 ล้างแคชข้อมูลของ User เก่าทิ้งทันทีเพื่อให้ User ใหม่ได้ข้อมูลของตัวเอง 100%
+          PurchaseOrderScreen.clearCache();
 
           // 🌟 2. เพิ่มโค้ดดึงและอัปโหลด FCM Token ทันทีที่ล็อกอินสำเร็จ!
           try {

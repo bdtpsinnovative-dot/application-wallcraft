@@ -55,11 +55,22 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   bool _isLoading = true;
 
   // 🌟 Static Cache for Dropdowns, Pipeline & Visit Plans (Instant 0ms Load!)
+  static String? _cachedUserId;
   static Map<String, dynamic>? _cachedDropdownData;
   static List<dynamic>? _cachedPipelineData;
   static List<dynamic>? _cachedVisitPlanData;
   static Position? _cachedLastPosition;
   static Future<void>? _activeInitFuture;
+
+  // 🧹 ล้างแคชทั้งหมดเมื่อออกจากระบบหรือเปลี่ยนผู้ใช้
+  static void clearCache() {
+    _cachedUserId = null;
+    _cachedDropdownData = null;
+    _cachedPipelineData = null;
+    _cachedVisitPlanData = null;
+    _cachedLastPosition = null;
+    _activeInitFuture = null;
+  }
 
   // 🌟 State for Pipeline & Visit Plans
   List<dynamic> _pipelineData = [];
@@ -70,6 +81,21 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   @override
   void initState() {
     super.initState();
+    _checkUserAndLoadData();
+  }
+
+  Future<void> _checkUserAndLoadData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final currentUserId = prefs.getString('user_id');
+
+      // 🔒 ถ้าตรวจพบว่ามีการสลับคนล็อกอิน (User ID ไม่ตรงกับแคชเดิม) ให้เคลียร์แคชเก่าทิ้งทันที!
+      if (_cachedUserId != null && _cachedUserId != currentUserId) {
+        clearCache();
+      }
+      _cachedUserId = currentUserId;
+    } catch (_) {}
+
     // 1. โหลดข้อมูลจาก Static Cache ทันที (0ms ไม่ต้องรอโหลดใหม่)
     if (_cachedDropdownData != null) {
       _populateDropdownsFromCache(_cachedDropdownData!);
