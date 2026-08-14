@@ -423,7 +423,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                               isExpanded: true,
                               value: _selectedAssignToUserId,
                               decoration: InputDecoration(
-                                labelText: 'มอบหมายให้ (Assign To)',
+                                labelText: 'มอบหมายให้',
                                 labelStyle: const TextStyle(color: Colors.white54, fontSize: 13),
                                 filled: true,
                                 fillColor: Colors.black26,
@@ -439,7 +439,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                     children: const [
                                       CircleAvatar(radius: 12, backgroundColor: Colors.white24, child: Icon(Icons.person, size: 16, color: Colors.white)),
                                       SizedBox(width: 8),
-                                      Text("ตัวเอง (Me)", overflow: TextOverflow.ellipsis)
+                                      Text("ตัวเอง", overflow: TextOverflow.ellipsis)
                                     ]
                                   )
                                 ),
@@ -554,7 +554,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                     const SizedBox(height: 16),
                     
                     // --- Project ---
-                    const Text("โครงการ (Project จากระบบ)", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const Text("โครงการ", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     DropdownSearch<dynamic>(
                       items: (filter, loadProps) async => _getProjectOptions(filter),
@@ -684,7 +684,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                     const SizedBox(height: 16),
         
                     // --- Concept ---
-                    const Text("แนวโครงการ (Concept / Notes)", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
+                    const Text("แนวโครงการ / รายละเอียด", style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     TextField(
                       controller: _conceptCtrl,
