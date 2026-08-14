@@ -37,13 +37,14 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
 
   bool _isAdmin = false;
   String _selectedUserId = 'all';
-  List<dynamic> _adminUsersList = [];
+  List<dynamic> _usersList = [];
 
   Future<void> _checkAdminAndFetchUsers() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
       if (token == null) return;
+      
       final response = await ApiService.post(
         Uri.parse('${AppConfig.baseUrl}/profile'),
         body: jsonEncode({'token': token})
@@ -52,26 +53,37 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
         final data = jsonDecode(response.body)['profile'];
         if (data != null && data['role'] == 'admin') {
           _isAdmin = true;
-          final usersRes = await ApiService.getUsers();
-          if (usersRes.statusCode == 200) {
-            final usersData = jsonDecode(usersRes.body);
-            if (mounted) {
-              setState(() {
-                _adminUsersList = usersData['users'] ?? [];
-              });
-            }
-          } else {
-             if (mounted) setState((){}); 
-          }
         }
+      }
+
+      final usersRes = await ApiService.getUsers();
+      if (usersRes.statusCode == 200) {
+        final usersData = jsonDecode(usersRes.body);
+        if (mounted) {
+          setState(() {
+            _usersList = usersData['users'] ?? [];
+          });
+        }
+      } else {
+        if (mounted) setState(() {});
       }
     } catch(e) {
       debugPrint('Admin check error: $e');
     }
   }
 
+  List<dynamic> get _filteredVisitPlans {
+    if (_selectedUserId == 'all') {
+      return _visitPlans;
+    }
+    return _visitPlans.where((p) {
+      final uId = p['user_id'] ?? p['profiles']?['id'];
+      return uId == _selectedUserId;
+    }).toList();
+  }
+
   List<dynamic> _getEventsForDay(DateTime day) {
-    return _visitPlans.where((plan) {
+    return _filteredVisitPlans.where((plan) {
       if (plan['planned_date'] == null) return false;
       final pDate = DateTime.parse(plan['planned_date']);
       return pDate.year == day.year && pDate.month == day.month && pDate.day == day.day;
@@ -509,7 +521,7 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
         onSave: _addPlan,
         allPlans: _visitPlans,
         isAdmin: _isAdmin,
-        adminUsersList: _adminUsersList,
+        adminUsersList: _usersList,
         initialData: null,
       ),
     );
@@ -529,8 +541,142 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
         initialData: plan,
         allPlans: _visitPlans,
         isAdmin: _isAdmin,
-        adminUsersList: _adminUsersList,
+        adminUsersList: _usersList,
       ),
+    );
+  }
+
+  void _showUserFilterDialog() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.7,
+          ),
+          decoration: const BoxDecoration(
+            color: kCardDark,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.white24,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'กรองแผนงานตามเซลส์',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (_selectedUserId != 'all')
+                      TextButton(
+                        onPressed: () {
+                          setState(() {
+                            _selectedUserId = 'all';
+                          });
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          'รีเซ็ต',
+                          style: TextStyle(color: kLimeGreen, fontSize: 13),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(color: Colors.white12, height: 1),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: _selectedUserId == 'all' ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.groups_rounded,
+                          color: _selectedUserId == 'all' ? kLimeGreen : Colors.white70,
+                          size: 20,
+                        ),
+                      ),
+                      title: const Text(
+                        'ทั้งหมด (ทุกคน)',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                      ),
+                      trailing: _selectedUserId == 'all'
+                          ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
+                          : null,
+                      onTap: () {
+                        setState(() {
+                          _selectedUserId = 'all';
+                        });
+                        Navigator.pop(context);
+                      },
+                    ),
+                    ..._usersList.map((user) {
+                      final uId = user['id']?.toString() ?? '';
+                      final fullName = user['full_name'] ?? user['username'] ?? 'ไม่มีชื่อ';
+                      final isSelected = _selectedUserId == uId;
+                      return ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: isSelected ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            Icons.person_rounded,
+                            color: isSelected ? kLimeGreen : Colors.white70,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          fullName,
+                          style: TextStyle(
+                            color: isSelected ? kLimeGreen : Colors.white,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            fontSize: 14,
+                          ),
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
+                            : null,
+                        onTap: () {
+                          setState(() {
+                            _selectedUserId = uId;
+                          });
+                          Navigator.pop(context);
+                        },
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -627,10 +773,10 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Column(
+                          Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
+                              const Text(
                                 "แผนการเข้าพบลูกค้า",
                                 style: TextStyle(
                                   color: Colors.white,
@@ -639,10 +785,13 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                 ),
                               ),
                               Text(
-                                "Weekly Visit Planner",
+                                _selectedUserId == 'all'
+                                    ? "Weekly Visit Planner"
+                                    : "ดูของ: ${_usersList.firstWhere((u) => u['id']?.toString() == _selectedUserId, orElse: () => {'full_name': 'เซลส์'})['full_name'] ?? 'เซลส์'}",
                                 style: TextStyle(
-                                  color: Colors.white54,
+                                  color: _selectedUserId == 'all' ? Colors.white54 : kLimeGreen,
                                   fontSize: 11,
+                                  fontWeight: _selectedUserId == 'all' ? FontWeight.normal : FontWeight.bold,
                                 ),
                               ),
                             ],
@@ -694,22 +843,19 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                           ),
                           const SizedBox(width: 8),
                           GestureDetector(
-                            onTap: () {
-                              _fetchVisitPlans();
-                              _fetchRepeatedVisits();
-                            },
+                            onTap: _showUserFilterDialog,
                             child: Container(
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
-                                color: kCardDark,
+                                color: _selectedUserId != 'all' ? kLimeGreen.withOpacity(0.2) : kCardDark,
                                 border: Border.all(
-                                  color: kLimeGreen.withOpacity(0.5),
+                                  color: _selectedUserId != 'all' ? kLimeGreen : Colors.white24,
                                 ),
                                 borderRadius: BorderRadius.circular(10),
                               ),
-                              child: const Icon(
-                                Icons.refresh_rounded,
-                                color: kLimeGreen,
+                              child: Icon(
+                                Icons.filter_list_rounded,
+                                color: _selectedUserId != 'all' ? kLimeGreen : Colors.white70,
                                 size: 18,
                               ),
                             ),
@@ -746,7 +892,7 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                         minutes: 59,
                                       ),
                                     );
-                                    final weekPlans = _visitPlans.where((p) {
+                                    final weekPlans = _filteredVisitPlans.where((p) {
                                       if (p['planned_date'] == null)
                                         return false;
                                       final planDate = DateTime.parse(
