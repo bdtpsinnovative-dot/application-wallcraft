@@ -216,17 +216,6 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
             // เช็คว่าไม่ได้เป็น Visit Plan ไปแล้ว
             if (!results.any((r) => r['id'] == p['company']['id'])) {
               
-              List<dynamic> myProjects = [];
-              if (p['projects'] != null) {
-                for (var proj in p['projects']) {
-                  if (proj['is_mine'] == true) {
-                    myProjects.add(proj);
-                  }
-                }
-              }
-              
-              if (myProjects.isEmpty) continue; // Skip companies that are not mine
-              
               final Map<String, dynamic> pipelineCompanyData = Map<String, dynamic>.from(p['company']);
               
               bool isNearby = false;
@@ -243,12 +232,29 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                   pipelineCompanyData['distance_m'] = distance;
                 }
               }
+
+              bool isTeam = p['is_team'] == true;
+              bool isGlobal = p['is_global'] == true;
+              bool isTeamOrGlobal = isTeam || isGlobal;
+              
+              List<dynamic> targetProjects = [];
+              if (p['projects'] != null) {
+                for (var proj in p['projects']) {
+                  if (proj['is_mine'] == true || isTeamOrGlobal) {
+                    targetProjects.add(proj);
+                  }
+                }
+              }
+              
+              if (targetProjects.isEmpty && !isNearby && !isTeamOrGlobal) continue;
               
               pipelineResults.add({
                 ...pipelineCompanyData, 
                 'is_pipeline': true,
                 'is_nearby': isNearby,
-                'projects': myProjects,
+                'is_team': isTeam,
+                'is_global': isGlobal,
+                'projects': targetProjects,
                 'api_index': apiIndex++
               });
             }

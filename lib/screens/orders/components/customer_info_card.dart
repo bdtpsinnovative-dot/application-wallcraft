@@ -265,6 +265,8 @@ class CustomerInfoCard extends StatelessWidget {
                     bool isVisitPlan = item['is_visit_plan'] == true;
                     bool isPipeline = item['is_pipeline'] == true;
                     bool isNearby = item['is_nearby'] == true;
+                    bool isTeam = item['is_team'] == true;
+                    bool isGlobal = item['is_global'] == true;
                     
                     int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
                     
@@ -308,6 +310,46 @@ class CustomerInfoCard extends StatelessWidget {
                                       Text(
                                         "ใกล้ฉัน",
                                         style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (isTeam)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orangeAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.people_rounded, color: Colors.orangeAccent, size: 10),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        "ในทีม",
+                                        style: TextStyle(color: Colors.orangeAccent, fontSize: 9, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              if (isGlobal)
+                                Container(
+                                  margin: const EdgeInsets.only(right: 4),
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.tealAccent.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.public_rounded, color: Colors.tealAccent, size: 10),
+                                      SizedBox(width: 2),
+                                      Text(
+                                        "ยอดฮิต",
+                                        style: TextStyle(color: Colors.tealAccent, fontSize: 9, fontWeight: FontWeight.bold),
                                       ),
                                     ],
                                   ),
