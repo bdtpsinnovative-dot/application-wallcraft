@@ -273,8 +273,13 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         }
       }
       
-      // Sort: nearby first (closest distance first), then frequency order (api_index)
+      // Sort: Personal companies (🏢) ALWAYS come first, Team companies (👥) ALWAYS stay at the bottom!
       pipelineResults.sort((a, b) {
+        bool aTeam = a['is_team'] == true || a['is_global'] == true;
+        bool bTeam = b['is_team'] == true || b['is_global'] == true;
+        if (!aTeam && bTeam) return -1; // ของเรามาก่อนของทีมเสมอ
+        if (aTeam && !bTeam) return 1;  // ของทีมไปอยู่ท้ายเสมอ
+
         bool aNear = a['is_nearby'] == true;
         bool bNear = b['is_nearby'] == true;
         if (aNear && !bNear) return -1;
