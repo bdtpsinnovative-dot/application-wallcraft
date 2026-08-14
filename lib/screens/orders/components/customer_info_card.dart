@@ -269,12 +269,13 @@ class CustomerInfoCard extends StatelessWidget {
                     bool isTeam = item['is_team'] == true && item['is_mine'] != true;
                     bool isGlobal = item['is_global'] == true && item['is_mine'] != true;
                     bool isMine = item['is_mine'] == true || (isPipeline && !isTeam && !isGlobal);
+                    bool isGeneral = item['is_general'] == true || (!isPipeline && !isVisitPlan);
                     
                     int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
 
-                    // 🌟 ไอคอนนำหน้าบอกประเภทบริษัททันที (ของเรา / ของทีม / ส่วนกลาง / แผนงาน)
-                    IconData leadingIcon = Icons.business_rounded;
-                    Color leadingColor = Colors.white54;
+                    // 🌟 ไอคอนนำหน้าบอกประเภทบริษัททันที (ของเรา / ของทีม / ส่วนกลาง / แผนงาน / ทั่วไป)
+                    IconData leadingIcon = Icons.domain_outlined;
+                    Color leadingColor = Colors.white30;
                     if (isVisitPlan) {
                       leadingIcon = Icons.calendar_month_rounded;
                       leadingColor = Colors.greenAccent;
@@ -297,7 +298,7 @@ class CustomerInfoCard extends StatelessWidget {
                       ),
                       child: Row(
                         children: [
-                          Icon(leadingIcon, color: leadingColor, size: 16),
+                          Icon(leadingIcon, color: leadingColor, size: isGeneral ? 15 : 16),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -305,7 +306,7 @@ class CustomerInfoCard extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: isSelected ? kLimeGreen : Colors.white,
+                                color: isSelected ? kLimeGreen : (isGeneral ? Colors.white70 : Colors.white),
                                 fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 13,
                               ),
