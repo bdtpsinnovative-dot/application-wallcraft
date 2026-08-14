@@ -88,12 +88,10 @@ class _AddVisitModalState extends State<AddVisitModal> {
 
   Future<void> _fetchData() async {
     try {
+      final targetUserId = widget.isAdmin ? _selectedAssignToUserId : null;
       final responses = await Future.wait([
-        ApiService.getPipeline(),
-        ApiService.getCompanies(),
-        ApiService.getProjects(),
-        ApiService.getProjectTypes(),
-        ApiService.getCategories(),
+        ApiService.getPipeline(userId: targetUserId),
+        ApiService.get(Uri.parse('${AppConfig.baseUrl}/orders')), // 🟢 ดึง project_types, product_categories และ initial projects รวดเดียว
       ]);
 
       if (responses[0].statusCode == 200) {
@@ -102,19 +100,9 @@ class _AddVisitModalState extends State<AddVisitModal> {
       }
       if (responses[1].statusCode == 200) {
         var decoded = jsonDecode(responses[1].body);
-        _allCompanies = decoded is List ? decoded : (decoded['companies'] ?? []);
-      }
-      if (responses[2].statusCode == 200) {
-        var decoded = jsonDecode(responses[2].body);
-        _allProjects = decoded is List ? decoded : (decoded['projects'] ?? []);
-      }
-      if (responses[3].statusCode == 200) {
-        var decoded = jsonDecode(responses[3].body);
-        _projectTypes = decoded is List ? decoded : (decoded['data'] ?? decoded['projectTypes'] ?? decoded['project_types'] ?? []);
-      }
-      if (responses[4].statusCode == 200) {
-        var decoded = jsonDecode(responses[4].body);
-        _productCategories = decoded is List ? decoded : (decoded['data'] ?? decoded['categories'] ?? decoded['product_categories'] ?? []);
+        _projectTypes = decoded['project_types'] ?? [];
+        _productCategories = decoded['product_categories'] ?? [];
+        _allProjects = decoded['projects'] ?? [];
       }
         
       // Match selected company and project for edit mode
