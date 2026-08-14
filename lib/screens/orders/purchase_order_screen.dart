@@ -262,13 +262,16 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         }
       }
       
-      // Sort: nearby first, then alphabetical
+      // Sort: nearby first (closest distance first), then frequency order (api_index)
       pipelineResults.sort((a, b) {
-        if (a['is_nearby'] == true && b['is_nearby'] != true) return -1;
-        if (a['is_nearby'] != true && b['is_nearby'] == true) return 1;
-        // if both nearby, sort by distance
-        if (a['is_nearby'] == true && b['is_nearby'] == true) {
-           return (a['distance_m'] ?? 0).compareTo(b['distance_m'] ?? 0);
+        bool aNear = a['is_nearby'] == true;
+        bool bNear = b['is_nearby'] == true;
+        if (aNear && !bNear) return -1;
+        if (!aNear && bNear) return 1;
+        if (aNear && bNear) {
+          double distA = (a['distance_m'] as num?)?.toDouble() ?? 999999.0;
+          double distB = (b['distance_m'] as num?)?.toDouble() ?? 999999.0;
+          return distA.compareTo(distB);
         }
         return (a['api_index'] as int? ?? 0).compareTo(b['api_index'] as int? ?? 0);
       });

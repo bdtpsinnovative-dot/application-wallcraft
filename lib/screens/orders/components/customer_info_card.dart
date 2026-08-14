@@ -246,6 +246,7 @@ class CustomerInfoCard extends StatelessWidget {
                 ),
                 popupProps: PopupProps.menu(
                   showSearchBox: true, // 🌟 ช่องค้นหาสำหรับบริษัทจำนวนมาก
+                  disableFilter: true, // 🌟 ให้ใช้ผลลัพธ์และการเรียงลำดับตามพิกัด/ความถี่จาก _getCompanies โดยตรง
                   constraints: BoxConstraints(
                     minWidth: MediaQuery.of(context).size.width - 60,
                     maxWidth: MediaQuery.of(context).size.width - 60,
