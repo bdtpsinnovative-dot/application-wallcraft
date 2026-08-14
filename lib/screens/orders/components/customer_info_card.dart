@@ -260,69 +260,72 @@ class CustomerInfoCard extends StatelessWidget {
                             Expanded(
                               child: Text(
                                 item['name'] ?? '',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: isSelected ? kLimeGreen : Colors.white,
                                   fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
                                 ),
                               ),
                             ),
+                            const SizedBox(width: 8),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
                                 if (isNearby)
                                   Container(
-                                    margin: const EdgeInsets.only(right: 6),
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    margin: const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.blueAccent.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.location_on, color: Colors.blueAccent, size: 12),
-                                        SizedBox(width: 4),
+                                        Icon(Icons.location_on, color: Colors.blueAccent, size: 10),
+                                        SizedBox(width: 2),
                                         Text(
                                           "ใกล้ฉัน",
-                                          style: TextStyle(color: Colors.blueAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                          style: TextStyle(color: Colors.blueAccent, fontSize: 9, fontWeight: FontWeight.bold),
                                         ),
                                       ],
                                     ),
                                   ),
                                 if (isVisitPlan)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.green.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.calendar_month, color: Colors.greenAccent, size: 12),
-                                        SizedBox(width: 4),
+                                        Icon(Icons.calendar_month, color: Colors.greenAccent, size: 10),
+                                        SizedBox(width: 2),
                                         Text(
                                           "แผนสัปดาห์นี้",
-                                          style: TextStyle(color: Colors.greenAccent, fontSize: 10, fontWeight: FontWeight.bold),
+                                          style: TextStyle(color: Colors.greenAccent, fontSize: 9, fontWeight: FontWeight.bold),
                                         ),
                                       ],
                                     ),
                                   )
                                 else if (isPipeline)
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
                                       color: Colors.amber.withOpacity(0.2),
-                                      borderRadius: BorderRadius.circular(8),
+                                      borderRadius: BorderRadius.circular(6),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.star, color: Colors.amber, size: 12),
-                                        const SizedBox(width: 4),
+                                        const Icon(Icons.star, color: Colors.amber, size: 10),
+                                        const SizedBox(width: 2),
                                         Text(
                                           "$projCount",
-                                          style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                          style: const TextStyle(color: Colors.amber, fontSize: 9, fontWeight: FontWeight.bold),
                                         ),
                                       ],
                                     ),
