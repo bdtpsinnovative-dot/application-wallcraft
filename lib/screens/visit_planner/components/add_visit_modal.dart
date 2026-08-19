@@ -276,6 +276,9 @@ class _AddVisitModalState extends State<AddVisitModal> {
              'project_name': name,
              'isPipeline': true,
              'isMine': p['is_mine'] == true,
+             'isTeam': p['is_team'] == true,
+             'isGlobal': p['is_global'] == true,
+             'usageCount': (p['count'] as num?)?.toInt() ?? 0,
              'project_type_id': p['project_type_id'],
              'product_category_id': p['product_category_id'],
            };
@@ -631,7 +634,20 @@ class _AddVisitModalState extends State<AddVisitModal> {
                           ),
                         ),
                         itemBuilder: (context, item, isSelected, isFocused) {
-                          bool isMine = item['isMine'] == true;
+                          final isMine = item['isMine'] == true;
+                          final isTeam = item['isTeam'] == true;
+                          final isPipe = item['isPipeline'] == true;
+                          final usageCount = (item['usageCount'] as int?) ?? 0;
+                          final sourceColor = isMine
+                              ? kLimeGreen
+                              : isTeam
+                              ? Colors.lightBlueAccent
+                              : Colors.amber;
+                          final sourceIcon = isMine
+                              ? Icons.person_outline
+                              : isTeam
+                              ? Icons.groups_outlined
+                              : Icons.auto_awesome_outlined;
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
@@ -650,11 +666,23 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                 ),
-                                if (isMine)
-                                  const Padding(
-                                    padding: EdgeInsets.only(left: 8.0),
-                                    child: Icon(Icons.star, color: Colors.amber, size: 16),
-                                  ),
+                                if (isPipe) ...[
+                                  const SizedBox(width: 8),
+                                  Icon(sourceIcon, color: sourceColor, size: 16),
+                                  if (usageCount > 0) ...[
+                                    const SizedBox(width: 5),
+                                    const Icon(Icons.history_rounded, color: Colors.white54, size: 14),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '$usageCount',
+                                      style: const TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ],
                             ),
                           );
