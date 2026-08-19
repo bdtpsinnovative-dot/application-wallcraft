@@ -520,16 +520,21 @@ class _AddVisitModalState extends State<AddVisitModal> {
                           final isPipe = item['isPipeline'] == true;
                           final projCount = (item['projectCount'] as int?) ?? 0;
                           final source = item['pipelineSource']?.toString();
-                          final sourceLabel = source == 'mine'
-                              ? 'ของคุณ'
-                              : source == 'team'
-                              ? 'ทีม'
-                              : 'แนะนำ';
                           final sourceColor = source == 'mine'
                               ? kLimeGreen
                               : source == 'team'
                               ? Colors.lightBlueAccent
                               : Colors.amber;
+                          final sourceIcon = source == 'mine'
+                              ? Icons.person_outline
+                              : source == 'team'
+                              ? Icons.groups_outlined
+                              : Icons.auto_awesome_outlined;
+                          final sourceDescription = source == 'mine'
+                              ? 'ประวัติของคุณ'
+                              : source == 'team'
+                              ? 'ประวัติทีม'
+                              : 'รายการแนะนำ';
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
@@ -548,18 +553,44 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                     ),
                                   ),
                                 ),
-                                if (isPipe)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: sourceColor.withOpacity(0.15),
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      projCount > 0 ? '$sourceLabel · $projCount โครงการ' : sourceLabel,
-                                      style: TextStyle(color: sourceColor, fontSize: 10, fontWeight: FontWeight.bold),
+                                if (isPipe) ...[
+                                  Semantics(
+                                    label: sourceDescription,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: sourceColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Icon(sourceIcon, color: sourceColor, size: 15),
                                     ),
                                   ),
+                                  if (projCount > 0) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.08),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.folder_outlined, color: Colors.white70, size: 13),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            '$projCount',
+                                            style: const TextStyle(
+                                              color: Colors.white70,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ],
                             ),
                           );
