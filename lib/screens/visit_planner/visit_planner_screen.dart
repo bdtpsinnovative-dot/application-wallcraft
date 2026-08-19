@@ -1,8 +1,13 @@
 import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:gal/gal.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:screenshot/screenshot.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
 import '../../constants.dart';
@@ -23,12 +28,16 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
   bool _isLoading = true;
   bool _isLoadingRepeated = true;
   bool _isFirstLoad = true;
+  String? _loadErrorMessage;
   List<dynamic> _visitPlans = [];
   List<dynamic> _repeatedVisits = [];
   Set<int> _expandedRepeatedVisits = {};
   late List<DateTime> _weeks;
   late PageController _pageController;
   DateTime? _pendingTargetWeek;
+  final ScreenshotController _weekScreenshotController = ScreenshotController();
+  bool _isCapturingWeek = false;
+  Timer? _overdueRefreshTimer;
 
   bool _sortByProjectCount = true;
   bool _isCalendarView = false;
@@ -44,10 +53,10 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
       if (token == null) return;
-      
+
       final response = await ApiService.post(
         Uri.parse('${AppConfig.baseUrl}/profile'),
-        body: jsonEncode({'token': token})
+        body: jsonEncode({'token': token}),
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body)['profile'];
@@ -59,15 +68,25 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
       final usersRes = await ApiService.getUsers();
       if (usersRes.statusCode == 200) {
         final usersData = jsonDecode(usersRes.body);
+        final sortedUsers = List<dynamic>.from(usersData['users'] ?? []);
+        sortedUsers.sort((a, b) {
+          final countA = (a['order_count'] as num?)?.toInt() ?? 0;
+          final countB = (b['order_count'] as num?)?.toInt() ?? 0;
+          final countCompare = countB.compareTo(countA);
+          if (countCompare != 0) return countCompare;
+          final nameA = a['full_name']?.toString() ?? '';
+          final nameB = b['full_name']?.toString() ?? '';
+          return nameA.toLowerCase().compareTo(nameB.toLowerCase());
+        });
         if (mounted) {
           setState(() {
-            _usersList = usersData['users'] ?? [];
+            _usersList = sortedUsers;
           });
         }
       } else {
         if (mounted) setState(() {});
       }
-    } catch(e) {
+    } catch (e) {
       debugPrint('Admin check error: $e');
     }
   }
@@ -86,7 +105,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     return _filteredVisitPlans.where((plan) {
       if (plan['planned_date'] == null) return false;
       final pDate = DateTime.parse(plan['planned_date']);
-      return pDate.year == day.year && pDate.month == day.month && pDate.day == day.day;
+      return pDate.year == day.year &&
+          pDate.month == day.month &&
+          pDate.day == day.day;
     }).toList();
   }
 
@@ -120,13 +141,17 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     _loadSortPreference();
     _checkAdminAndFetchUsers();
     _generateWeeks([]);
-    _pageController = PageController(initialPage: 1, viewportFraction: 0.85);
+    _pageController = PageController(initialPage: 1, viewportFraction: 0.96);
+    _overdueRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
     refreshVisitPlans();
     _fetchRepeatedVisits();
   }
 
   @override
   void dispose() {
+    _overdueRefreshTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -143,6 +168,61 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
       return DateTime.tryParse(value);
     }
     return null;
+  }
+
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is List && value.isNotEmpty) return _asMap(value.first);
+    return <String, dynamic>{};
+  }
+
+  String _assignedSalesNameForPlan(dynamic plan) {
+    final directName = plan['assigned_name']?.toString().trim();
+    if (directName != null && directName.isNotEmpty) return directName;
+
+    final profileName = _asMap(
+      plan['profiles'],
+    )['full_name']?.toString().trim();
+    if (profileName != null && profileName.isNotEmpty) return profileName;
+
+    return 'ไม่ระบุผู้รับผิดชอบ';
+  }
+
+  String _planTimeRange(dynamic plan) {
+    final start = plan['start_time']?.toString().trim();
+    final end = plan['end_time']?.toString().trim();
+    if (start == null || start.isEmpty || end == null || end.isEmpty) {
+      return 'ไม่ระบุเวลา';
+    }
+    String shortTime(String value) =>
+        value.length >= 5 ? value.substring(0, 5) : value;
+    return '${shortTime(start)} - ${shortTime(end)} น.';
+  }
+
+  bool _isPlanOverdue(dynamic plan) {
+    if (plan['status']?.toString() != 'pending') return false;
+    final plannedDate = _parseDate(plan['planned_date']);
+    if (plannedDate == null) return false;
+
+    final day = DateTime(plannedDate.year, plannedDate.month, plannedDate.day);
+    final rawEndTime = plan['end_time']?.toString().trim() ?? '';
+    final match = RegExp(r'^(\d{1,2}):(\d{2})').firstMatch(rawEndTime);
+    final deadline = match == null
+        ? day.add(const Duration(hours: 23, minutes: 59, seconds: 59))
+        : DateTime(
+            day.year,
+            day.month,
+            day.day,
+            int.parse(match.group(1)!),
+            int.parse(match.group(2)!),
+          );
+    return DateTime.now().isAfter(deadline);
+  }
+
+  String _effectivePlanStatus(dynamic plan) {
+    final status = plan['status']?.toString() ?? 'pending';
+    return status == 'pending' && _isPlanOverdue(plan) ? 'overdue' : status;
   }
 
   void _generateWeeks(List<dynamic> plans, {DateTime? ensureWeek}) {
@@ -214,7 +294,10 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     });
   }
 
-  Future<void> refreshVisitPlans({DateTime? targetWeek, bool isSilent = false}) async {
+  Future<void> refreshVisitPlans({
+    DateTime? targetWeek,
+    bool isSilent = false,
+  }) async {
     if (!mounted) return;
     ApiService.clearCache();
     if (!isSilent) setState(() => _isLoading = true);
@@ -223,34 +306,21 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         List<dynamic> plans = data['visit_plans'] ?? [];
-        
-        final now = DateTime.now();
-        final today = DateTime(now.year, now.month, now.day);
-        
-        bool needsCron = false;
-        final currentWeekStart = _weekStart(today);
-        
-        for (var plan in plans) {
-          if ((plan['status'] == 'pending' || plan['status'] == null) && plan['planned_date'] != null) {
-            final pDate = DateTime.parse(plan['planned_date']);
-            final planWeekStart = _weekStart(pDate);
-            
-            // Only auto-cancel if the entire week has passed (plan's week is strictly before current week)
-            if (planWeekStart.isBefore(currentWeekStart)) {
-              plan['status'] = 'missed';
-              needsCron = true;
-            }
-          }
-        }
-        
-        if (needsCron) {
-          // Trigger the backend cron job to officially mark them as unsuccessful and send notifications
-          ApiService.triggerDailySummaryCron();
-        }
+        // Keep the app safe even when an older backend instance still returns
+        // soft-deleted plans; the canonical filter also lives on the API.
+        plans = plans
+            .where(
+              (plan) =>
+                  plan is Map &&
+                  plan['is_deleted'] != true &&
+                  plan['status'] != 'deleted',
+            )
+            .toList();
 
         if (mounted) {
           setState(() {
             _visitPlans = plans;
+            _loadErrorMessage = null;
             _generateWeeks(_visitPlans, ensureWeek: targetWeek);
             _isLoading = false;
           });
@@ -261,11 +331,17 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
       }
     } catch (e) {
       debugPrint("Error: $e");
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _loadErrorMessage = 'ไม่สามารถโหลดข้อมูลแผนงานได้';
+        });
+      }
     }
   }
 
-  Future<void> _fetchVisitPlans({DateTime? targetWeek}) => refreshVisitPlans(targetWeek: targetWeek);
+  Future<void> _fetchVisitPlans({DateTime? targetWeek}) =>
+      refreshVisitPlans(targetWeek: targetWeek);
 
   Future<void> _fetchRepeatedVisits() async {
     setState(() => _isLoadingRepeated = true);
@@ -289,24 +365,58 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
+  Future<void> _refreshPlannerData() async {
+    await Future.wait([
+      refreshVisitPlans(isSilent: true),
+      _fetchRepeatedVisits(),
+    ]);
+
+    if (mounted && _loadErrorMessage != null && _visitPlans.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.wifi_off_rounded, color: Colors.white),
+              SizedBox(width: 10),
+              Expanded(child: Text('ไม่มีอินเทอร์เน็ต จึงยังใช้ข้อมูลเดิม')),
+            ],
+          ),
+          backgroundColor: Colors.redAccent,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+        ),
+      );
+    }
+  }
+
   Future<void> _addPlan(Map<String, dynamic> data) async {
-    Navigator.of(context).pop(); // close modal
     setState(() => _isLoading = true);
     try {
-      final response = await ApiService.addVisitPlan(data);
+      final response = await ApiService.addVisitPlan(
+        data,
+      ).timeout(const Duration(seconds: 20));
       if (response.statusCode == 200 || response.statusCode == 201) {
         DateTime? targetDate;
         targetDate = _parseDate(data['planned_date']);
         await _fetchVisitPlans(targetWeek: targetDate);
+        if (mounted) Navigator.of(context).pop();
       } else {
         if (mounted) setState(() => _isLoading = false);
-        debugPrint(
-          "Failed to add plan: ${response.statusCode} - ${response.body}",
-        );
+        await _showPlanSaveError(_getPlanSaveError(response));
       }
+    } on TimeoutException {
+      if (mounted) setState(() => _isLoading = false);
+      await _showPlanSaveError(
+        'เชื่อมต่อเซิร์ฟเวอร์นานเกินไป ข้อมูลที่กรอกยังอยู่ กรุณาตรวจสอบอินเทอร์เน็ตแล้วกดบันทึกใหม่',
+      );
     } catch (e) {
       debugPrint("Error adding plan: $e");
       if (mounted) setState(() => _isLoading = false);
+      await _showPlanSaveError(
+        'เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ ข้อมูลที่กรอกยังอยู่ กรุณาตรวจสอบอินเทอร์เน็ตแล้วกดบันทึกใหม่',
+      );
     }
   }
 
@@ -324,29 +434,96 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
   }
 
   Future<void> _editPlan(Map<String, dynamic> data) async {
-    Navigator.of(context).pop(); // close modal
     setState(() => _isLoading = true);
     try {
       // Use ApiService.updateVisitPlan if it exists, otherwise post with ID or patch
-      // Since it's Next.js backend, let's assume it accepts patch for updates, or post handles upsert.
       final response = await ApiService.patch(
-        Uri.parse('${AppConfig.baseUrl}/visit-plans/${data['id']}'),
+        Uri.parse(
+          '${AppConfig.baseUrl}/visit-plans?id=${Uri.encodeQueryComponent(data['id'].toString())}',
+        ),
         body: jsonEncode(data),
-      );
+      ).timeout(const Duration(seconds: 20));
       if (response.statusCode == 200 || response.statusCode == 201) {
         DateTime? targetDate;
         targetDate = _parseDate(data['planned_date']);
         await _fetchVisitPlans(targetWeek: targetDate);
+        if (mounted) Navigator.of(context).pop();
       } else {
         if (mounted) setState(() => _isLoading = false);
-        debugPrint(
-          "Failed to edit plan: ${response.statusCode} - ${response.body}",
-        );
+        await _showPlanSaveError(_getPlanSaveError(response));
       }
+    } on TimeoutException {
+      if (mounted) setState(() => _isLoading = false);
+      await _showPlanSaveError(
+        'เชื่อมต่อเซิร์ฟเวอร์นานเกินไป ข้อมูลที่แก้ไขยังอยู่ กรุณาตรวจสอบอินเทอร์เน็ตแล้วกดบันทึกใหม่',
+      );
     } catch (e) {
       debugPrint("Error editing plan: $e");
       if (mounted) setState(() => _isLoading = false);
+      await _showPlanSaveError(
+        'แก้ไขไม่สำเร็จ ข้อมูลเดิมยังอยู่ กรุณาตรวจสอบอินเทอร์เน็ตแล้วลองใหม่',
+      );
     }
+  }
+
+  String _getPlanSaveError(dynamic response) {
+    try {
+      final decoded = jsonDecode(response.body);
+      final code = decoded is Map ? decoded['code']?.toString() : null;
+      if (code == 'VISIT_PLAN_TIME_COLUMNS_MISSING' ||
+          code == 'VISIT_PLAN_REQUIRED_COLUMNS_MISSING') {
+        return 'ฐานข้อมูลยังไม่มีคอลัมน์ที่จำเป็น (start_time, end_time หรือ client_request_id) กรุณารันไฟล์ SQL migration ก่อน แล้วลองบันทึกใหม่';
+      }
+      final message = decoded is Map
+          ? (decoded['message'] ?? decoded['error'])
+          : null;
+      if (message != null && message.toString().trim().isNotEmpty) {
+        final code = decoded is Map ? decoded['code']?.toString() : null;
+        final details = decoded is Map ? decoded['details']?.toString() : null;
+        final detailText =
+            details != null &&
+                details.isNotEmpty &&
+                details != message.toString()
+            ? '\nรายละเอียดระบบ: $details'
+            : '';
+        final codeText = code != null && code.isNotEmpty ? '\nรหัส: $code' : '';
+        return '${message.toString()}$codeText$detailText\nข้อมูลที่กรอกยังอยู่ กรุณาแก้ไขหรือลองใหม่';
+      }
+    } catch (_) {}
+    return 'บันทึกไม่สำเร็จ (รหัส ${response.statusCode})\nข้อมูลที่กรอกยังอยู่ กรุณาตรวจสอบข้อมูลและลองใหม่';
+  }
+
+  Future<void> _showPlanSaveError(String message) async {
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: kCardDark,
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.orangeAccent),
+            SizedBox(width: 8),
+            Text(
+              'บันทึกไม่สำเร็จ',
+              style: TextStyle(color: Colors.white, fontSize: 18),
+            ),
+          ],
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white70, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text(
+              'ปิด และลองบันทึกใหม่',
+              style: TextStyle(color: kLimeGreen),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCalendarView() {
@@ -363,7 +540,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
               _focusedDay = focusedDay;
             });
           },
-          onPageChanged: (focusedDay) { _focusedDay = focusedDay; },
+          onPageChanged: (focusedDay) {
+            _focusedDay = focusedDay;
+          },
           eventLoader: _getEventsForDay,
           calendarBuilders: CalendarBuilders(
             markerBuilder: (context, date, events) {
@@ -374,11 +553,14 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: events.take(4).map((event) {
                     final plan = event as Map<String, dynamic>;
-                    final status = plan['status']?.toString();
+                    final status = _effectivePlanStatus(plan);
                     Color markerColor = kLimeGreen;
                     if (status == 'completed' || status == 'success') {
                       markerColor = Colors.green;
-                    } else if (status == 'missed' || status == 'failed' || status == 'canceled' || status == 'cancelled') {
+                    } else if (status == 'missed' ||
+                        status == 'failed' ||
+                        status == 'canceled' ||
+                        status == 'cancelled') {
                       markerColor = Colors.redAccent;
                     }
                     return Container(
@@ -396,8 +578,14 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
             },
           ),
           calendarStyle: const CalendarStyle(
-            selectedDecoration: BoxDecoration(color: kLimeGreen, shape: BoxShape.circle),
-            todayDecoration: BoxDecoration(color: Colors.white24, shape: BoxShape.circle),
+            selectedDecoration: BoxDecoration(
+              color: kLimeGreen,
+              shape: BoxShape.circle,
+            ),
+            todayDecoration: BoxDecoration(
+              color: Colors.white24,
+              shape: BoxShape.circle,
+            ),
             defaultTextStyle: TextStyle(color: Colors.white),
             weekendTextStyle: TextStyle(color: Colors.white70),
             outsideTextStyle: TextStyle(color: Colors.white38),
@@ -416,63 +604,408 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
         ),
         const SizedBox(height: 16),
         Expanded(
-          child: _selectedDay == null 
-              ? const Center(child: Text("เลือกวันที่เพื่อดูแผนงาน", style: TextStyle(color: Colors.white54)))
+          child: _selectedDay == null
+              ? const Center(
+                  child: Text(
+                    "เลือกวันที่เพื่อดูแผนงาน",
+                    style: TextStyle(color: Colors.white54),
+                  ),
+                )
               : Builder(
                   builder: (context) {
                     final dayPlans = _getEventsForDay(_selectedDay!);
                     if (dayPlans.isEmpty) {
-                       return const Center(child: Text("ไม่มีแผนงานในวันนี้", style: TextStyle(color: Colors.white54)));
+                      return const Center(
+                        child: Text(
+                          "ไม่มีแผนงานในวันนี้",
+                          style: TextStyle(color: Colors.white54),
+                        ),
+                      );
                     }
-                    return ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: dayPlans.length,
-                      itemBuilder: (context, index) {
-                        final plan = dayPlans[index];
-                        final company = plan['companies'] ?? {};
-                        final project = plan['projects'] ?? {};
-                        final profile = plan['profiles'] ?? {};
-                        
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF1A1A1C),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.white12),
-                          ),
-                          child: Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 16,
-                                backgroundColor: kLimeGreen.withOpacity(0.2),
-                                backgroundImage: profile['avatar_url'] != null ? NetworkImage(profile['avatar_url']) : null,
-                                child: profile['avatar_url'] == null 
-                                  ? const Icon(Icons.person, size: 16, color: kLimeGreen) 
-                                  : null,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(company['name'] ?? 'Unknown Company', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                                    const SizedBox(height: 4),
-                                    Text(project['project_name'] ?? 'No Project', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                                  ],
+                    return RefreshIndicator(
+                      onRefresh: _refreshPlannerData,
+                      color: kLimeGreen,
+                      backgroundColor: kCardDark,
+                      child: ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: dayPlans.length,
+                        itemBuilder: (context, index) {
+                          final plan = dayPlans[index];
+                          final company = _asMap(plan['companies']);
+                          final profile = _asMap(plan['profiles']);
+
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1A1A1C),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.white12),
+                            ),
+                            child: Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: kLimeGreen.withOpacity(0.2),
+                                  backgroundImage: profile['avatar_url'] != null
+                                      ? NetworkImage(profile['avatar_url'])
+                                      : null,
+                                  child: profile['avatar_url'] == null
+                                      ? const Icon(
+                                          Icons.person,
+                                          size: 16,
+                                          color: kLimeGreen,
+                                        )
+                                      : null,
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              _buildStatusBadge(plan['status']),
-                            ],
-                          ),
-                        );
-                      }
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        company['name'] ?? 'Unknown Company',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _assignedSalesNameForPlan(plan),
+                                        style: const TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 3),
+                                      Text(
+                                        _planTimeRange(plan),
+                                        style: const TextStyle(
+                                          color: Colors.white38,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                _buildStatusBadge(_effectivePlanStatus(plan)),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
                     );
-                  }
+                  },
                 ),
         ),
       ],
+    );
+  }
+
+  List<dynamic> _plansForWeek(DateTime weekStart) {
+    final endOfWeek = weekStart.add(
+      const Duration(days: 6, hours: 23, minutes: 59),
+    );
+
+    return _filteredVisitPlans.where((plan) {
+      final planDate = _parseDate(plan['planned_date']);
+      if (planDate == null) return false;
+      return !planDate.isBefore(weekStart) && !planDate.isAfter(endOfWeek);
+    }).toList();
+  }
+
+  Future<void> _captureWeekPlan(
+    DateTime weekStart,
+    List<dynamic> weekPlans,
+  ) async {
+    if (_isCapturingWeek) return;
+
+    setState(() => _isCapturingWeek = true);
+    try {
+      final captureWidth = MediaQuery.of(context).size.width - 32;
+      final imageBytes = await _weekScreenshotController.captureFromLongWidget(
+        InheritedTheme.captureAll(
+          context,
+          Material(
+            color: kDarkBg,
+            child: SizedBox(
+              width: captureWidth,
+              child: _buildWeekCaptureContent(weekStart, weekPlans),
+            ),
+          ),
+        ),
+        context: context,
+        delay: const Duration(milliseconds: 100),
+        pixelRatio: 2,
+      );
+
+      final weekLabel =
+          '${weekStart.year}${weekStart.month.toString().padLeft(2, '0')}${weekStart.day.toString().padLeft(2, '0')}';
+      await Gal.putImageBytes(imageBytes, name: 'weekly_visit_plan_$weekLabel');
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('บันทึกรูปแผนงานลงเครื่องแล้ว'),
+          backgroundColor: kLimeGreen,
+        ),
+      );
+
+      final directory = await getTemporaryDirectory();
+      final imageFile = File(
+        '${directory.path}/weekly_visit_plan_$weekLabel.png',
+      );
+      await imageFile.writeAsBytes(imageBytes);
+      await Share.shareXFiles([
+        XFile(imageFile.path),
+      ], text: 'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)}');
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('สร้างภาพแผนงานไม่สำเร็จ: $error'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isCapturingWeek = false);
+    }
+  }
+
+  Widget _buildWeekCaptureContent(DateTime weekStart, List<dynamic> weekPlans) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      color: kDarkBg,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: kLimeGreen.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.calendar_month_rounded,
+                  color: kLimeGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'แผนการเข้าพบลูกค้า',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            decoration: BoxDecoration(
+              color: kCardDark,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: kLimeGreen.withOpacity(0.35)),
+            ),
+            child: Text(
+              _formatWeekRange(weekStart),
+              style: const TextStyle(
+                color: kLimeGreen,
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (weekPlans.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 36),
+              child: Center(
+                child: Text(
+                  'ไม่มีแผนเข้าพบในสัปดาห์นี้',
+                  style: TextStyle(color: Colors.white54),
+                ),
+              ),
+            )
+          else
+            ...weekPlans.map(_buildWeekCapturePlanCard),
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              'Wallcraft · Weekly Visit Planner',
+              style: TextStyle(color: Colors.white38, fontSize: 10),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWeekCapturePlanCard(dynamic plan) {
+    final company = _asMap(plan['companies']);
+    final companyName = company['name']?.toString().trim();
+    final concept = plan['project_concept']?.toString().trim();
+
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kCardDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  companyName == null || companyName.isEmpty
+                      ? 'ไม่ระบุบริษัท'
+                      : companyName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              _buildCaptureStatusBadge(_effectivePlanStatus(plan)),
+            ],
+          ),
+          if (concept != null && concept.isNotEmpty) ...[
+            const SizedBox(height: 5),
+            Text(
+              concept,
+              style: const TextStyle(color: Colors.white70, fontSize: 12),
+            ),
+          ],
+          const SizedBox(height: 10),
+          const Divider(color: Colors.white12, height: 1),
+          const SizedBox(height: 9),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCaptureMeta(
+                Icons.calendar_today_rounded,
+                _formatPlanDate(plan['planned_date']),
+                kLimeGreen,
+              ),
+              _buildCaptureMeta(
+                Icons.person_outline_rounded,
+                _assignedSalesNameForPlan(plan),
+                Colors.white54,
+              ),
+              _buildCaptureMeta(
+                Icons.schedule_rounded,
+                _planTimeRange(plan),
+                Colors.white54,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCaptureMeta(IconData icon, String text, Color color) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 13, color: color),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(color: color, fontSize: 11),
+              softWrap: true,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCaptureStatusBadge(String? status) {
+    Color color;
+    IconData icon;
+    String label;
+    switch (status) {
+      case 'completed':
+        color = Colors.greenAccent;
+        icon = Icons.check_circle_rounded;
+        label = 'เสร็จสิ้น';
+        break;
+      case 'in_progress':
+        color = Colors.lightBlueAccent;
+        icon = Icons.autorenew_rounded;
+        label = 'ดำเนินการ';
+        break;
+      case 'cancelled':
+      case 'missed':
+        color = Colors.redAccent;
+        icon = Icons.cancel_rounded;
+        label = 'ไม่สำเร็จ';
+        break;
+      case 'overdue':
+        color = Colors.redAccent;
+        icon = Icons.warning_rounded;
+        label = 'เลยกำหนด';
+        break;
+      case 'pending':
+      default:
+        color = Colors.amber;
+        icon = Icons.schedule_rounded;
+        label = 'วางแผน';
+        break;
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(left: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 13),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -496,6 +1029,11 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
         color = Colors.redAccent;
         icon = Icons.cancel_rounded;
         label = "ไม่สำเร็จ";
+        break;
+      case 'overdue':
+        color = Colors.redAccent;
+        icon = Icons.warning_rounded;
+        label = "เลยกำหนด";
         break;
       case 'pending':
       default:
@@ -573,7 +1111,10 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 12,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -605,7 +1146,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
               Builder(
                 builder: (context) {
                   final namedUsers = _usersList.where((u) {
-                    final name = (u['full_name'] ?? u['username'] ?? '').toString().trim();
+                    final name = (u['full_name'] ?? u['username'] ?? '')
+                        .toString()
+                        .trim();
                     return name.isNotEmpty && name != 'ไม่มีชื่อ';
                   }).toList();
 
@@ -620,21 +1163,33 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                           leading: Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: _selectedUserId == 'all' ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                              color: _selectedUserId == 'all'
+                                  ? kLimeGreen.withOpacity(0.2)
+                                  : Colors.white10,
                               shape: BoxShape.circle,
                             ),
                             child: Icon(
                               Icons.groups_rounded,
-                              color: _selectedUserId == 'all' ? kLimeGreen : Colors.white70,
+                              color: _selectedUserId == 'all'
+                                  ? kLimeGreen
+                                  : Colors.white70,
                               size: 20,
                             ),
                           ),
                           title: const Text(
                             'ทั้งหมด (ทุกคน)',
-                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
                           ),
                           trailing: _selectedUserId == 'all'
-                              ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
+                              ? const Icon(
+                                  Icons.check_circle_rounded,
+                                  color: kLimeGreen,
+                                  size: 22,
+                                )
                               : null,
                           onTap: () {
                             setState(() {
@@ -645,24 +1200,33 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                         ),
                         ...namedUsers.map((user) {
                           final uId = user['id']?.toString() ?? '';
-                          final fullName = (user['full_name'] ?? user['username'] ?? '').toString().trim();
+                          final fullName =
+                              (user['full_name'] ?? user['username'] ?? '')
+                                  .toString()
+                                  .trim();
                           final avatarUrl = user['avatar_url'];
                           final isSelected = _selectedUserId == uId;
-                          
+
                           return ListTile(
-                            leading: avatarUrl != null && avatarUrl.toString().trim().isNotEmpty
+                            leading:
+                                avatarUrl != null &&
+                                    avatarUrl.toString().trim().isNotEmpty
                                 ? Container(
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: isSelected ? kLimeGreen : Colors.white24,
+                                        color: isSelected
+                                            ? kLimeGreen
+                                            : Colors.white24,
                                         width: isSelected ? 2 : 1,
                                       ),
                                     ),
                                     child: CircleAvatar(
                                       radius: 18,
                                       backgroundColor: Colors.white10,
-                                      backgroundImage: NetworkImage(avatarUrl.toString()),
+                                      backgroundImage: NetworkImage(
+                                        avatarUrl.toString(),
+                                      ),
                                       onBackgroundImageError: (_, __) {},
                                     ),
                                   )
@@ -670,18 +1234,28 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                     width: 36,
                                     height: 36,
                                     decoration: BoxDecoration(
-                                      color: isSelected ? kLimeGreen.withOpacity(0.2) : Colors.white10,
+                                      color: isSelected
+                                          ? kLimeGreen.withOpacity(0.2)
+                                          : Colors.white10,
                                       shape: BoxShape.circle,
                                       border: Border.all(
-                                        color: isSelected ? kLimeGreen : Colors.transparent,
+                                        color: isSelected
+                                            ? kLimeGreen
+                                            : Colors.transparent,
                                         width: 1.5,
                                       ),
                                     ),
                                     alignment: Alignment.center,
                                     child: Text(
-                                      fullName.isNotEmpty ? fullName.substring(0, 1).toUpperCase() : '?',
+                                      fullName.isNotEmpty
+                                          ? fullName
+                                                .substring(0, 1)
+                                                .toUpperCase()
+                                          : '?',
                                       style: TextStyle(
-                                        color: isSelected ? kLimeGreen : Colors.white70,
+                                        color: isSelected
+                                            ? kLimeGreen
+                                            : Colors.white70,
                                         fontWeight: FontWeight.bold,
                                         fontSize: 14,
                                       ),
@@ -691,12 +1265,18 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                               fullName,
                               style: TextStyle(
                                 color: isSelected ? kLimeGreen : Colors.white,
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
                                 fontSize: 14,
                               ),
                             ),
                             trailing: isSelected
-                                ? const Icon(Icons.check_circle_rounded, color: kLimeGreen, size: 22)
+                                ? const Icon(
+                                    Icons.check_circle_rounded,
+                                    color: kLimeGreen,
+                                    size: 22,
+                                  )
                                 : null,
                             onTap: () {
                               setState(() {
@@ -708,7 +1288,10 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                         }).toList(),
                         if (namelessCount > 0)
                           Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 12.0,
+                              horizontal: 16.0,
+                            ),
                             child: Center(
                               child: Text(
                                 "(ซ่อนบัญชีไม่มีชื่อ $namelessCount บัญชี)",
@@ -757,8 +1340,18 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     if (date == null) return "";
     const thaiDays = ["จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส.", "อา."];
     const thaiMonths = [
-      "ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.",
-      "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."
+      "ม.ค.",
+      "ก.พ.",
+      "มี.ค.",
+      "เม.ย.",
+      "พ.ค.",
+      "มิ.ย.",
+      "ก.ค.",
+      "ส.ค.",
+      "ก.ย.",
+      "ต.ค.",
+      "พ.ย.",
+      "ธ.ค.",
     ];
     final dayName = thaiDays[date.weekday - 1];
     final monthName = thaiMonths[date.month - 1];
@@ -774,6 +1367,53 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
       now.day,
     ).subtract(Duration(days: day - 1));
     return start.isAtSameMomentAs(currentMonday);
+  }
+
+  Widget _buildOfflineState() {
+    return RefreshIndicator(
+      onRefresh: _refreshPlannerData,
+      color: kLimeGreen,
+      backgroundColor: kCardDark,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 48),
+        children: [
+          const SizedBox(height: 70),
+          const Icon(Icons.wifi_off_rounded, color: Colors.white54, size: 54),
+          const SizedBox(height: 16),
+          const Center(
+            child: Text(
+              'ไม่มีอินเทอร์เน็ต',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              'เชื่อมต่ออินเทอร์เน็ตแล้วลองใหม่อีกครั้ง',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 13),
+            ),
+          ),
+          const SizedBox(height: 20),
+          Center(
+            child: OutlinedButton.icon(
+              onPressed: _refreshPlannerData,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('ลองใหม่'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kLimeGreen,
+                side: const BorderSide(color: kLimeGreen),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -841,9 +1481,13 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                     ? "Weekly Visit Planner"
                                     : "ดูของ: ${_usersList.firstWhere((u) => u['id']?.toString() == _selectedUserId, orElse: () => {'full_name': 'เซลส์'})['full_name'] ?? 'เซลส์'}",
                                 style: TextStyle(
-                                  color: _selectedUserId == 'all' ? Colors.white54 : kLimeGreen,
+                                  color: _selectedUserId == 'all'
+                                      ? Colors.white54
+                                      : kLimeGreen,
                                   fontSize: 11,
-                                  fontWeight: _selectedUserId == 'all' ? FontWeight.normal : FontWeight.bold,
+                                  fontWeight: _selectedUserId == 'all'
+                                      ? FontWeight.normal
+                                      : FontWeight.bold,
                                 ),
                               ),
                             ],
@@ -857,21 +1501,31 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                               setState(() {
                                 if (!_isCalendarView) {
                                   if (_pageController.hasClients) {
-                                    final currentIndex = _pageController.page?.round() ?? 0;
-                                    if (currentIndex >= 0 && currentIndex < _weeks.length) {
+                                    final currentIndex =
+                                        _pageController.page?.round() ?? 0;
+                                    if (currentIndex >= 0 &&
+                                        currentIndex < _weeks.length) {
                                       _focusedDay = _weeks[currentIndex];
                                       _selectedDay = _focusedDay;
                                     }
                                   }
                                 } else {
                                   final targetWeek = _weekStart(_focusedDay);
-                                  final targetIndex = _weeks.indexWhere((w) => w.year == targetWeek.year && w.month == targetWeek.month && w.day == targetWeek.day);
+                                  final targetIndex = _weeks.indexWhere(
+                                    (w) =>
+                                        w.year == targetWeek.year &&
+                                        w.month == targetWeek.month &&
+                                        w.day == targetWeek.day,
+                                  );
                                   if (targetIndex != -1) {
-                                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                                      if (_pageController.hasClients) {
-                                        _pageController.jumpToPage(targetIndex);
-                                      }
-                                    });
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                          if (_pageController.hasClients) {
+                                            _pageController.jumpToPage(
+                                              targetIndex,
+                                            );
+                                          }
+                                        });
                                   }
                                 }
                                 _isCalendarView = !_isCalendarView;
@@ -881,13 +1535,13 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                               padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(
                                 color: kCardDark,
-                                border: Border.all(
-                                  color: Colors.white24,
-                                ),
+                                border: Border.all(color: Colors.white24),
                                 borderRadius: BorderRadius.circular(10),
                               ),
                               child: Icon(
-                                _isCalendarView ? Icons.view_carousel_rounded : Icons.calendar_month_rounded,
+                                _isCalendarView
+                                    ? Icons.view_carousel_rounded
+                                    : Icons.calendar_month_rounded,
                                 color: Colors.white70,
                                 size: 18,
                               ),
@@ -900,13 +1554,17 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                               builder: (context) {
                                 final selectedUser = _selectedUserId != 'all'
                                     ? _usersList.firstWhere(
-                                        (u) => u['id']?.toString() == _selectedUserId,
+                                        (u) =>
+                                            u['id']?.toString() ==
+                                            _selectedUserId,
                                         orElse: () => null,
                                       )
                                     : null;
                                 final avatarUrl = selectedUser?['avatar_url'];
 
-                                if (selectedUser != null && avatarUrl != null && avatarUrl.toString().trim().isNotEmpty) {
+                                if (selectedUser != null &&
+                                    avatarUrl != null &&
+                                    avatarUrl.toString().trim().isNotEmpty) {
                                   return Container(
                                     width: 36,
                                     height: 36,
@@ -919,7 +1577,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                     ),
                                     child: CircleAvatar(
                                       backgroundColor: Colors.white10,
-                                      backgroundImage: NetworkImage(avatarUrl.toString()),
+                                      backgroundImage: NetworkImage(
+                                        avatarUrl.toString(),
+                                      ),
                                       onBackgroundImageError: (_, __) {},
                                     ),
                                   );
@@ -928,15 +1588,21 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                 return Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: _selectedUserId != 'all' ? kLimeGreen.withOpacity(0.2) : kCardDark,
+                                    color: _selectedUserId != 'all'
+                                        ? kLimeGreen.withOpacity(0.2)
+                                        : kCardDark,
                                     border: Border.all(
-                                      color: _selectedUserId != 'all' ? kLimeGreen : Colors.white24,
+                                      color: _selectedUserId != 'all'
+                                          ? kLimeGreen
+                                          : Colors.white24,
                                     ),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(
                                     Icons.filter_list_rounded,
-                                    color: _selectedUserId != 'all' ? kLimeGreen : Colors.white70,
+                                    color: _selectedUserId != 'all'
+                                        ? kLimeGreen
+                                        : Colors.white70,
                                     size: 18,
                                   ),
                                 );
@@ -953,222 +1619,211 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                       ? const Center(
                           child: CircularProgressIndicator(color: kLimeGreen),
                         )
+                      : _loadErrorMessage != null && _visitPlans.isEmpty
+                      ? _buildOfflineState()
                       : _isCalendarView
-                          ? _buildCalendarView()
-                          : Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: 12),
-                              Expanded(
-                                child: PageView.builder(
-                                  controller: _pageController,
-                                  itemCount: _weeks.length,
-                                  itemBuilder: (context, index) {
-                                    final weekStart = _weeks[index];
-                                    final isCurrent = _isCurrentWeek(weekStart);
+                      ? _buildCalendarView()
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: _weeks.length,
+                                itemBuilder: (context, index) {
+                                  final weekStart = _weeks[index];
+                                  final isCurrent = _isCurrentWeek(weekStart);
 
-                                    // Get plans for this week
-                                    final endOfWeek = weekStart.add(
-                                      const Duration(
-                                        days: 6,
-                                        hours: 23,
-                                        minutes: 59,
-                                      ),
-                                    );
-                                    final weekPlans = _filteredVisitPlans.where((p) {
-                                      if (p['planned_date'] == null)
-                                        return false;
-                                      final planDate = DateTime.parse(
-                                        p['planned_date'],
-                                      );
-                                      return planDate.isAfter(
-                                            weekStart.subtract(
-                                              const Duration(seconds: 1),
-                                            ),
-                                          ) &&
-                                          planDate.isBefore(endOfWeek);
-                                    }).toList();
+                                  final weekPlans = _plansForWeek(weekStart);
 
-                                    return AnimatedBuilder(
-                                      animation: _pageController,
-                                      builder: (context, child) {
-                                        double value = 1.0;
-                                        if (_pageController
-                                            .position
-                                            .haveDimensions) {
-                                          value =
-                                              (_pageController.page! - index)
-                                                  .abs();
-                                          value = (1 - (value * 0.15)).clamp(
-                                            0.85,
-                                            1.0,
-                                          );
-                                        } else {
-                                          value = index == 4 ? 1.0 : 0.85;
-                                        }
+                                  return AnimatedBuilder(
+                                    animation: _pageController,
+                                    builder: (context, child) {
+                                      double value = 1.0;
+                                      if (_pageController
+                                          .position
+                                          .haveDimensions) {
+                                        value = (_pageController.page! - index)
+                                            .abs();
+                                        value = (1 - (value * 0.15)).clamp(
+                                          0.85,
+                                          1.0,
+                                        );
+                                      } else {
+                                        // Keep the first visible weekly card full-size
+                                        // before PageView has measured its dimensions.
+                                        value = 1.0;
+                                      }
 
-                                        return Center(
-                                          child: Transform.scale(
-                                            scale: value,
-                                            child: Opacity(
-                                              opacity: value.clamp(0.5, 1.0),
-                                              child: Container(
-                                                width: double.infinity,
-                                                margin:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 4,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  color: kCardDark,
-                                                  border: Border.all(
-                                                    color: isCurrent
-                                                        ? kLimeGreen
-                                                        : Colors.white12,
-                                                    width: isCurrent ? 2 : 1,
+                                      return Center(
+                                        child: Transform.scale(
+                                          scale: value,
+                                          child: Opacity(
+                                            opacity: value.clamp(0.5, 1.0),
+                                            child: Container(
+                                              width: double.infinity,
+                                              margin:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 2,
                                                   ),
-                                                  borderRadius:
-                                                      BorderRadius.circular(12),
+                                              decoration: BoxDecoration(
+                                                color: kCardDark,
+                                                border: Border.all(
+                                                  color: isCurrent
+                                                      ? kLimeGreen
+                                                      : Colors.white12,
+                                                  width: isCurrent ? 2 : 1,
                                                 ),
-                                                child: Column(
-                                                  crossAxisAlignment:
-                                                      CrossAxisAlignment.start,
-                                                  children: [
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 16,
-                                                            vertical: 12,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: isCurrent
-                                                            ? kLimeGreen
-                                                                  .withAlpha(25)
-                                                            : Colors.black26,
-                                                        borderRadius:
-                                                            const BorderRadius.vertical(
-                                                              top:
-                                                                  Radius.circular(
-                                                                    11,
-                                                                  ),
-                                                            ),
-                                                      ),
-                                                      child: Row(
-                                                        mainAxisAlignment:
-                                                            MainAxisAlignment
-                                                                .spaceBetween,
-                                                        children: [
-                                                          Text(
-                                                            _formatWeekRange(
-                                                              weekStart,
-                                                            ),
-                                                            style: TextStyle(
-                                                              color: isCurrent
-                                                                  ? kLimeGreen
-                                                                  : Colors
-                                                                        .white,
-                                                              fontWeight:
-                                                                  FontWeight
-                                                                      .bold,
-                                                            ),
-                                                          ),
-                                                          Builder(
-                                                            builder: (context) {
-                                                              String label = "";
-                                                              Color
-                                                              bgColor = Colors
-                                                                  .transparent;
-                                                              Color textColor =
-                                                                  Colors.white;
-
-                                                              if (isCurrent) {
-                                                                label =
-                                                                    "สัปดาห์นี้";
-                                                                bgColor =
-                                                                    kLimeGreen;
-                                                                textColor =
-                                                                    Colors
-                                                                        .black;
-                                                              } else if (weekStart
-                                                                  .isBefore(
-                                                                    DateTime.now(),
-                                                                  )) {
-                                                                label =
-                                                                    "ที่ผ่านมา";
-                                                                bgColor = Colors
-                                                                    .white12;
-                                                                textColor =
-                                                                    Colors
-                                                                        .white54;
-                                                              } else {
-                                                                label =
-                                                                    "ล่วงหน้า";
-                                                                bgColor = Colors
-                                                                    .blueAccent
-                                                                    .withAlpha(
-                                                                      25,
-                                                                    );
-                                                                textColor = Colors
-                                                                    .blueAccent;
-                                                              }
-
-                                                              if (label.isEmpty)
-                                                                return const SizedBox.shrink();
-
-                                                              return Container(
-                                                                padding:
-                                                                    const EdgeInsets.symmetric(
-                                                                      horizontal:
-                                                                          8,
-                                                                      vertical:
-                                                                          4,
-                                                                    ),
-                                                                decoration: BoxDecoration(
-                                                                  color:
-                                                                      bgColor,
-                                                                  borderRadius:
-                                                                      BorderRadius.circular(
-                                                                        4,
-                                                                      ),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 16,
+                                                          vertical: 12,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: isCurrent
+                                                          ? kLimeGreen
+                                                                .withAlpha(25)
+                                                          : Colors.black26,
+                                                      borderRadius:
+                                                          const BorderRadius.vertical(
+                                                            top:
+                                                                Radius.circular(
+                                                                  11,
                                                                 ),
-                                                                child: Text(
-                                                                  label,
-                                                                  style: TextStyle(
-                                                                    color:
-                                                                        textColor,
-                                                                    fontSize:
-                                                                        10,
-                                                                    fontWeight:
-                                                                        FontWeight
-                                                                            .bold,
-                                                                  ),
-                                                                ),
-                                                              );
-                                                            },
                                                           ),
-                                                        ],
-                                                      ),
                                                     ),
-                                                    Expanded(
-                                                      child: weekPlans.isEmpty
-                                                          ? Center(
+                                                    child: Row(
+                                                      mainAxisAlignment:
+                                                          MainAxisAlignment
+                                                              .spaceBetween,
+                                                      children: [
+                                                        Text(
+                                                          _formatWeekRange(
+                                                            weekStart,
+                                                          ),
+                                                          style: TextStyle(
+                                                            color: isCurrent
+                                                                ? kLimeGreen
+                                                                : Colors.white,
+                                                            fontWeight:
+                                                                FontWeight.bold,
+                                                          ),
+                                                        ),
+                                                        Builder(
+                                                          builder: (context) {
+                                                            String label = "";
+                                                            Color
+                                                            bgColor = Colors
+                                                                .transparent;
+                                                            Color textColor =
+                                                                Colors.white;
+
+                                                            if (isCurrent) {
+                                                              label =
+                                                                  "สัปดาห์นี้";
+                                                              bgColor =
+                                                                  kLimeGreen;
+                                                              textColor =
+                                                                  Colors.black;
+                                                            } else if (weekStart
+                                                                .isBefore(
+                                                                  DateTime.now(),
+                                                                )) {
+                                                              label =
+                                                                  "ที่ผ่านมา";
+                                                              bgColor = Colors
+                                                                  .white12;
+                                                              textColor = Colors
+                                                                  .white54;
+                                                            } else {
+                                                              label =
+                                                                  "ล่วงหน้า";
+                                                              bgColor = Colors
+                                                                  .blueAccent
+                                                                  .withAlpha(
+                                                                    25,
+                                                                  );
+                                                              textColor = Colors
+                                                                  .blueAccent;
+                                                            }
+
+                                                            if (label.isEmpty)
+                                                              return const SizedBox.shrink();
+
+                                                            return Container(
+                                                              padding:
+                                                                  const EdgeInsets.symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical: 4,
+                                                                  ),
+                                                              decoration:
+                                                                  BoxDecoration(
+                                                                    color:
+                                                                        bgColor,
+                                                                    borderRadius:
+                                                                        BorderRadius.circular(
+                                                                          4,
+                                                                        ),
+                                                                  ),
                                                               child: Text(
-                                                                index == 0
-                                                                    ? "ไม่มีแผนงานที่เก่ากว่านี้"
-                                                                    : (index ==
-                                                                              _weeks.length - 1
-                                                                          ? "ไม่มีแผนที่ใหม่กว่านี้\nสามารถสร้างแผนใหม่ได้"
-                                                                          : "ไม่มีแผนเข้าพบ"),
-                                                                textAlign:
-                                                                    TextAlign
-                                                                        .center,
-                                                                style: const TextStyle(
-                                                                  color: Colors
-                                                                      .white54,
-                                                                  fontSize: 13,
+                                                                label,
+                                                                style: TextStyle(
+                                                                  color:
+                                                                      textColor,
+                                                                  fontSize: 10,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .bold,
                                                                 ),
                                                               ),
-                                                            )
-                                                          : ListView.builder(
+                                                            );
+                                                          },
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    child: weekPlans.isEmpty
+                                                        ? Center(
+                                                            child: Text(
+                                                              index == 0
+                                                                  ? "ไม่มีแผนงานที่เก่ากว่านี้"
+                                                                  : (index ==
+                                                                            _weeks.length -
+                                                                                1
+                                                                        ? "ไม่มีแผนที่ใหม่กว่านี้\nสามารถสร้างแผนใหม่ได้"
+                                                                        : "ไม่มีแผนเข้าพบ"),
+                                                              textAlign:
+                                                                  TextAlign
+                                                                      .center,
+                                                              style:
+                                                                  const TextStyle(
+                                                                    color: Colors
+                                                                        .white54,
+                                                                    fontSize:
+                                                                        13,
+                                                                  ),
+                                                            ),
+                                                          )
+                                                        : RefreshIndicator(
+                                                            onRefresh:
+                                                                _refreshPlannerData,
+                                                            color: kLimeGreen,
+                                                            backgroundColor:
+                                                                kCardDark,
+                                                            child: ListView.builder(
+                                                              physics:
+                                                                  const AlwaysScrollableScrollPhysics(),
                                                               padding:
                                                                   const EdgeInsets.all(
                                                                     12,
@@ -1242,7 +1897,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                               width: 8,
                                                                             ),
                                                                             _buildStatusBadge(
-                                                                              plan['status']?.toString(),
+                                                                              _effectivePlanStatus(
+                                                                                plan,
+                                                                              ),
                                                                             ),
                                                                           ],
                                                                         ),
@@ -1265,11 +1922,23 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                                 TextOverflow.ellipsis,
                                                                           ),
                                                                         ],
-                                                                        const SizedBox(height: 8),
-                                                                        const Divider(color: Colors.white12, height: 1),
-                                                                        const SizedBox(height: 8),
+                                                                        const SizedBox(
+                                                                          height:
+                                                                              8,
+                                                                        ),
+                                                                        const Divider(
+                                                                          color:
+                                                                              Colors.white12,
+                                                                          height:
+                                                                              1,
+                                                                        ),
+                                                                        const SizedBox(
+                                                                          height:
+                                                                              8,
+                                                                        ),
                                                                         Row(
-                                                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                                                          mainAxisAlignment:
+                                                                              MainAxisAlignment.spaceBetween,
                                                                           children: [
                                                                             Row(
                                                                               children: [
@@ -1278,9 +1947,13 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                                   size: 12,
                                                                                   color: kLimeGreen,
                                                                                 ),
-                                                                                const SizedBox(width: 5),
+                                                                                const SizedBox(
+                                                                                  width: 5,
+                                                                                ),
                                                                                 Text(
-                                                                                  _formatPlanDate(plan['planned_date']),
+                                                                                  _formatPlanDate(
+                                                                                    plan['planned_date'],
+                                                                                  ),
                                                                                   style: const TextStyle(
                                                                                     color: kLimeGreen,
                                                                                     fontSize: 11,
@@ -1289,18 +1962,29 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                                 ),
                                                                               ],
                                                                             ),
-                                                                            if (plan['profiles'] != null && plan['profiles']['full_name'] != null)
-                                                                              Flexible(
-                                                                                child: Text(
-                                                                                  plan['profiles']['full_name'],
-                                                                                  style: const TextStyle(
-                                                                                    color: Colors.white38,
-                                                                                    fontSize: 10,
-                                                                                  ),
-                                                                                  maxLines: 1,
-                                                                                  overflow: TextOverflow.ellipsis,
+                                                                            Flexible(
+                                                                              child: Text(
+                                                                                'เซล: ${_assignedSalesNameForPlan(plan)}',
+                                                                                style: const TextStyle(
+                                                                                  color: Colors.white38,
+                                                                                  fontSize: 10,
                                                                                 ),
+                                                                                maxLines: 1,
+                                                                                overflow: TextOverflow.ellipsis,
                                                                               ),
+                                                                            ),
+                                                                            const SizedBox(
+                                                                              width: 8,
+                                                                            ),
+                                                                            Text(
+                                                                              _planTimeRange(
+                                                                                plan,
+                                                                              ),
+                                                                              style: const TextStyle(
+                                                                                color: Colors.white38,
+                                                                                fontSize: 10,
+                                                                              ),
+                                                                            ),
                                                                           ],
                                                                         ),
                                                                       ],
@@ -1309,61 +1993,117 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                                 );
                                                               },
                                                             ),
-                                                    ),
-                                                    InkWell(
-                                                      onTap: () =>
-                                                          _showAddModal(
-                                                            weekStart,
                                                           ),
-                                                      child: Container(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              12,
-                                                            ),
-                                                        decoration:
-                                                            const BoxDecoration(
-                                                              border: Border(
-                                                                top: BorderSide(
-                                                                  color: Colors
-                                                                      .white12,
-                                                                ),
-                                                              ),
-                                                            ),
-                                                        child: const Row(
-                                                          mainAxisAlignment:
-                                                              MainAxisAlignment
-                                                                  .center,
-                                                          children: [
-                                                            Icon(
-                                                              Icons.add,
+                                                  ),
+                                                  Container(
+                                                    decoration:
+                                                        const BoxDecoration(
+                                                          border: Border(
+                                                            top: BorderSide(
                                                               color: Colors
-                                                                  .white54,
-                                                              size: 18,
+                                                                  .white12,
                                                             ),
-                                                            SizedBox(width: 8),
-                                                            Text(
-                                                              "เพิ่มแผนเข้าพบ",
-                                                              style: TextStyle(
-                                                                color: Colors
-                                                                    .white54,
+                                                          ),
+                                                        ),
+                                                    child: Row(
+                                                      children: [
+                                                        Expanded(
+                                                          child: InkWell(
+                                                            onTap: () =>
+                                                                _showAddModal(
+                                                                  weekStart,
+                                                                ),
+                                                            child: const SizedBox(
+                                                              height: 48,
+                                                              child: Row(
+                                                                mainAxisAlignment:
+                                                                    MainAxisAlignment
+                                                                        .center,
+                                                                children: [
+                                                                  Icon(
+                                                                    Icons.add,
+                                                                    color: Colors
+                                                                        .white54,
+                                                                    size: 18,
+                                                                  ),
+                                                                  SizedBox(
+                                                                    width: 8,
+                                                                  ),
+                                                                  Text(
+                                                                    'เพิ่มแผนเข้าพบ',
+                                                                    style: TextStyle(
+                                                                      color: Colors
+                                                                          .white54,
+                                                                    ),
+                                                                  ),
+                                                                ],
                                                               ),
                                                             ),
-                                                          ],
+                                                          ),
                                                         ),
-                                                      ),
+                                                        Tooltip(
+                                                          message:
+                                                              'แคปแผนทั้งสัปดาห์',
+                                                          child: InkWell(
+                                                            onTap:
+                                                                _isCapturingWeek
+                                                                ? null
+                                                                : () => _captureWeekPlan(
+                                                                    weekStart,
+                                                                    weekPlans,
+                                                                  ),
+                                                            borderRadius:
+                                                                const BorderRadius.only(
+                                                                  bottomRight:
+                                                                      Radius.circular(
+                                                                        12,
+                                                                      ),
+                                                                ),
+                                                            child: SizedBox(
+                                                              width: 52,
+                                                              height: 48,
+                                                              child: Center(
+                                                                child:
+                                                                    _isCapturingWeek
+                                                                    ? const SizedBox(
+                                                                        width:
+                                                                            18,
+                                                                        height:
+                                                                            18,
+                                                                        child: CircularProgressIndicator(
+                                                                          strokeWidth:
+                                                                              2,
+                                                                          color:
+                                                                              kLimeGreen,
+                                                                        ),
+                                                                      )
+                                                                    : const Icon(
+                                                                        Icons
+                                                                            .camera_alt_outlined,
+                                                                        color:
+                                                                            kLimeGreen,
+                                                                        size:
+                                                                            20,
+                                                                      ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
                                                     ),
-                                                  ],
-                                                ), // Ends Column
-                                              ), // Ends Container
-                                            ), // Ends Opacity
-                                          ), // Ends Transform.scale
-                                        ); // Ends Center
-                                      }, // Ends builder
-                                    ); // Ends AnimatedBuilder
-                                  }, // Ends itemBuilder
-                                ), // Ends PageView.builder
-                              ), // Ends SizedBox
-                              /* 
+                                                  ),
+                                                ],
+                                              ), // Ends Column
+                                            ), // Ends Container
+                                          ), // Ends Opacity
+                                        ), // Ends Transform.scale
+                                      ); // Ends Center
+                                    }, // Ends builder
+                                  ); // Ends AnimatedBuilder
+                                }, // Ends itemBuilder
+                              ), // Ends PageView.builder
+                            ), // Ends SizedBox
+                            /*
                               // --- Repeated Visits Section (Hidden for now) ---
                               const SizedBox(height: 24),
                               Padding(
@@ -1669,8 +2409,8 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                     ),
                               const SizedBox(height: 40),
                               */
-                            ],
-                          ),
+                          ],
+                        ),
                 ),
               ],
             ),

@@ -1,7 +1,8 @@
 // lib/screens/voice_chat_sceenai/ai_voice_chat/text_chat_page.dart
 import 'package:flutter/material.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http; // ยังคง import ไว้ใช้สำหรับ Type Response
+import 'package:http/http.dart'
+    as http; // ยังคง import ไว้ใช้สำหรับ Type Response
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ 1. เพิ่ม SharedPrefs เพื่อดึง UserID
 import '../../../../constants.dart';
 import '../../../../services/api_service.dart'; // ✅ 2. เพิ่ม ApiService
@@ -15,14 +16,22 @@ class TextChatPage extends StatefulWidget {
 
 class _TextChatPageState extends State<TextChatPage> {
   final TextEditingController _controller = TextEditingController();
-  final ScrollController _scrollController = ScrollController(); // เพิ่มตัวช่วยเลื่อนจอลงล่างสุด
-  
+  final ScrollController _scrollController =
+      ScrollController(); // เพิ่มตัวช่วยเลื่อนจอลงล่างสุด
+
   // ข้อความเริ่มต้น
   final List<Map<String, String>> _messages = [
-    {'role': 'assistant', 'content': 'ผมคือ AI ของแบรนด์ Wallcraft'}
+    {'role': 'assistant', 'content': 'ผมคือ AI ของแบรนด์ Wallcraft'},
   ];
-  
+
   bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<void> _sendMessage() async {
     if (_controller.text.isEmpty) return;
@@ -39,10 +48,11 @@ class _TextChatPageState extends State<TextChatPage> {
     try {
       // ✅ 1. ดึง UserID จริงจากเครื่อง
       final prefs = await SharedPreferences.getInstance();
-      final userId = prefs.getString('user_id') ?? 'guest'; // ถ้าไม่มีให้เป็น guest
-      
+      final userId =
+          prefs.getString('user_id') ?? 'guest'; // ถ้าไม่มีให้เป็น guest
+
       final url = AppConfig.chatUrl;
-      print("Sending to: $url (User: $userId)"); 
+      print("Sending to: $url (User: $userId)");
 
       // ✅ 2. ใช้ ApiService.post แทน http.post
       // (ระบบจะจัดการ Header และ Token Auto-Refresh ให้เอง)
@@ -56,10 +66,11 @@ class _TextChatPageState extends State<TextChatPage> {
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        
+
         setState(() {
           // รับค่าตอบกลับ (รองรับทั้ง key 'ai_reply' และ 'reply')
-          String reply = data['ai_reply'] ?? data['reply'] ?? "No response content";
+          String reply =
+              data['ai_reply'] ?? data['reply'] ?? "No response content";
           _messages.add({"role": "assistant", "content": reply});
         });
         _scrollToBottom(); // เลื่อนจอลงเมื่อ AI ตอบ
@@ -94,7 +105,7 @@ class _TextChatPageState extends State<TextChatPage> {
       SnackBar(
         content: Text(msg, style: const TextStyle(color: Colors.white)),
         backgroundColor: Colors.redAccent,
-      )
+      ),
     );
   }
 
@@ -109,98 +120,119 @@ class _TextChatPageState extends State<TextChatPage> {
         centerTitle: true,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1.0),
-          child: Container(
-            color: Colors.white12,
-            height: 1.0,
-          ),
+          child: Container(color: Colors.white12, height: 1.0),
         ),
       ),
-      body: Column(
-        children: [
-          // --- ส่วนแสดงรายการข้อความ ---
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController, // ✅ ใส่ Controller
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final m = _messages[index];
-                final isUser = m['role'] == 'user';
-                return Align(
-                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-                    decoration: BoxDecoration(
-                      color: isUser ? Colors.blueGrey.shade800 : const Color(0xFF1A1A1A),
-                      borderRadius: BorderRadius.only(
-                        topLeft: const Radius.circular(16),
-                        topRight: const Radius.circular(16),
-                        bottomLeft: isUser ? const Radius.circular(16) : Radius.zero,
-                        bottomRight: isUser ? Radius.zero : const Radius.circular(16),
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        top: false,
+        bottom: true,
+        child: Column(
+          children: [
+            // --- ส่วนแสดงรายการข้อความ ---
+            Expanded(
+              child: ListView.builder(
+                controller: _scrollController, // ✅ ใส่ Controller
+                padding: const EdgeInsets.all(16),
+                itemCount: _messages.length,
+                itemBuilder: (context, index) {
+                  final m = _messages[index];
+                  final isUser = m['role'] == 'user';
+                  return Align(
+                    alignment: isUser
+                        ? Alignment.centerRight
+                        : Alignment.centerLeft,
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
                       ),
-                      border: Border.all(color: Colors.white10),
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.of(context).size.width * 0.75,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isUser
+                            ? Colors.blueGrey.shade800
+                            : const Color(0xFF1A1A1A),
+                        borderRadius: BorderRadius.only(
+                          topLeft: const Radius.circular(16),
+                          topRight: const Radius.circular(16),
+                          bottomLeft: isUser
+                              ? const Radius.circular(16)
+                              : Radius.zero,
+                          bottomRight: isUser
+                              ? Radius.zero
+                              : const Radius.circular(16),
+                        ),
+                        border: Border.all(color: Colors.white10),
+                      ),
+                      child: Text(
+                        m['content'] ?? "",
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                        ),
+                      ),
                     ),
-                    child: Text(
-                      m['content'] ?? "",
-                      style: const TextStyle(color: Colors.white, fontSize: 16),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          
-          // --- Loading Indicator ---
-          if (_isLoading) 
-            const Padding(
-              padding: EdgeInsets.all(8.0),
-              child: LinearProgressIndicator(
-                backgroundColor: Colors.transparent, 
-                color: Colors.purpleAccent,
+                  );
+                },
               ),
             ),
 
-          // --- ช่องพิมพ์ข้อความ ---
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(
-              color: Color(0xFF111111),
-              border: Border(top: BorderSide(color: Colors.white12)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    style: const TextStyle(color: Colors.white),
-                    onSubmitted: (_) => _sendMessage(),
-                    decoration: InputDecoration(
-                      hintText: 'Type a message...',
-                      hintStyle: TextStyle(color: Colors.grey.shade600),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide.none,
+            // --- Loading Indicator ---
+            if (_isLoading)
+              const Padding(
+                padding: EdgeInsets.all(8.0),
+                child: LinearProgressIndicator(
+                  backgroundColor: Colors.transparent,
+                  color: Colors.purpleAccent,
+                ),
+              ),
+
+            // --- ช่องพิมพ์ข้อความ ---
+            Container(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              decoration: const BoxDecoration(
+                color: Color(0xFF111111),
+                border: Border(top: BorderSide(color: Colors.white12)),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _controller,
+                      style: const TextStyle(color: Colors.white),
+                      onSubmitted: (_) => _sendMessage(),
+                      decoration: InputDecoration(
+                        hintText: 'Type a message...',
+                        hintStyle: TextStyle(color: Colors.grey.shade600),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(30),
+                          borderSide: BorderSide.none,
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF222222),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 10,
+                        ),
                       ),
-                      filled: true,
-                      fillColor: const Color(0xFF222222),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                CircleAvatar(
-                  backgroundColor: Colors.white,
-                  child: IconButton(
-                    icon: const Icon(Icons.send, color: Colors.black),
-                    onPressed: _isLoading ? null : _sendMessage,
+                  const SizedBox(width: 8),
+                  CircleAvatar(
+                    backgroundColor: Colors.white,
+                    child: IconButton(
+                      icon: const Icon(Icons.send, color: Colors.black),
+                      onPressed: _isLoading ? null : _sendMessage,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

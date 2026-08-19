@@ -39,38 +39,41 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
   final TextEditingController _minAreaController = TextEditingController();
   final TextEditingController _maxAreaController = TextEditingController();
 
-  bool _showTeamLeaderboard = true; 
+  bool _showTeamLeaderboard = true;
 
   String _aiInsight = "กำลังวิเคราะห์ข้อมูล...";
-  String _totalProjects = "0"; 
-  String _totalCheckins = "0"; 
+  String _totalProjects = "0";
+  String _totalCheckins = "0";
   String _totalArea = "0.00";
   String _importantCount = "0";
   String _timeLabel = "ทั้งหมด";
-  
+
   List<String> _availableTeams = [];
   List<String> _availablePersons = [];
-  List<dynamic> _projectTypes = []; 
-  List<dynamic> _productCategories = []; 
-  
+  List<dynamic> _projectTypes = [];
+  List<dynamic> _productCategories = [];
+
   // 🎯 เปลี่ยน Type มารองรับ dynamic (เพราะ API จะส่งเป็น Object {count, area})
   List<MapEntry<String, dynamic>> _teamLeaderboard = [];
-  List<MapEntry<String, dynamic>> _personLeaderboard = []; 
-  List<MapEntry<String, dynamic>> _sourceLeaderboard = []; 
+  List<MapEntry<String, dynamic>> _personLeaderboard = [];
+  List<MapEntry<String, dynamic>> _sourceLeaderboard = [];
 
-  Map<String, dynamic> _rawStats = {}; 
+  Map<String, dynamic> _rawStats = {};
 
   // 🌟 Static Cache Variables
   static Map<String, dynamic>? _cachedData;
-  static bool _hasLoadedOnce = false;
-
   @override
   void initState() {
     super.initState();
-    // Default to 'monthly' (This month) instead of 'all' to save bandwidth
-    if (!_hasLoadedOnce) {
-      _currentFilter = 'monthly';
-    }
+    // เปิดหน้าแรกด้วยข้อมูลย้อนหลัง 90 วัน (นับรวมวันนี้)
+    final today = DateTime.now();
+    _currentFilter = 'custom';
+    _startDate = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).subtract(const Duration(days: 89));
+    _endDate = DateTime(today.year, today.month, today.day);
 
     if (_cachedData != null) {
       // โหลดข้อมูลจาก Cache ทันทีโดยไม่ต้องขึ้น Loading Screen
@@ -78,43 +81,54 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
       // แอบรีเฟรชข้อมูลพื้นหลัง (Silent Refresh)
       _fetchSummaryData(isSilent: true);
     } else {
-      _fetchSummaryData(); 
+      _fetchSummaryData();
     }
   }
 
   void _populateDataFromCache(Map<String, dynamic> data) {
     if (!mounted) return;
-    
+
     Map<String, dynamic> teamsData = data['stats']['team_performance'] ?? {};
-    var sortedTeams = teamsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
-    
-    Map<String, dynamic> personsData = data['stats']['person_performance'] ?? {};
-    var sortedPersons = personsData.entries.toList()..sort((a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int));
-    
+    var sortedTeams = teamsData.entries.toList()
+      ..sort(
+        (a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int),
+      );
+
+    Map<String, dynamic> personsData =
+        data['stats']['person_performance'] ?? {};
+    var sortedPersons = personsData.entries.toList()
+      ..sort(
+        (a, b) => (b.value['count'] as int).compareTo(a.value['count'] as int),
+      );
+
     Map<String, dynamic> sourceData = data['stats']['source_performance'] ?? {};
     var sortedSource = sourceData.entries.toList();
 
     setState(() {
       _aiInsight = data['ai_insight'] ?? "ไม่พบข้อความสรุปจาก AI";
-      _rawStats = data['stats']; 
-      _totalProjects = _rawStats['total_orders'].toString(); 
-      _totalCheckins = _rawStats['total_checkins']?.toString() ?? _totalProjects;
-      
-      double area = double.tryParse(_rawStats['total_area_sqm'].toString()) ?? 0;
-      _totalArea = area > 1000 ? "${(area / 1000).toStringAsFixed(1)}K" : area.toStringAsFixed(0);
-      
+      _rawStats = data['stats'];
+      _totalProjects = _rawStats['total_orders'].toString();
+      _totalCheckins =
+          _rawStats['total_checkins']?.toString() ?? _totalProjects;
+
+      double area =
+          double.tryParse(_rawStats['total_area_sqm'].toString()) ?? 0;
+      _totalArea = area > 1000
+          ? "${(area / 1000).toStringAsFixed(1)}K"
+          : area.toStringAsFixed(0);
+
       _importantCount = _rawStats['important_count'].toString();
       _timeLabel = data['time_label'] ?? "ทั้งหมด";
-      
+
       _teamLeaderboard = sortedTeams;
       _personLeaderboard = sortedPersons;
-      _sourceLeaderboard = sortedSource; 
-      
+      _sourceLeaderboard = sortedSource;
+
       _availableTeams = List<String>.from(data['available_teams'] ?? []);
       _availablePersons = List<String>.from(data['available_persons'] ?? []);
       _projectTypes = data['project_types'] ?? [];
       _productCategories = data['product_categories'] ?? [];
-      
+
       _isLoading = false;
     });
   }
@@ -128,28 +142,37 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
 
   Future<void> _fetchSummaryData({bool isSilent = false}) async {
     if (!isSilent) {
-      setState(() { _isLoading = true; _errorMessage = null; });
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
     }
 
     try {
-      String urlStr = '${AppConfig.baseUrl}/admin/ai-summary?filter=$_currentFilter'
+      String urlStr =
+          '${AppConfig.baseUrl}/admin/ai-summary?filter=$_currentFilter'
           '&team=$_selectedTeam&person=$_selectedPerson&source=$_selectedSource'
           '&project_type_id=$_selectedProjectType&product_category_id=$_selectedProductCategory';
-      
-      if (_startDate != null) urlStr += '&start_date=${_startDate!.toIso8601String().split('T')[0]}';
-      if (_endDate != null) urlStr += '&end_date=${_endDate!.toIso8601String().split('T')[0]}';
-      if (_minAreaController.text.isNotEmpty) urlStr += '&min_area=${_minAreaController.text}';
-      if (_maxAreaController.text.isNotEmpty) urlStr += '&max_area=${_maxAreaController.text}';
+
+      if (_startDate != null)
+        urlStr += '&start_date=${_startDate!.toIso8601String().split('T')[0]}';
+      if (_endDate != null)
+        urlStr += '&end_date=${_endDate!.toIso8601String().split('T')[0]}';
+      if (_minAreaController.text.isNotEmpty)
+        urlStr += '&min_area=${_minAreaController.text}';
+      if (_maxAreaController.text.isNotEmpty)
+        urlStr += '&max_area=${_maxAreaController.text}';
 
       final url = Uri.parse(urlStr);
-      final response = await ApiService.get(url).timeout(const Duration(seconds: 20));
+      final response = await ApiService.get(
+        url,
+      ).timeout(const Duration(seconds: 20));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (mounted) {
           // เก็บลง Cache
           _cachedData = data;
-          _hasLoadedOnce = true;
           // แสดงผล
           _populateDataFromCache(data);
         }
@@ -162,7 +185,11 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
   }
 
   void _handleError(String msg) {
-    if (mounted) setState(() { _errorMessage = msg; _isLoading = false; });
+    if (mounted)
+      setState(() {
+        _errorMessage = msg;
+        _isLoading = false;
+      });
   }
 
   void _openFilterModal() {
@@ -172,23 +199,37 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
       backgroundColor: Colors.transparent,
       builder: (context) => AdminFilterModal(
         currentFilters: {
-          'currentFilter': _currentFilter, 'selectedTeam': _selectedTeam, 'selectedPerson': _selectedPerson,
-          'selectedSource': _selectedSource, 'selectedProjectType': _selectedProjectType,
-          'selectedProductCategory': _selectedProductCategory, 'startDate': _startDate,
-          'endDate': _endDate, 'minArea': _minAreaController.text, 'maxArea': _maxAreaController.text,
+          'currentFilter': _currentFilter,
+          'selectedTeam': _selectedTeam,
+          'selectedPerson': _selectedPerson,
+          'selectedSource': _selectedSource,
+          'selectedProjectType': _selectedProjectType,
+          'selectedProductCategory': _selectedProductCategory,
+          'startDate': _startDate,
+          'endDate': _endDate,
+          'minArea': _minAreaController.text,
+          'maxArea': _maxAreaController.text,
         },
-        projectTypes: _projectTypes, productCategories: _productCategories,
-        availableTeams: _availableTeams, availablePersons: _availablePersons,
+        projectTypes: _projectTypes,
+        productCategories: _productCategories,
+        availableTeams: _availableTeams,
+        availablePersons: _availablePersons,
         onApply: (newFilters) {
           setState(() {
-            _currentFilter = newFilters['currentFilter']; _selectedTeam = newFilters['selectedTeam']; _selectedPerson = newFilters['selectedPerson'];
-            _selectedSource = newFilters['selectedSource']; _selectedProjectType = newFilters['selectedProjectType'];
-            _selectedProductCategory = newFilters['selectedProductCategory']; _startDate = newFilters['startDate'];
-            _endDate = newFilters['endDate']; _minAreaController.text = newFilters['minArea']; _maxAreaController.text = newFilters['maxArea'];
+            _currentFilter = newFilters['currentFilter'];
+            _selectedTeam = newFilters['selectedTeam'];
+            _selectedPerson = newFilters['selectedPerson'];
+            _selectedSource = newFilters['selectedSource'];
+            _selectedProjectType = newFilters['selectedProjectType'];
+            _selectedProductCategory = newFilters['selectedProductCategory'];
+            _startDate = newFilters['startDate'];
+            _endDate = newFilters['endDate'];
+            _minAreaController.text = newFilters['minArea'];
+            _maxAreaController.text = newFilters['maxArea'];
           });
           _fetchSummaryData();
         },
-      )
+      ),
     );
   }
 
@@ -201,7 +242,7 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
         rawStats: _rawStats,
         timeLabel: _timeLabel,
         initialAiInsight: _aiInsight,
-      )
+      ),
     );
   }
 
@@ -211,63 +252,169 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
       backgroundColor: kDarkBg,
       body: Stack(
         children: [
-          Positioned(top: -50, right: -50, child: Container(width: 300, height: 300, decoration: BoxDecoration(shape: BoxShape.circle, color: kPremiumGold.withOpacity(0.1)), child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80), child: Container(color: Colors.transparent)))),
+          Positioned(
+            top: -50,
+            right: -50,
+            child: Container(
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: kPremiumGold.withOpacity(0.1),
+              ),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
+                child: Container(color: Colors.transparent),
+              ),
+            ),
+          ),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16.0,
+                    vertical: 12.0,
+                  ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Row(
                         children: [
-                          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kPremiumGold.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: const Icon(Icons.analytics_rounded, color: kPremiumGold, size: 22)),
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: kPremiumGold.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.analytics_rounded,
+                              color: kPremiumGold,
+                              size: 22,
+                            ),
+                          ),
                           const SizedBox(width: 12),
                           const Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [Text("รายงานสรุป", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)), Text("Enterprise Insight", style: TextStyle(color: Colors.white54, fontSize: 11))],
+                            children: [
+                              Text(
+                                "รายงานสรุป",
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                "Enterprise Insight",
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
-                      GestureDetector(onTap: _openFilterModal, child: Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kCardDark, border: Border.all(color: kPremiumGold.withOpacity(0.5)), borderRadius: BorderRadius.circular(10)), child: const Icon(Icons.tune_rounded, color: kPremiumGold, size: 18)))
+                      GestureDetector(
+                        onTap: _openFilterModal,
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kCardDark,
+                            border: Border.all(
+                              color: kPremiumGold.withOpacity(0.5),
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.tune_rounded,
+                            color: kPremiumGold,
+                            size: 18,
+                          ),
+                        ),
+                      ),
                     ],
                   ),
                 ),
                 Expanded(
-                  child: _isLoading 
-                    ? const Center(child: CircularProgressIndicator(color: kPremiumGold))
-                    : _errorMessage != null
+                  child: _isLoading
+                      ? const Center(
+                          child: CircularProgressIndicator(color: kPremiumGold),
+                        )
+                      : _errorMessage != null
                       ? _buildErrorState()
                       : RefreshIndicator(
-                          color: kPremiumGold, backgroundColor: kCardDark, onRefresh: _fetchSummaryData,
+                          color: kPremiumGold,
+                          backgroundColor: kCardDark,
+                          onRefresh: _fetchSummaryData,
                           child: ListView(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 110),
+                            physics: const AlwaysScrollableScrollPhysics(),
                             children: [
-                              _buildAiInsightBanner(),
-                              const SizedBox(height: 24),
-                              Text("สถิติประจำช่วง: $_timeLabel", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                              Text(
+                                "สถิติประจำช่วง: $_timeLabel",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               const SizedBox(height: 12),
-                              
+
                               Row(
                                 children: [
-                                  Expanded(child: SummaryStatCard(title: "จำนวนโครงการ", value: _totalProjects, unit: "โครงการ", icon: Icons.business_center_rounded, color: Colors.blueAccent)),
+                                  Expanded(
+                                    child: SummaryStatCard(
+                                      title: "จำนวนโครงการ",
+                                      value: _totalProjects,
+                                      unit: "โครงการ",
+                                      icon: Icons.business_center_rounded,
+                                      color: Colors.blueAccent,
+                                    ),
+                                  ),
                                   const SizedBox(width: 16),
-                                  Expanded(child: SummaryStatCard(title: "พื้นที่รวม", value: _totalArea, unit: "ตร.ม.", icon: Icons.square_foot_rounded, color: Colors.orangeAccent)),
+                                  Expanded(
+                                    child: SummaryStatCard(
+                                      title: "พื้นที่รวม",
+                                      value: _totalArea,
+                                      unit: "ตร.ม.",
+                                      icon: Icons.square_foot_rounded,
+                                      color: Colors.orangeAccent,
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 16),
                               Row(
                                 children: [
-                                  Expanded(child: SummaryStatCard(title: "โครงการสำคัญ", value: _importantCount, unit: "โครงการ", icon: Icons.star_rounded, color: Colors.redAccent)),
+                                  Expanded(
+                                    child: SummaryStatCard(
+                                      title: "โครงการสำคัญ",
+                                      value: _importantCount,
+                                      unit: "โครงการ",
+                                      icon: Icons.star_rounded,
+                                      color: Colors.redAccent,
+                                    ),
+                                  ),
                                   const SizedBox(width: 16),
-                                  Expanded(child: SummaryStatCard(title: "เช็คอิน", value: _totalCheckins, unit: "ครั้ง", icon: Icons.location_on_rounded, color: Colors.greenAccent)),
+                                  Expanded(
+                                    child: SummaryStatCard(
+                                      title: "เช็คอิน",
+                                      value: _totalCheckins,
+                                      unit: "ครั้ง",
+                                      icon: Icons.location_on_rounded,
+                                      color: Colors.greenAccent,
+                                    ),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 24),
 
-                              TrendLineChart(trendData: _rawStats['daily_trend']),
+                              TrendLineChart(
+                                trendData: _rawStats['daily_trend'],
+                              ),
                               const SizedBox(height: 16),
                               SourcePieChart(sourceData: _sourceLeaderboard),
                               const SizedBox(height: 16),
@@ -277,8 +424,27 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
                               const SizedBox(height: 30),
 
                               Container(
-                                padding: const EdgeInsets.all(4), decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(12)),
-                                child: Row(children: [Expanded(child: _buildTabButton("ตารางอันดับทีม", true)), Expanded(child: _buildTabButton("ตารางบุคคล", false))]),
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: kCardDark,
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: _buildTabButton(
+                                        "ตารางอันดับทีม",
+                                        true,
+                                      ),
+                                    ),
+                                    Expanded(
+                                      child: _buildTabButton(
+                                        "ตารางบุคคล",
+                                        false,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                               const SizedBox(height: 16),
                               _buildLeaderboardList(),
@@ -290,6 +456,11 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
               ],
             ),
           ),
+          Positioned(
+            right: 18,
+            bottom: MediaQuery.of(context).padding.bottom + 18,
+            child: _buildAiFloatingButton(),
+          ),
         ],
       ),
     );
@@ -299,50 +470,126 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
     bool isSelected = _showTeamLeaderboard == isTeamTab;
     return GestureDetector(
       onTap: () => setState(() => _showTeamLeaderboard = isTeamTab),
-      child: Container(padding: const EdgeInsets.symmetric(vertical: 10), decoration: BoxDecoration(color: isSelected ? kPremiumGold.withOpacity(0.15) : Colors.transparent, borderRadius: BorderRadius.circular(8)), child: Center(child: Text(text, style: TextStyle(color: isSelected ? kPremiumGold : Colors.white54, fontWeight: FontWeight.bold, fontSize: 13)))),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? kPremiumGold.withOpacity(0.15)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: isSelected ? kPremiumGold : Colors.white54,
+              fontWeight: FontWeight.bold,
+              fontSize: 13,
+            ),
+          ),
+        ),
+      ),
     );
   }
 
-  Widget _buildAiInsightBanner() {
-    return GestureDetector(
-      onTap: _openAiChatModal,
-      child: Container(
-        padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: LinearGradient(colors: [kCardDark, kCardDark.withOpacity(0.8)], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(24), border: Border.all(color: kPremiumGold.withOpacity(0.4)), boxShadow: [BoxShadow(color: kPremiumGold.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 5))]),
-        child: Row(
-          children: [
-            Container(padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: kPremiumGold.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.auto_awesome_rounded, color: kPremiumGold, size: 24)),
-            const SizedBox(width: 16),
-            const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text("อ่านบทสรุปเชิงลึก", style: TextStyle(color: kPremiumGold, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 0.5)), SizedBox(height: 4), Text("พร้อมพูดคุยถามข้อมูลกับ AI Assistant", style: TextStyle(color: Colors.white70, fontSize: 12))])),
-            const Icon(Icons.arrow_forward_ios_rounded, color: kPremiumGold, size: 16),
-          ],
+  Widget _buildAiFloatingButton() {
+    return Semantics(
+      button: true,
+      label: 'เปิด AI Assistant',
+      child: Tooltip(
+        message: 'เปิด AI Assistant',
+        child: Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: kPremiumGold,
+            border: Border.all(color: Colors.white24, width: 2),
+            boxShadow: [
+              BoxShadow(
+                color: kPremiumGold.withOpacity(0.35),
+                blurRadius: 12,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: _openAiChatModal,
+              customBorder: const CircleBorder(),
+              child: const Icon(
+                Icons.auto_awesome_rounded,
+                color: kDarkBg,
+                size: 24,
+              ),
+            ),
+          ),
         ),
       ),
     );
   }
 
   Widget _buildLeaderboardList() {
-    List<MapEntry<String, dynamic>> dataList = _showTeamLeaderboard ? _teamLeaderboard : _personLeaderboard;
-    if (dataList.isEmpty) return Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(20)), child: const Center(child: Text("ไม่มีข้อมูล", style: TextStyle(color: Colors.white54))));
-    
+    List<MapEntry<String, dynamic>> dataList = _showTeamLeaderboard
+        ? _teamLeaderboard
+        : _personLeaderboard;
+    if (dataList.isEmpty)
+      return Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: kCardDark,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Center(
+          child: Text("ไม่มีข้อมูล", style: TextStyle(color: Colors.white54)),
+        ),
+      );
+
     return Container(
-      decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(24), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      decoration: BoxDecoration(
+        color: kCardDark,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Column(
         children: List.generate(dataList.length, (index) {
           final item = dataList[index];
           // 🎯 ดึงข้อมูลจาก API ที่เราแก้ใหม่
-          final count = item.value['count']; 
-          final area = (item.value['area'] as num).toStringAsFixed(1); 
+          final count = item.value['count'];
+          final area = (item.value['area'] as num).toStringAsFixed(1);
 
           return ListTile(
-            leading: Text("#${index + 1}", style: TextStyle(color: index == 0 ? kPremiumGold : Colors.grey[600], fontWeight: FontWeight.bold)),
-            title: Text(item.key, style: const TextStyle(color: Colors.white, fontSize: 14)),
+            leading: Text(
+              "#${index + 1}",
+              style: TextStyle(
+                color: index == 0 ? kPremiumGold : Colors.grey[600],
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            title: Text(
+              item.key,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
             // 🎯 แก้ไขให้แสดง 2 บรรทัด (จำนวนโครงการ และ ตร.ม.)
             trailing: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text("$count โครงการ", style: const TextStyle(color: kNeonPurple, fontWeight: FontWeight.bold, fontSize: 13)),
-                Text("$area ตร.ม.", style: const TextStyle(color: Colors.white54, fontSize: 11)),
+                Text(
+                  "$count โครงการ",
+                  style: const TextStyle(
+                    color: kNeonPurple,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                  ),
+                ),
+                Text(
+                  "$area ตร.ม.",
+                  style: const TextStyle(color: Colors.white54, fontSize: 11),
+                ),
               ],
             ),
           );
@@ -360,7 +607,14 @@ class _AdminSummaryScreenState extends State<AdminSummaryScreen> {
           const SizedBox(height: 16),
           Text(_errorMessage!, style: const TextStyle(color: Colors.white70)),
           const SizedBox(height: 24),
-          ElevatedButton(onPressed: _fetchSummaryData, style: ElevatedButton.styleFrom(backgroundColor: kPremiumGold, foregroundColor: Colors.black), child: const Text("ลองใหม่"))
+          ElevatedButton(
+            onPressed: _fetchSummaryData,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: kPremiumGold,
+              foregroundColor: Colors.black,
+            ),
+            child: const Text("ลองใหม่"),
+          ),
         ],
       ),
     );
