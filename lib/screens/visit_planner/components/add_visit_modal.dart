@@ -183,8 +183,10 @@ class _AddVisitModalState extends State<AddVisitModal> {
     for (var p in _pipelineData) {
       if (p['company'] == null) continue;
       
-      bool isMine = p['is_mine'] == true;
-      int myProjectCount = 0;
+      final isMine = p['is_mine'] == true;
+      final isTeam = p['is_team'] == true;
+      final isGlobal = p['is_global'] == true;
+      int projectCount = 0;
       
       if (p['projects'] != null) {
         for (var proj in p['projects']) {
@@ -194,24 +196,26 @@ class _AddVisitModalState extends State<AddVisitModal> {
               pName.contains('ไม่มีการระบุโครงการ')) {
             continue;
           }
-          if (proj['is_mine'] == true) {
-            isMine = true;
-            myProjectCount++;
-          }
+          projectCount++;
         }
       }
-      
-      if (!isMine) continue;
 
       final cId = p['company']['id'].toString();
       pipelineIds.add(cId);
       final name = p['company']['name']?.toString() ?? '';
       if (name.toLowerCase().contains(lowerFilter)) {
+        // API จัดลำดับตามประวัติไว้แล้ว: ของตนเอง -> ทีม -> ทั่วระบบ
+        // ห้ามกรองรายการทีม/ทั่วระบบออก เพราะพนักงานใหม่จะไม่มีรายการแนะนำ
+        // เหลืออยู่เลย
+        final source = isMine
+            ? 'mine'
+            : (isTeam ? 'team' : (isGlobal ? 'global' : 'system'));
         options.add({
           'id': cId,
           'name': name,
           'isPipeline': true,
-          'projectCount': myProjectCount,
+          'pipelineSource': source,
+          'projectCount': projectCount,
           'projects': p['projects'] ?? [], // Pipeline projects
         });
       }
@@ -513,8 +517,19 @@ class _AddVisitModalState extends State<AddVisitModal> {
                           ),
                         ),
                         itemBuilder: (context, item, isSelected, isFocused) {
-                          bool isPipe = item['isPipeline'] == true;
-                          int projCount = (item['projectCount'] as int?) ?? 0;
+                          final isPipe = item['isPipeline'] == true;
+                          final projCount = (item['projectCount'] as int?) ?? 0;
+                          final source = item['pipelineSource']?.toString();
+                          final sourceLabel = source == 'mine'
+                              ? 'ของคุณ'
+                              : source == 'team'
+                              ? 'ทีม'
+                              : 'แนะนำ';
+                          final sourceColor = source == 'mine'
+                              ? kLimeGreen
+                              : source == 'team'
+                              ? Colors.lightBlueAccent
+                              : Colors.amber;
                           return Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                             decoration: BoxDecoration(
@@ -533,16 +548,16 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                     ),
                                   ),
                                 ),
-                                if (isPipe && projCount > 0)
+                                if (isPipe)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                     decoration: BoxDecoration(
-                                      color: Colors.amber.withOpacity(0.15),
+                                      color: sourceColor.withOpacity(0.15),
                                       borderRadius: BorderRadius.circular(4),
                                     ),
                                     child: Text(
-                                      "⭐ $projCount", 
-                                      style: const TextStyle(color: Colors.amber, fontSize: 10, fontWeight: FontWeight.bold),
+                                      projCount > 0 ? '$sourceLabel · $projCount โครงการ' : sourceLabel,
+                                      style: TextStyle(color: sourceColor, fontSize: 10, fontWeight: FontWeight.bold),
                                     ),
                                   ),
                               ],
