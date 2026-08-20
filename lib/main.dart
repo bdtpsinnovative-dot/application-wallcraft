@@ -1,5 +1,6 @@
 //lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart'; // ✅ เพิ่มตัวนี้
@@ -15,18 +16,18 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   try {
     await dotenv.load(fileName: ".env");
-    
+
     // 🔥 ปลุกพลัง Firebase ตรงนี้ครับนาย
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
-    
+
     // 🔔 ตั้งค่าพื้นฐาน Notification (ขอสิทธิ์)
     await NotificationService.initNotification();
-    
+
     print("✅ Load .env and Firebase success");
   } catch (e) {
     print("❌ Error initializing: $e");
@@ -59,6 +60,17 @@ class MyApp extends StatelessWidget {
         ),
         useMaterial3: true,
       ),
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          systemNavigationBarColor: kDarkBg,
+          systemNavigationBarDividerColor: kDarkBg,
+          systemNavigationBarIconBrightness: Brightness.light,
+          systemNavigationBarContrastEnforced: false,
+        ),
+        child: child ?? const SizedBox.shrink(),
+      ),
       home: const CheckAuth(),
     );
   }
@@ -88,7 +100,8 @@ class _CheckAuthState extends State<CheckAuth> {
           context,
           PageRouteBuilder(
             pageBuilder: (_, __, ___) => const HomeScreen(),
-            transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
+            transitionsBuilder: (_, a, __, c) =>
+                FadeTransition(opacity: a, child: c),
           ),
         );
       } else {
@@ -96,7 +109,8 @@ class _CheckAuthState extends State<CheckAuth> {
           context,
           PageRouteBuilder(
             pageBuilder: (_, __, ___) => const LoginScreen(),
-            transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
+            transitionsBuilder: (_, a, __, c) =>
+                FadeTransition(opacity: a, child: c),
           ),
         );
       }
@@ -107,9 +121,7 @@ class _CheckAuthState extends State<CheckAuth> {
   Widget build(BuildContext context) {
     return const Scaffold(
       backgroundColor: kDarkBg,
-      body: Center(
-        child: CircularProgressIndicator(color: kLimeGreen),
-      ),
+      body: Center(child: CircularProgressIndicator(color: kLimeGreen)),
     );
   }
 }

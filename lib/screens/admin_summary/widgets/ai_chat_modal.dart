@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../../../constants.dart';
 import '../../../services/api_service.dart';
+
 class AiChatModal extends StatefulWidget {
   final Map<String, dynamic> rawStats;
   final String timeLabel;
@@ -39,9 +40,10 @@ class _AiChatModalState extends State<AiChatModal> {
     super.initState();
     _chatMessages = [
       {
-        "role": "ai", 
-        "text": "สวัสดีครับแอดมิน! นี่คือสรุปข้อมูลโครงการช่วง ${widget.timeLabel} ครับ:\n\n${widget.initialAiInsight}"
-      }
+        "role": "ai",
+        "text":
+            "สวัสดีครับแอดมิน! นี่คือสรุปข้อมูลโครงการช่วง ${widget.timeLabel} ครับ:\n\n${widget.initialAiInsight}",
+      },
     ];
     _initSpeech();
   }
@@ -65,8 +67,9 @@ class _AiChatModalState extends State<AiChatModal> {
     if (!_isListening && _speechEnabled) {
       setState(() => _isListening = true);
       _speechToText.listen(
-        onResult: (val) => setState(() => _chatController.text = val.recognizedWords),
-        localeId: 'th_TH', 
+        onResult: (val) =>
+            setState(() => _chatController.text = val.recognizedWords),
+        localeId: 'th_TH',
       );
     } else {
       setState(() => _isListening = false);
@@ -76,7 +79,11 @@ class _AiChatModalState extends State<AiChatModal> {
 
   void _scrollToBottom() {
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -98,16 +105,26 @@ class _AiChatModalState extends State<AiChatModal> {
 
     try {
       final url = Uri.parse('${AppConfig.baseUrl}/admin/ai-summary');
-      final historyToSend = _chatMessages.where((msg) => msg['text'] != text).toList();
+      final historyToSend = _chatMessages
+          .where((msg) => msg['text'] != text)
+          .toList();
 
-      final response = await ApiService.post(url, body: jsonEncode({
-        "message": text, "stats": widget.rawStats, "history": historyToSend
-      })).timeout(const Duration(seconds: 15));
+      final response = await ApiService.post(
+        url,
+        body: jsonEncode({
+          "message": text,
+          "stats": widget.rawStats,
+          "history": historyToSend,
+        }),
+      ).timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         setState(() {
-          _chatMessages.add({"role": "ai", "text": data['reply'] ?? "ขออภัยประมวลผลไม่ได้"});
+          _chatMessages.add({
+            "role": "ai",
+            "text": data['reply'] ?? "ขออภัยประมวลผลไม่ได้",
+          });
           _isChatLoading = false;
         });
       } else {
@@ -115,7 +132,10 @@ class _AiChatModalState extends State<AiChatModal> {
       }
     } catch (e) {
       setState(() {
-        _chatMessages.add({"role": "ai", "text": "⚠️ ขัดข้อง: เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ครับ"});
+        _chatMessages.add({
+          "role": "ai",
+          "text": "⚠️ ขัดข้อง: เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ครับ",
+        });
         _isChatLoading = false;
       });
     }
@@ -126,17 +146,55 @@ class _AiChatModalState extends State<AiChatModal> {
   Widget build(BuildContext context) {
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
-      decoration: const BoxDecoration(color: kDarkBg, borderRadius: BorderRadius.vertical(top: Radius.circular(28))),
+      decoration: const BoxDecoration(
+        color: kDarkBg,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
       child: Column(
         children: [
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-            decoration: BoxDecoration(color: kCardDark, borderRadius: const BorderRadius.vertical(top: Radius.circular(28)), border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
+            decoration: BoxDecoration(
+              color: kCardDark,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(28),
+              ),
+              border: Border(
+                bottom: BorderSide(color: Colors.white.withOpacity(0.05)),
+              ),
+            ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(children: [Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: kPremiumGold.withOpacity(0.2), shape: BoxShape.circle), child: const Icon(Icons.auto_awesome_rounded, color: kPremiumGold, size: 20)), const SizedBox(width: 12), const Text("AI Assistant", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold))]),
-                IconButton(icon: const Icon(Icons.close, color: Colors.white54), onPressed: () => Navigator.pop(context))
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: kPremiumGold.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.auto_awesome_rounded,
+                        color: kPremiumGold,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      "AI Assistant",
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close, color: Colors.white54),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
           ),
@@ -147,34 +205,101 @@ class _AiChatModalState extends State<AiChatModal> {
               itemCount: _chatMessages.length + (_isChatLoading ? 1 : 0),
               itemBuilder: (context, index) {
                 if (index == _chatMessages.length && _isChatLoading) {
-                  return const Align(alignment: Alignment.centerLeft, child: Padding(padding: EdgeInsets.only(top: 8.0, bottom: 20), child: Text("AI กำลังวิเคราะห์...", style: TextStyle(color: kPremiumGold, fontStyle: FontStyle.italic))));
+                  return const Align(
+                    alignment: Alignment.centerLeft,
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 8.0, bottom: 20),
+                      child: Text(
+                        "AI กำลังวิเคราะห์...",
+                        style: TextStyle(
+                          color: kPremiumGold,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  );
                 }
                 final msg = _chatMessages[index];
                 final isMe = msg['role'] == 'user';
                 return Align(
-                  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                  alignment: isMe
+                      ? Alignment.centerRight
+                      : Alignment.centerLeft,
                   child: Container(
-                    margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16),
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: isMe ? kGlowPurple : kCardDark,
-                      borderRadius: BorderRadius.circular(16).copyWith(bottomRight: isMe ? const Radius.circular(0) : const Radius.circular(16), bottomLeft: !isMe ? const Radius.circular(0) : const Radius.circular(16)),
-                      border: isMe ? null : Border.all(color: kPremiumGold.withOpacity(0.3)),
+                      borderRadius: BorderRadius.circular(16).copyWith(
+                        bottomRight: isMe
+                            ? const Radius.circular(0)
+                            : const Radius.circular(16),
+                        bottomLeft: !isMe
+                            ? const Radius.circular(0)
+                            : const Radius.circular(16),
+                      ),
+                      border: isMe
+                          ? null
+                          : Border.all(color: kPremiumGold.withOpacity(0.3)),
                     ),
-                    child: Text(msg['text']!, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5)),
+                    child: Text(
+                      msg['text']!,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        height: 1.5,
+                      ),
+                    ),
                   ),
                 );
               },
             ),
           ),
           Padding(
-            padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom + 16, left: 16, right: 16, top: 8),
+            padding: EdgeInsets.only(
+              bottom:
+                  MediaQuery.of(context).viewInsets.bottom +
+                  MediaQuery.of(context).padding.bottom +
+                  16,
+              left: 16,
+              right: 16,
+              top: 8,
+            ),
             child: Container(
-              decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white.withOpacity(0.1))),
+              decoration: BoxDecoration(
+                color: kCardDark,
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
               child: Row(
                 children: [
-                  Expanded(child: TextField(controller: _chatController, style: const TextStyle(color: Colors.white), decoration: const InputDecoration(hintText: "ถาม AI...", hintStyle: TextStyle(color: Colors.white24), border: InputBorder.none, contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 14)), onSubmitted: (_) => _sendMessage())),
-                  IconButton(icon: Icon(_isListening ? Icons.mic : Icons.mic_none, color: kPremiumGold), onPressed: _listen),
-                  IconButton(icon: const Icon(Icons.send, color: kPremiumGold), onPressed: _sendMessage)
+                  Expanded(
+                    child: TextField(
+                      controller: _chatController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: const InputDecoration(
+                        hintText: "ถาม AI...",
+                        hintStyle: TextStyle(color: Colors.white24),
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 20,
+                          vertical: 14,
+                        ),
+                      ),
+                      onSubmitted: (_) => _sendMessage(),
+                    ),
+                  ),
+                  IconButton(
+                    icon: Icon(
+                      _isListening ? Icons.mic : Icons.mic_none,
+                      color: kPremiumGold,
+                    ),
+                    onPressed: _listen,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send, color: kPremiumGold),
+                    onPressed: _sendMessage,
+                  ),
                 ],
               ),
             ),

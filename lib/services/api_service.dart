@@ -85,6 +85,18 @@ class ApiService {
     return res;
   }
 
+  static Future<http.Response> getVisitPlanProjectHistory({
+    required String companyId,
+    String? userId,
+  }) async {
+    final params = <String, String>{'company_id': companyId};
+    if (userId != null && userId.isNotEmpty) params['user_id'] = userId;
+    final query = params.entries
+        .map((entry) => '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+        .join('&');
+    return await get(Uri.parse('${AppConfig.baseUrl}/profile/visit-plans/project-history?$query'));
+  }
+
   static Future<http.Response> getVisitPlans() async {
     final url = Uri.parse('${AppConfig.baseUrl}/profile/visit-plans');
     return await get(url);

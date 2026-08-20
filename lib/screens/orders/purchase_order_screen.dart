@@ -80,6 +80,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   // 🌟 State for Pipeline & Visit Plans
   List<dynamic> _pipelineData = [];
   List<dynamic> _visitPlanData = [];
+  bool _isVisitPlansReady = false;
   Position? _currentPosition; // 📍 เก็บพิกัดผู้ใช้
   bool _isDataReady = false;
 
@@ -111,6 +112,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     }
     if (_cachedVisitPlanData != null) {
       _visitPlanData = List.from(_cachedVisitPlanData!);
+      _isVisitPlansReady = true;
     }
     if (_cachedLastPosition != null) {
       _currentPosition = _cachedLastPosition;
@@ -185,11 +187,15 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         if (mounted) {
           setState(() {
             _visitPlanData = list;
+            _isVisitPlansReady = true;
           });
         }
+      } else if (mounted) {
+        setState(() => _isVisitPlansReady = true);
       }
     } catch (e) {
       debugPrint("Error fetching visit plans: $e");
+      if (mounted) setState(() => _isVisitPlansReady = true);
     }
   }
 
@@ -267,12 +273,15 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   }
 
   Future<List<dynamic>> _getCompanies(String filter) async {
-    // 🌟 ถ้าระบบกำลังโหลดครั้งแรกและยังไม่มีข้อมูลในแคช ให้รอตัว Future ให้พร้อมก่อนเปิดเมนู
-    if ((_pipelineData.isEmpty || _visitPlanData.isEmpty) && _activeInitFuture != null) {
+    // Wait for visit-plan data before showing general companies. This prevents
+    // the dropdown from appearing to have no plans while the request is slow.
+    if (!_isVisitPlansReady && _activeInitFuture != null) {
       try {
-        await _activeInitFuture!.timeout(const Duration(milliseconds: 1500));
+        await _activeInitFuture!.timeout(const Duration(seconds: 15));
       } catch (_) {}
     }
+
+    if (!_isVisitPlansReady) return [];
 
     List<dynamic> results = [];
     final lowerFilter = filter.toLowerCase();
@@ -286,6 +295,8 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       } catch (_) {}
     }
 
+    final visitPlanResults = <dynamic>[];
+
     // 1. 📅 กรอง Visit Plans มาก่อนสุด
     if (_visitPlanData.isNotEmpty) {
       for (var vp in _visitPlanData) {
@@ -293,15 +304,43 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           final compName = vp['companies']['name'].toString().toLowerCase();
           if (compName.contains(lowerFilter)) {
             final Map<String, dynamic> companyData = Map<String, dynamic>.from(vp['companies']);
-            results.add({
+            final plannedDate = DateTime.tryParse(vp['planned_date']?.toString() ?? '');
+            final endTime = vp['end_time']?.toString();
+            final isPending = vp['status'] == null || vp['status'] == 'pending';
+            var isOverdue = false;
+            if (isPending && plannedDate != null) {
+              final endParts = endTime?.split(':') ?? [];
+              final endMinutes = endParts.length >= 2
+                  ? ((int.tryParse(endParts[0]) ?? 23) * 60 + (int.tryParse(endParts[1]) ?? 59))
+                  : 23 * 60 + 59;
+              final endDateTime = DateTime(
+                plannedDate.toLocal().year,
+                plannedDate.toLocal().month,
+                plannedDate.toLocal().day,
+                endMinutes ~/ 60,
+                endMinutes % 60,
+              );
+              isOverdue = endDateTime.isBefore(DateTime.now());
+            }
+            visitPlanResults.add({
               ...companyData, 
               'is_visit_plan': true,
+              'is_visit_plan_overdue': isOverdue,
               'visit_plan_data': vp // แนบข้อมูลแผนงานทั้งหมดไปใช้ตอนเลือก
             });
           }
         }
       }
     }
+    visitPlanResults.sort((a, b) {
+      final aOverdue = a['is_visit_plan_overdue'] == true;
+      final bOverdue = b['is_visit_plan_overdue'] == true;
+      if (aOverdue != bOverdue) return aOverdue ? -1 : 1;
+      final aDate = DateTime.tryParse(a['visit_plan_data']?['planned_date']?.toString() ?? '') ?? DateTime.now();
+      final bDate = DateTime.tryParse(b['visit_plan_data']?['planned_date']?.toString() ?? '') ?? DateTime.now();
+      return aDate.compareTo(bDate);
+    });
+    results.addAll(visitPlanResults);
 
     // 2. 🌟 กรอง Pipeline Companies
     if (_pipelineData.isNotEmpty) {
@@ -560,6 +599,8 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
            // 🌟 🌟 🌟 จุดที่นายถาม คือตรงนี้ครับนาย! 🌟 🌟 🌟
            // ส่งประเภทโครงการที่เซลส์เลือกในการ์ด แนบไปพร้อมกับโครงการที่ติ๊ก
            'project_type_id': item.projectTypeId, 
+           'queue_level': item.queueLevel,
+           'project_year': item.projectYearCtrl.text.trim(),
          });
       }
 
@@ -567,6 +608,9 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         'product_category_id': item.categoryId,
         'interest_level': item.interestLevel,
         'note': item.noteCtrl.text,
+        'project_type_id': item.projectTypeId,
+        'queue_level': item.queueLevel,
+        'project_year': item.projectYearCtrl.text.trim(),
         'project_usage': projectUsages,
         'images': itemImagesBase64,
       });

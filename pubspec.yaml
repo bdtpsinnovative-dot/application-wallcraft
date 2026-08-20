@@ -1,7 +1,7 @@
 name: Wallcraft
 description: "A new Flutter project."
 publish_to: "none"
-version: 2.0.1+2
+version: 2.0.2+2
 
 environment:
   sdk: ">=3.10.4 <4.0.0"
@@ -31,6 +31,9 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   crypto: ^3.0.3
+  screenshot: ^3.0.0
+  gal: ^2.3.3
+  share_plus: ^10.1.4
 
   # 📍 พิกัดและตำแหน่ง (เพิ่ม 2 ตัวนี้เข้ามาให้แล้ว)
   geolocator: ^14.0.2

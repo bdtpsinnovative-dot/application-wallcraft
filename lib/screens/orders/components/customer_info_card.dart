@@ -231,14 +231,6 @@ class CustomerInfoCard extends StatelessWidget {
                 selectedItem: selectedCompany,
                 onChanged: (val) => onCompanyChanged(val),
                 compareFn: (i1, i2) => i1?['id'] == i2?['id'],
-                suffixProps: const DropdownSuffixProps(
-                  dropdownButtonProps: DropdownButtonProps(
-                    padding: EdgeInsets.only(right: 68),
-                  ),
-                  clearButtonProps: ClearButtonProps(
-                    padding: EdgeInsets.only(right: 68),
-                  ),
-                ),
                 decoratorProps: DropDownDecoratorProps(
                   baseStyle: const TextStyle(color: Colors.white, fontSize: 13),
                   decoration: _inputDecoration("ค้นหาชื่อบริษัท...", Icons.business_rounded).copyWith(
@@ -265,12 +257,19 @@ class CustomerInfoCard extends StatelessWidget {
                     if (item == null) return const SizedBox();
                     
                     bool isVisitPlan = item['is_visit_plan'] == true;
+                    bool isVisitPlanOverdue = item['is_visit_plan_overdue'] == true;
                     bool isPipeline = item['is_pipeline'] == true;
                     bool isNearby = item['is_nearby'] == true;
                     bool isTeam = item['is_team'] == true && item['is_mine'] != true;
-                    bool isGlobal = item['is_global'] == true && item['is_mine'] != true;
-                    bool isMine = item['is_mine'] == true || (isPipeline && !isTeam && !isGlobal);
-                    bool isGeneral = item['is_general'] == true || (!isPipeline && !isVisitPlan);
+        bool isGlobal = item['is_global'] == true && item['is_mine'] != true;
+        bool isMine = item['is_mine'] == true || (isPipeline && !isTeam && !isGlobal);
+        bool isGeneral = item['is_general'] == true || (!isPipeline && !isVisitPlan);
+        final planDate = DateTime.tryParse(
+          item['visit_plan_data']?['planned_date']?.toString() ?? '',
+        );
+        final visitPlanDateLabel = planDate == null
+            ? ''
+            : '${planDate.day}/${planDate.month}/${(planDate.year + 543) % 100}';
                     
                     int projCount = isPipeline && item['projects'] != null ? (item['projects'] as List).length : 0;
 
@@ -278,8 +277,8 @@ class CustomerInfoCard extends StatelessWidget {
                     IconData leadingIcon = Icons.domain_outlined;
                     Color leadingColor = Colors.white30;
                     if (isVisitPlan) {
-                      leadingIcon = Icons.calendar_month_rounded;
-                      leadingColor = Colors.greenAccent;
+                      leadingIcon = isVisitPlanOverdue ? Icons.warning_rounded : Icons.calendar_month_rounded;
+                      leadingColor = isVisitPlanOverdue ? Colors.redAccent : Colors.greenAccent;
                     } else if (isMine) {
                       leadingIcon = Icons.business_rounded;
                       leadingColor = Colors.amber;
@@ -295,7 +294,9 @@ class CustomerInfoCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
                       decoration: BoxDecoration(
                         border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05))),
-                        color: isVisitPlan ? Colors.green.withOpacity(0.1) : (isPipeline ? Colors.indigo.withOpacity(0.08) : Colors.transparent),
+                        color: isVisitPlan
+                            ? (isVisitPlanOverdue ? Colors.redAccent.withOpacity(0.14) : Colors.green.withOpacity(0.1))
+                            : (isPipeline ? Colors.indigo.withOpacity(0.08) : Colors.transparent),
                       ),
                       child: Row(
                         children: [
@@ -307,7 +308,9 @@ class CustomerInfoCard extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
-                                color: isSelected ? kLimeGreen : (isGeneral ? Colors.white70 : Colors.white),
+                                color: isSelected
+                                    ? kLimeGreen
+                                    : (isVisitPlanOverdue ? Colors.redAccent : (isGeneral ? Colors.white70 : Colors.white)),
                                 fontWeight: (isPipeline || isVisitPlan) ? FontWeight.bold : FontWeight.normal,
                                 fontSize: 13,
                               ),
@@ -351,6 +354,28 @@ class CustomerInfoCard extends StatelessWidget {
                                   ),
                                 )
                               else ...[
+                                if (isVisitPlan)
+                                  Container(
+                                    margin: const EdgeInsets.only(right: 4),
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: (isVisitPlanOverdue
+                                              ? Colors.redAccent
+                                              : Colors.greenAccent)
+                                          .withOpacity(0.18),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      visitPlanDateLabel,
+                                      style: TextStyle(
+                                        color: isVisitPlanOverdue
+                                            ? Colors.redAccent
+                                            : Colors.greenAccent,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
                                 if (isNearby)
                                   Container(
                                     margin: const EdgeInsets.only(right: 4),
@@ -389,10 +414,6 @@ class CustomerInfoCard extends StatelessWidget {
                   },
                 ),
               ),
-              Positioned(
-                right: 0,
-                child: _buildAddBtn(onAddCompany),
-              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -414,8 +435,6 @@ class CustomerInfoCard extends StatelessWidget {
                   onChanged: onCustomerTypeChanged,
                 ),
               ),
-              const SizedBox(width: 12),
-              _buildAddBtn(onAddCustomerType),
             ],
           ),
           const SizedBox(height: 16),
@@ -427,13 +446,6 @@ class CustomerInfoCard extends StatelessWidget {
     );
   }
 
-  Widget _buildAddBtn(VoidCallback onTap) {
-    return Container(
-      height: 55, width: 55,
-      decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: kPrimaryColor.withOpacity(0.3))),
-      child: IconButton(icon: const Icon(Icons.add_rounded, color: kPrimaryColor), onPressed: onTap),
-    );
-  }
 }
 
 // 🎨 Helper Decoration

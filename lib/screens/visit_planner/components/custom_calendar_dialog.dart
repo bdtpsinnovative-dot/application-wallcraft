@@ -50,6 +50,33 @@ class _CustomCalendarDialogState extends State<CustomCalendarDialog> {
     return _eventsMap[normalizedDate] ?? [];
   }
 
+  Map<String, dynamic> _asMap(dynamic value) {
+    if (value is Map<String, dynamic>) return value;
+    if (value is Map) return Map<String, dynamic>.from(value);
+    if (value is List && value.isNotEmpty) return _asMap(value.first);
+    return <String, dynamic>{};
+  }
+
+  String _assignedSalesName(dynamic plan) {
+    final assignedName = plan['assigned_name']?.toString().trim();
+    if (assignedName != null && assignedName.isNotEmpty) return assignedName;
+
+    final profileName = _asMap(plan['profiles'])['full_name']?.toString().trim();
+    if (profileName != null && profileName.isNotEmpty) return profileName;
+
+    return 'ไม่ระบุผู้รับผิดชอบ';
+  }
+
+  String _planTimeRange(dynamic plan) {
+    final start = plan['start_time']?.toString().trim();
+    final end = plan['end_time']?.toString().trim();
+    if (start == null || start.isEmpty || end == null || end.isEmpty) {
+      return 'ไม่ระบุเวลา';
+    }
+    String shortTime(String value) => value.length >= 5 ? value.substring(0, 5) : value;
+    return '${shortTime(start)} - ${shortTime(end)} น.';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -184,7 +211,8 @@ class _CustomCalendarDialogState extends State<CustomCalendarDialog> {
               child: Column(
                 children: events.map<Widget>((ev) {
                   final companyName = ev['companies']?['name'] ?? 'ไม่มีชื่อบริษัท';
-                  final projectName = ev['projects']?['project_name'] ?? '-';
+                  final salesName = _assignedSalesName(ev);
+                  final timeRange = _planTimeRange(ev);
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8.0),
                     child: Row(
@@ -200,7 +228,8 @@ class _CustomCalendarDialogState extends State<CustomCalendarDialog> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(companyName, style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.bold)),
-                              Text(projectName, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text(salesName, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                              Text(timeRange, style: const TextStyle(color: Colors.white38, fontSize: 10)),
                             ],
                           ),
                         ),

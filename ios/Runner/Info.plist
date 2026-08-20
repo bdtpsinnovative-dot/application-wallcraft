@@ -34,6 +34,10 @@
 
     <key>NSMicrophoneUsageDescription</key>
     <string>แอปต้องการสิทธิ์เข้าถึงไมโครโฟนเพื่อรับเสียงพูด</string>
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>แอปต้องการบันทึกรูปแผนการเข้าพบลงในคลังรูปภาพของคุณ</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>แอปต้องการเข้าถึงคลังรูปภาพเพื่อบันทึกรูปแผนการเข้าพบ</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>แอปต้องการสิทธิ์เข้าถึงการจดจำเสียงเพื่อพิมพ์ข้อความ</string>
     <key>NSUserNotificationsUsageDescription</key>

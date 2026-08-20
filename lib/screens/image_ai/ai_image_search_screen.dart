@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui';
 import 'package:flutter/material.dart';
@@ -42,16 +42,35 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Center(
-                    child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10))),
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
                   ),
                 ),
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.blueAccent.withOpacity(0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.camera_alt_rounded, color: Colors.blueAccent),
+                    decoration: BoxDecoration(
+                      color: Colors.blueAccent.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.blueAccent,
+                    ),
                   ),
-                  title: const Text('ถ่ายรูป (Camera)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  title: const Text(
+                    'ถ่ายรูป (Camera)',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _pickImage(ImageSource.camera);
@@ -60,10 +79,22 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 ListTile(
                   leading: Container(
                     padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.1), shape: BoxShape.circle),
-                    child: const Icon(Icons.photo_library_rounded, color: Colors.purpleAccent),
+                    decoration: BoxDecoration(
+                      color: Colors.purpleAccent.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.photo_library_rounded,
+                      color: Colors.purpleAccent,
+                    ),
                   ),
-                  title: const Text('เลือกจากแกลเลอรี (Gallery)', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  title: const Text(
+                    'เลือกจากแกลเลอรี (Gallery)',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _pickImage(ImageSource.gallery);
@@ -91,7 +122,7 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     }
   }
 
- // 🚀 3. ยิง API ค้นหาด้วย AI (ฉบับปลดล็อก Error Uri)
+  // 🚀 3. ยิง API ค้นหาด้วย AI (ฉบับปลดล็อก Error Uri)
   Future<void> _searchWithAI() async {
     if (_image == null) return;
     setState(() => _loading = true);
@@ -102,18 +133,24 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
 
       // 🌟 แก้ไขตรงนี้: ลบ Uri.parse() ออก เพราะตัวแปรเป็น Uri อยู่แล้วครับ!
       var request = http.MultipartRequest('POST', AppConfig.aiSearchUrl);
-      
-      request.files.add(await http.MultipartFile.fromPath('image', _image!.path));
+
+      request.files.add(
+        await http.MultipartFile.fromPath('image', _image!.path),
+      );
 
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
-      
+
       if (response.statusCode == 413) {
-        throw Exception("รูปภาพมีขนาดใหญ่เกินไป (เกินลิมิตเซิร์ฟเวอร์) กรุณาครอปหรือใช้รูปที่เล็กลงครับ");
+        throw Exception(
+          "รูปภาพมีขนาดใหญ่เกินไป (เกินลิมิตเซิร์ฟเวอร์) กรุณาครอปหรือใช้รูปที่เล็กลงครับ",
+        );
       }
-      
+
       if (response.statusCode != 200) {
-         throw Exception("เซิร์ฟเวอร์ตอบกลับผิดพลาด (รหัส ${response.statusCode})");
+        throw Exception(
+          "เซิร์ฟเวอร์ตอบกลับผิดพลาด (รหัส ${response.statusCode})",
+        );
       }
 
       var data = json.decode(response.body);
@@ -122,17 +159,23 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
         _products = data['products'] ?? [];
         _aiAnalysis = data['ai_analysis'];
       });
-      
     } on FormatException catch (_) {
-      _showErrorDialog("ระบบขัดข้องชั่วคราว: ไม่สามารถอ่านข้อมูลจากเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้งครับ");
+      _showErrorDialog(
+        "ระบบขัดข้องชั่วคราว: ไม่สามารถอ่านข้อมูลจากเซิร์ฟเวอร์ได้ กรุณาลองใหม่อีกครั้งครับ",
+      );
     } on SocketException {
-      _showErrorDialog("ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต: ดูเหมือนเน็ตจะหลุดหรือช้าเกินไปครับ");
+      _showErrorDialog(
+        "ตรวจสอบการเชื่อมต่ออินเทอร์เน็ต: ดูเหมือนเน็ตจะหลุดหรือช้าเกินไปครับ",
+      );
     } catch (e) {
-      _showErrorDialog("ไม่สามารถค้นหาได้: ${e.toString().replaceAll('Exception: ', '')}");
+      _showErrorDialog(
+        "ไม่สามารถค้นหาได้: ${e.toString().replaceAll('Exception: ', '')}",
+      );
     } finally {
       setState(() => _loading = false);
     }
   }
+
   // 💬 ฟังก์ชันโชว์ Error แบบสวยๆ เป็นภาษาคน
   void _showErrorDialog(String message) {
     if (!mounted) return;
@@ -145,14 +188,26 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
           children: [
             Icon(Icons.error_outline_rounded, color: Colors.redAccent),
             SizedBox(width: 10),
-            Text('แจ้งเตือน', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            Text(
+              'แจ้งเตือน',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
           ],
         ),
-        content: Text(message, style: const TextStyle(color: Colors.white70, height: 1.5)),
+        content: Text(
+          message,
+          style: const TextStyle(color: Colors.white70, height: 1.5),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('ตกลง', style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'ตกลง',
+              style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -170,9 +225,14 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
           filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
           child: Container(
             height: MediaQuery.of(context).size.height * 0.85,
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(context).padding.bottom,
+            ),
             decoration: BoxDecoration(
               color: kDarkBg.withOpacity(0.9),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
               border: Border.all(color: Colors.white.withOpacity(0.1)),
             ),
             child: Column(
@@ -182,8 +242,12 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 Center(
                   child: Container(
                     margin: const EdgeInsets.only(top: 16, bottom: 20),
-                    width: 50, height: 5,
-                    decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(10)),
+                    width: 50,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                 ),
                 // รูปภาพสินค้าแบบเต็มๆ
@@ -194,7 +258,10 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                     margin: const EdgeInsets.symmetric(horizontal: 20),
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(20),
-                      image: DecorationImage(image: NetworkImage(product['variant_image']), fit: BoxFit.cover),
+                      image: DecorationImage(
+                        image: NetworkImage(product['variant_image']),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
@@ -210,18 +277,53 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(product['sku'] ?? 'NO SKU', style: const TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold, fontSize: 16)),
+                            Text(
+                              product['sku'] ?? 'NO SKU',
+                              style: const TextStyle(
+                                color: kLimeGreen,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                              decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(20)),
-                              child: Text('ความแม่นยำ ${(product['similarity'] * 100).toStringAsFixed(1)}%', style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
-                            )
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.greenAccent.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Text(
+                                'ความแม่นยำ ${(product['similarity'] * 100).toStringAsFixed(1)}%',
+                                style: const TextStyle(
+                                  color: Colors.greenAccent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                         const SizedBox(height: 12),
-                        Text(product['name'] ?? 'ไม่มีชื่อสินค้า', style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+                        Text(
+                          product['name'] ?? 'ไม่มีชื่อสินค้า',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         const SizedBox(height: 8),
-                        Text(product['description'] ?? 'สินค้าคุณภาพจาก TPS Garden', style: const TextStyle(color: Colors.white54, fontSize: 14, height: 1.5)),
+                        Text(
+                          product['description'] ??
+                              'สินค้าคุณภาพจาก TPS Garden',
+                          style: const TextStyle(
+                            color: Colors.white54,
+                            fontSize: 14,
+                            height: 1.5,
+                          ),
+                        ),
                         const Spacer(),
                         // ปุ่ม Action
                         SizedBox(
@@ -232,9 +334,17 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.white,
                               foregroundColor: Colors.black,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
                             ),
-                            child: const Text('ปิดหน้าต่าง', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                            child: const Text(
+                              'ปิดหน้าต่าง',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
+                            ),
                           ),
                         ),
                         const SizedBox(height: 30),
@@ -255,7 +365,14 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
     return Scaffold(
       backgroundColor: kDarkBg,
       appBar: AppBar(
-        title: const Text('AI IMAGE SEARCH', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 1)),
+        title: const Text(
+          'AI IMAGE SEARCH',
+          style: TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+            letterSpacing: 1,
+          ),
+        ),
         centerTitle: true,
         backgroundColor: Colors.transparent,
         foregroundColor: Colors.white,
@@ -265,11 +382,19 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
         children: [
           // 🌌 Background Glow (ให้เหมือนหน้า Home)
           Positioned(
-            top: -50, right: -50,
+            top: -50,
+            right: -50,
             child: Container(
-              width: 300, height: 300,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent.withOpacity(0.15)),
-              child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100), child: Container(color: Colors.transparent)),
+              width: 300,
+              height: 300,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.cyanAccent.withOpacity(0.15),
+              ),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
+                child: Container(color: Colors.transparent),
+              ),
             ),
           ),
 
@@ -278,9 +403,19 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("Find your product", style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold)),
+                const Text(
+                  "Find your product",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                const Text("อัปโหลดรูปภาพเพื่อค้นหาสินค้าที่ใกล้เคียงที่สุดในสต็อก", style: TextStyle(color: Colors.white54, fontSize: 14)),
+                const Text(
+                  "อัปโหลดรูปภาพเพื่อค้นหาสินค้าที่ใกล้เคียงที่สุดในสต็อก",
+                  style: TextStyle(color: Colors.white54, fontSize: 14),
+                ),
                 const SizedBox(height: 30),
 
                 // 🖼️ กล่องอัปโหลดรูป (Glassmorphism & เปลี่ยนรูปได้)
@@ -292,19 +427,38 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                     decoration: BoxDecoration(
                       color: kCardDark.withOpacity(0.7),
                       borderRadius: BorderRadius.circular(28),
-                      border: Border.all(color: Colors.white.withOpacity(0.1), width: 1.5),
-                      boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.1),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.3),
+                          blurRadius: 20,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
                     ),
                     child: _image != null
                         ? Stack(
                             fit: StackFit.expand,
                             children: [
-                              ClipRRect(borderRadius: BorderRadius.circular(26), child: Image.file(_image!, fit: BoxFit.cover)),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(26),
+                                child: Image.file(_image!, fit: BoxFit.cover),
+                              ),
                               // โอเวอร์เลย์มืดๆ ขอบล่าง
                               Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(26),
-                                  gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Colors.transparent, Colors.black.withOpacity(0.7)]),
+                                  gradient: LinearGradient(
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                    colors: [
+                                      Colors.transparent,
+                                      Colors.black.withOpacity(0.7),
+                                    ],
+                                  ),
                                 ),
                               ),
                               // ปุ่ม "เปลี่ยนรูป" ลอยอยู่ตรงกลางให้เห็นชัดๆ
@@ -312,16 +466,38 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(30),
                                   child: BackdropFilter(
-                                    filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+                                    filter: ImageFilter.blur(
+                                      sigmaX: 5,
+                                      sigmaY: 5,
+                                    ),
                                     child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                      decoration: BoxDecoration(color: Colors.black.withOpacity(0.5), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white.withOpacity(0.2))),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 20,
+                                        vertical: 12,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.5),
+                                        borderRadius: BorderRadius.circular(30),
+                                        border: Border.all(
+                                          color: Colors.white.withOpacity(0.2),
+                                        ),
+                                      ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.flip_camera_ios_rounded, color: Colors.white, size: 18),
+                                          Icon(
+                                            Icons.flip_camera_ios_rounded,
+                                            color: Colors.white,
+                                            size: 18,
+                                          ),
                                           SizedBox(width: 8),
-                                          Text('เปลี่ยนรูปภาพ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                                          Text(
+                                            'เปลี่ยนรูปภาพ',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -335,13 +511,33 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                             children: [
                               Container(
                                 padding: const EdgeInsets.all(20),
-                                decoration: BoxDecoration(color: Colors.cyanAccent.withOpacity(0.1), shape: BoxShape.circle),
-                                child: const Icon(Icons.add_photo_alternate_rounded, color: Colors.cyanAccent, size: 40),
+                                decoration: BoxDecoration(
+                                  color: Colors.cyanAccent.withOpacity(0.1),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.add_photo_alternate_rounded,
+                                  color: Colors.cyanAccent,
+                                  size: 40,
+                                ),
                               ),
                               const SizedBox(height: 16),
-                              const Text('แตะเพื่ออัปโหลดรูปภาพ', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                              const Text(
+                                'แตะเพื่ออัปโหลดรูปภาพ',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
                               const SizedBox(height: 4),
-                              const Text('รองรับ Camera & Gallery', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                              const Text(
+                                'รองรับ Camera & Gallery',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 12,
+                                ),
+                              ),
                             ],
                           ),
                   ),
@@ -356,27 +552,67 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     gradient: _image == null
-                        ? LinearGradient(colors: [Colors.grey[800]!, Colors.grey[900]!])
-                        : const LinearGradient(colors: [Color(0xFF6C4AB6), Color(0xFF4A3080)]),
-                    boxShadow: _image != null ? [BoxShadow(color: const Color(0xFF6C4AB6).withOpacity(0.4), blurRadius: 15, offset: const Offset(0, 5))] : [],
+                        ? LinearGradient(
+                            colors: [Colors.grey[800]!, Colors.grey[900]!],
+                          )
+                        : const LinearGradient(
+                            colors: [Color(0xFF6C4AB6), Color(0xFF4A3080)],
+                          ),
+                    boxShadow: _image != null
+                        ? [
+                            BoxShadow(
+                              color: const Color(0xFF6C4AB6).withOpacity(0.4),
+                              blurRadius: 15,
+                              offset: const Offset(0, 5),
+                            ),
+                          ]
+                        : [],
                   ),
                   child: ElevatedButton(
-                    onPressed: _loading || _image == null ? null : _searchWithAI,
+                    onPressed: _loading || _image == null
+                        ? null
+                        : _searchWithAI,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.transparent,
                       shadowColor: Colors.transparent,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
                     ),
                     child: _loading
                         ? const Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: kLimeGreen, strokeWidth: 3)),
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: kLimeGreen,
+                                  strokeWidth: 3,
+                                ),
+                              ),
                               SizedBox(width: 12),
-                              Text('AI is scanning...', style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold, fontSize: 16)),
+                              Text(
+                                'AI is scanning...',
+                                style: TextStyle(
+                                  color: kLimeGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
                             ],
                           )
-                        : Text('START SEARCH', style: TextStyle(color: _image == null ? Colors.white54 : kLimeGreen, fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: 1)),
+                        : Text(
+                            'START SEARCH',
+                            style: TextStyle(
+                              color: _image == null
+                                  ? Colors.white54
+                                  : kLimeGreen,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 16,
+                              letterSpacing: 1,
+                            ),
+                          ),
                   ),
                 ),
 
@@ -385,13 +621,26 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                   const SizedBox(height: 30),
                   Container(
                     padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.amber.withOpacity(0.3))),
+                    decoration: BoxDecoration(
+                      color: kCardDark,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.amber.withOpacity(0.3)),
+                    ),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Icon(Icons.auto_awesome, color: Colors.amber),
                         const SizedBox(width: 16),
-                        Expanded(child: Text(_aiAnalysis!, style: const TextStyle(color: Colors.amber, height: 1.6, fontSize: 14))),
+                        Expanded(
+                          child: Text(
+                            _aiAnalysis!,
+                            style: const TextStyle(
+                              color: Colors.amber,
+                              height: 1.6,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -400,29 +649,50 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                 // 🪵 รายการสินค้าที่เจอ
                 if (_products.isNotEmpty) ...[
                   const SizedBox(height: 30),
-                  const Text("Best Matches", style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+                  const Text(
+                    "Best Matches",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   ListView.separated(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: _products.length,
-                    separatorBuilder: (context, index) => const SizedBox(height: 16),
+                    separatorBuilder: (context, index) =>
+                        const SizedBox(height: 16),
                     itemBuilder: (context, index) {
                       final product = _products[index];
                       final score = product['similarity'] * 100;
                       final isHighMatch = score >= 60;
 
                       return GestureDetector(
-                        onTap: () => _showProductDetails(product), // 🚨 กดแล้วเด้งหน้าต่างโชว์ข้อมูล
+                        onTap: () => _showProductDetails(
+                          product,
+                        ), // 🚨 กดแล้วเด้งหน้าต่างโชว์ข้อมูล
                         child: Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+                          decoration: BoxDecoration(
+                            color: kCardDark,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.05),
+                            ),
+                          ),
                           child: Row(
                             children: [
                               // รูปสินค้าเล็ก
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
-                                child: Image.network(product['variant_image'], width: 80, height: 80, fit: BoxFit.cover),
+                                child: Image.network(
+                                  product['variant_image'],
+                                  width: 80,
+                                  height: 80,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                               const SizedBox(width: 16),
                               // ข้อมูลสินค้า
@@ -430,30 +700,62 @@ class _AiSearchScreenState extends State<AiSearchScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(product['name'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                                    Text(
+                                      product['name'],
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
                                     const SizedBox(height: 6),
-                                    Text('SKU: ${product['sku'] ?? '-'}', style: const TextStyle(color: Colors.white54, fontSize: 13)),
+                                    Text(
+                                      'SKU: ${product['sku'] ?? '-'}',
+                                      style: const TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 13,
+                                      ),
+                                    ),
                                     const SizedBox(height: 8),
                                     // ป้ายความแม่นยำ
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                      decoration: BoxDecoration(color: isHighMatch ? Colors.green.withOpacity(0.15) : Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isHighMatch
+                                            ? Colors.green.withOpacity(0.15)
+                                            : Colors.orange.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                       child: Text(
                                         'Match: ${score.toStringAsFixed(1)}%',
-                                        style: TextStyle(color: isHighMatch ? Colors.greenAccent : Colors.orangeAccent, fontSize: 12, fontWeight: FontWeight.bold),
+                                        style: TextStyle(
+                                          color: isHighMatch
+                                              ? Colors.greenAccent
+                                              : Colors.orangeAccent,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                       ),
-                                    )
+                                    ),
                                   ],
                                 ),
                               ),
-                              const Icon(Icons.chevron_right_rounded, color: Colors.white24),
+                              const Icon(
+                                Icons.chevron_right_rounded,
+                                color: Colors.white24,
+                              ),
                             ],
                           ),
                         ),
                       );
                     },
                   ),
-                ]
+                ],
               ],
             ),
           ),

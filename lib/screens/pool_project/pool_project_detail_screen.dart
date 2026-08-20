@@ -45,6 +45,16 @@ class _PoolProjectDetailScreenState extends State<PoolProjectDetailScreen> {
 
   final ImagePicker _picker = ImagePicker();
 
+  String _relationName(dynamic relation) {
+    if (relation is Map) {
+      return relation['name']?.toString().trim() ?? '';
+    }
+    if (relation is List && relation.isNotEmpty && relation.first is Map) {
+      return relation.first['name']?.toString().trim() ?? '';
+    }
+    return '';
+  }
+
   String get _cacheKey => 'pending_images_${orderData['id']}';
 
   Future<void> _loadPendingImages() async {
@@ -509,6 +519,11 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
   Widget build(BuildContext context) {
     final ownerName = orderData['customer_name'] ?? 'ไม่ระบุชื่อลูกค้า';
     final companyName = orderData['companies']?['name'] ?? 'ไม่ระบุชื่อบริษัท';
+    final orderCustomerTypeName = _relationName(orderData['customer_types']);
+    final companyCustomerTypeName = _relationName(orderData['companies']?['customer_types']);
+    final customerTypeName = orderCustomerTypeName.isNotEmpty
+        ? orderCustomerTypeName
+        : (companyCustomerTypeName.isNotEmpty ? companyCustomerTypeName : '-');
     final phoneNum = orderData['phone'] ?? '-';
     final saleName = orderData['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์';
     
@@ -652,6 +667,7 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
                       const SizedBox(height: 20), const Divider(color: Colors.white12), const SizedBox(height: 16),
                       _buildInfoRow("Customer", ownerName),
                       _buildInfoRow("Company", companyName),
+                      _buildInfoRow("Customer Type", customerTypeName),
                       _buildInfoRow("Phone / Line", phoneNum),
                       _buildInfoRow("Sale Name", saleName),
                       _buildInfoRow("Date", dateStr),
@@ -863,6 +879,9 @@ Widget _buildProjectCard(Map<String, dynamic> pData, String category, String? ca
     final String pId = pData['id'] ?? '';
     final String pName = pData['project_name'] ?? '-';
     final String area = pData['area_sqm']?.toString() ?? '0';
+    final String projectType = pData['project_types']?['name'] ?? '-';
+    final String quarter = pData['queue_level']?.toString() ?? '-';
+    final String projectYear = pData['project_year']?.toString() ?? '-';
 
     // 🌟 2. ประกอบร่าง! เอาข้อมูลเดิมมาเพิ่ม หมวดหมู่สินค้า เข้าไป
     Map<String, dynamic> dataForDialog = Map<String, dynamic>.from(pData);
@@ -908,9 +927,23 @@ Widget _buildProjectCard(Map<String, dynamic> pData, String category, String? ca
                 const SizedBox(height: 16), // เพิ่มช่องว่าง
                 
                 Wrap(
-                  spacing: 12, runSpacing: 8, // เพิ่มช่องว่างระหว่าง chip
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: kPremiumGold.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text(category, style: const TextStyle(color: kPremiumGold, fontSize: 11, fontWeight: FontWeight.bold))),
+                    if (projectType != '-')
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: kNeonPurple.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text(projectType, style: const TextStyle(color: kNeonPurple, fontSize: 11, fontWeight: FontWeight.bold))),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (quarter != '-')
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text("Q$quarter", style: const TextStyle(color: Colors.orangeAccent, fontSize: 11, fontWeight: FontWeight.bold))),
+                    if (projectYear != '-')
+                      Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.blue.withOpacity(0.15), borderRadius: BorderRadius.circular(6)), child: Text("ค.ศ. $projectYear", style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold))),
                     Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), borderRadius: BorderRadius.circular(6)), child: Row(mainAxisSize: MainAxisSize.min, children: [const Icon(Icons.aspect_ratio_rounded, color: Colors.white70, size: 12), const SizedBox(width: 4), Text("$area ตร.ม.", style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.bold))])),
                   ],
                 ),
