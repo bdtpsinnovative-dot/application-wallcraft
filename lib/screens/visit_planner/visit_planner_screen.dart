@@ -741,51 +741,312 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }).toList();
   }
 
+  void _showCaptureOptions(DateTime weekStart, List<dynamic> weekPlans) {
+    if (weekPlans.isEmpty) {
+      _captureWeekPlan(weekStart, weekPlans);
+      return;
+    }
+
+    final totalPages = (weekPlans.length + 4) ~/ 5;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: const BoxDecoration(
+            color: Color(0xFF1E1E24),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(color: Colors.white12, width: 1),
+            ),
+          ),
+          child: SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white24,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: kLimeGreen.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(
+                        Icons.photo_camera_rounded,
+                        color: kLimeGreen,
+                        size: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'เลือกรูปแบบการบันทึกภาพ',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'พบทั้งหมด ${weekPlans.length} รายการในสัปดาห์นี้',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.5),
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                // 📸 ตัวเลือกที่ 1: ถ่ายยาวทั้งหมด
+                _buildCaptureOptionCard(
+                  icon: Icons.view_day_rounded,
+                  iconColor: Colors.amberAccent,
+                  title: '1. ถ่ายยาวทั้งหมด (1 รูป)',
+                  subtitle: 'รวมทั้งหมด ${weekPlans.length} รายการในภาพเดียวแบบยาว',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _captureWeekPlan(weekStart, weekPlans, paginated: false);
+                  },
+                ),
+                const SizedBox(height: 12),
+
+                // 📑 ตัวเลือกที่ 2: แบ่งหน้าละ 5 รายการ
+                _buildCaptureOptionCard(
+                  icon: Icons.auto_awesome_motion_rounded,
+                  iconColor: kLimeGreen,
+                  title: '2. ถ่ายแบ่งหน้า (หน้าละ 5 รายการ)',
+                  subtitle:
+                      'แบ่งเป็น $totalPages ภาพ (หน้าละ 5 รายการ) อ่านง่าย ส่ง LINE สะดวก',
+                  badgeText: '$totalPages หน้า',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _captureWeekPlan(weekStart, weekPlans, paginated: true);
+                  },
+                ),
+                const SizedBox(height: 10),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCaptureOptionCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+    String? badgeText,
+  }) {
+    return Material(
+      color: const Color(0xFF26262E),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        if (badgeText != null) ...[
+                          const SizedBox(width: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: iconColor.withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              badgeText,
+                              style: TextStyle(
+                                color: iconColor,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.5),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.white30,
+                size: 14,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _captureWeekPlan(
     DateTime weekStart,
-    List<dynamic> weekPlans,
-  ) async {
+    List<dynamic> weekPlans, {
+    bool paginated = false,
+  }) async {
     if (_isCapturingWeek) return;
 
     setState(() => _isCapturingWeek = true);
     try {
       final captureWidth = MediaQuery.of(context).size.width - 32;
-      final imageBytes = await _weekScreenshotController.captureFromLongWidget(
-        InheritedTheme.captureAll(
-          context,
-          Material(
-            color: kDarkBg,
-            child: SizedBox(
-              width: captureWidth,
-              child: _buildWeekCaptureContent(weekStart, weekPlans),
-            ),
-          ),
-        ),
-        context: context,
-        delay: const Duration(milliseconds: 100),
-        pixelRatio: 2,
-      );
-
       final weekLabel =
           '${weekStart.year}${weekStart.month.toString().padLeft(2, '0')}${weekStart.day.toString().padLeft(2, '0')}';
-      await Gal.putImageBytes(imageBytes, name: 'weekly_visit_plan_$weekLabel');
+      final tempDir = await getTemporaryDirectory();
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('บันทึกรูปแผนงานลงเครื่องแล้ว'),
-          backgroundColor: kLimeGreen,
-        ),
-      );
+      if (!paginated || weekPlans.length <= 5) {
+        final imageBytes = await _weekScreenshotController.captureFromLongWidget(
+          InheritedTheme.captureAll(
+            context,
+            Material(
+              color: kDarkBg,
+              child: SizedBox(
+                width: captureWidth,
+                child: _buildWeekCaptureContent(weekStart, weekPlans),
+              ),
+            ),
+          ),
+          context: context,
+          delay: const Duration(milliseconds: 100),
+          pixelRatio: 2,
+        );
 
-      final directory = await getTemporaryDirectory();
-      final imageFile = File(
-        '${directory.path}/weekly_visit_plan_$weekLabel.png',
-      );
-      await imageFile.writeAsBytes(imageBytes);
-      await Share.shareXFiles([
-        XFile(imageFile.path),
-      ], text: 'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)}');
+        await Gal.putImageBytes(imageBytes, name: 'weekly_visit_plan_$weekLabel');
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('บันทึกรูปแผนงานลงเครื่องแล้ว'),
+            backgroundColor: kLimeGreen,
+          ),
+        );
+
+        final imageFile = File(
+          '${tempDir.path}/weekly_visit_plan_$weekLabel.png',
+        );
+        await imageFile.writeAsBytes(imageBytes);
+        await Share.shareXFiles([
+          XFile(imageFile.path),
+        ], text: 'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)}');
+      } else {
+        final totalPages = (weekPlans.length + 4) ~/ 5;
+        final List<XFile> shareFiles = [];
+
+        for (int i = 0; i < totalPages; i++) {
+          final chunk = weekPlans.skip(i * 5).take(5).toList();
+          final imageBytes = await _weekScreenshotController.captureFromLongWidget(
+            InheritedTheme.captureAll(
+              context,
+              Material(
+                color: kDarkBg,
+                child: SizedBox(
+                  width: captureWidth,
+                  child: _buildWeekCaptureContent(
+                    weekStart,
+                    chunk,
+                    pageIndex: i,
+                    totalPages: totalPages,
+                    totalItemCount: weekPlans.length,
+                  ),
+                ),
+              ),
+            ),
+            context: context,
+            delay: const Duration(milliseconds: 100),
+            pixelRatio: 2,
+          );
+
+          await Gal.putImageBytes(
+            imageBytes,
+            name: 'weekly_visit_plan_${weekLabel}_p${i + 1}',
+          );
+
+          final imageFile = File(
+            '${tempDir.path}/weekly_visit_plan_${weekLabel}_p${i + 1}.png',
+          );
+          await imageFile.writeAsBytes(imageBytes);
+          shareFiles.add(XFile(imageFile.path));
+        }
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('บันทึกรูปแผนงานครบทั้ง $totalPages หน้าลงเครื่องแล้ว'),
+            backgroundColor: kLimeGreen,
+          ),
+        );
+
+        await Share.shareXFiles(
+          shareFiles,
+          text:
+              'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)} (ทั้งหมด $totalPages หน้า)',
+        );
+      }
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -800,7 +1061,16 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
     }
   }
 
-  Widget _buildWeekCaptureContent(DateTime weekStart, List<dynamic> weekPlans) {
+  Widget _buildWeekCaptureContent(
+    DateTime weekStart,
+    List<dynamic> weekPlans, {
+    int? pageIndex,
+    int? totalPages,
+    int? totalItemCount,
+  }) {
+    final isPaginated = totalPages != null && totalPages > 1;
+    final pageNum = (pageIndex ?? 0) + 1;
+
     return Container(
       padding: const EdgeInsets.all(16),
       color: kDarkBg,
@@ -813,7 +1083,7 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: kLimeGreen.withOpacity(0.12),
+                  color: kLimeGreen.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
@@ -833,6 +1103,25 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                   ),
                 ),
               ),
+              if (isPaginated)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: kLimeGreen.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(12),
+                    border:
+                        Border.all(color: kLimeGreen.withValues(alpha: 0.4)),
+                  ),
+                  child: Text(
+                    'หน้า $pageNum/$totalPages',
+                    style: const TextStyle(
+                      color: kLimeGreen,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 16),
@@ -842,15 +1131,30 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
             decoration: BoxDecoration(
               color: kCardDark,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: kLimeGreen.withOpacity(0.35)),
+              border: Border.all(color: kLimeGreen.withValues(alpha: 0.35)),
             ),
-            child: Text(
-              _formatWeekRange(weekStart),
-              style: const TextStyle(
-                color: kLimeGreen,
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-              ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _formatWeekRange(weekStart),
+                    style: const TextStyle(
+                      color: kLimeGreen,
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+                if (isPaginated && totalItemCount != null)
+                  Text(
+                    'รายการ ${(pageIndex! * 5) + 1} - ${(pageIndex * 5) + weekPlans.length} จาก $totalItemCount',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.6),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
             ),
           ),
           const SizedBox(height: 12),
@@ -867,10 +1171,12 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
           else
             ...weekPlans.map(_buildWeekCapturePlanCard),
           const SizedBox(height: 8),
-          const Center(
+          Center(
             child: Text(
-              'Wallcraft · Weekly Visit Planner',
-              style: TextStyle(color: Colors.white38, fontSize: 10),
+              isPaginated
+                  ? 'Wallcraft · Weekly Visit Planner (หน้า $pageNum จาก $totalPages)'
+                  : 'Wallcraft · Weekly Visit Planner',
+              style: const TextStyle(color: Colors.white38, fontSize: 10),
             ),
           ),
         ],
@@ -2163,12 +2469,12 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                                         ),
                                                         Tooltip(
                                                           message:
-                                                              'แคปแผนทั้งสัปดาห์',
+                                                              'ถ่ายรูปแผนงาน',
                                                           child: InkWell(
                                                             onTap:
                                                                 _isCapturingWeek
                                                                 ? null
-                                                                : () => _captureWeekPlan(
+                                                                : () => _showCaptureOptions(
                                                                     weekStart,
                                                                     weekPlans,
                                                                   ),
