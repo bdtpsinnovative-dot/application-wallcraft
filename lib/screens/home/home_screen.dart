@@ -877,7 +877,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
               ),
               const Spacer(),
               if (_hasTeam || _isAdmin)
-                _buildScopeToggle(systemView: false, compact: isNarrow)
+                _buildScopeToggle(systemView: false)
               else
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -888,9 +888,9 @@ class _HomeDashboardState extends State<_HomeDashboard>
                     color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    isNarrow ? 'MY' : 'MY STATS',
-                    style: const TextStyle(
+                  child: const Text(
+                    'MY STATS',
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
@@ -987,8 +987,8 @@ class _HomeDashboardState extends State<_HomeDashboard>
                 ),
               ),
               const Spacer(),
-              if (_hasTeam)
-                _buildScopeToggle(systemView: true, compact: isNarrow)
+              if (_hasTeam || _isAdmin)
+                _buildScopeToggle(systemView: true)
               else
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -999,9 +999,9 @@ class _HomeDashboardState extends State<_HomeDashboard>
                     color: const Color(0xFF4A3100).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: Text(
-                    isNarrow ? 'ALL' : 'ALL TEAMS',
-                    style: const TextStyle(
+                  child: const Text(
+                    'ALL TEAMS',
+                    style: TextStyle(
                       color: Color(0xFF4A3100),
                       fontSize: 9,
                       fontWeight: FontWeight.w900,
@@ -1091,46 +1091,55 @@ class _HomeDashboardState extends State<_HomeDashboard>
     );
   }
 
-  Widget _buildScopeToggle({required bool systemView, bool compact = false}) {
-    final color = systemView ? const Color(0xFF4A3100) : kPremiumGold;
+  Widget _buildScopeToggle({required bool systemView}) {
+    final bgColor = systemView
+        ? const Color(0xFF3A2400)
+        : const Color(0xFF2E1954);
+    final textColor = systemView
+        ? const Color(0xFFFFDF7A)
+        : kLimeGreen;
+    final borderColor = systemView
+        ? const Color(0xFFFFD54F).withValues(alpha: 0.6)
+        : kLimeGreen.withValues(alpha: 0.6);
     final label = systemView
-        ? 'TEAM VIEW'
-        : (_isAdmin ? 'SYSTEM VIEW' : 'TEAM ACTIVITY');
-    final icon = systemView
-        ? Icons.groups_rounded
-        : (_isAdmin ? Icons.insights_rounded : Icons.groups_rounded);
+        ? 'สลับดูทีม'
+        : (_isAdmin ? 'สลับดูระบบ' : 'ทีมของฉัน');
 
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: _toggleSystemActivityView,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(20),
+        splashColor: textColor.withValues(alpha: 0.25),
+        highlightColor: textColor.withValues(alpha: 0.15),
         child: Container(
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 6 : 8,
-            vertical: 5,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.14),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: color.withValues(alpha: 0.35)),
+            color: bgColor,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.25),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(icon, color: color, size: 14),
-              if (!compact) ...[
-                const SizedBox(width: 4),
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 0.5,
-                  ),
+              Icon(Icons.swap_horiz_rounded, color: textColor, size: 14),
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.3,
                 ),
-              ],
+              ),
             ],
           ),
         ),
