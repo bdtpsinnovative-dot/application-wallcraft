@@ -20,6 +20,11 @@ class SummaryStatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasK = value.endsWith('K') || value.endsWith('k');
+    final String cleanValueStr = hasK ? value.substring(0, value.length - 1) : value;
+    final double? parsedVal = double.tryParse(cleanValueStr);
+    final bool isInteger = parsedVal != null && !cleanValueStr.contains('.');
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -42,7 +47,36 @@ class SummaryStatCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline, 
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+              if (parsedVal != null)
+                TweenAnimationBuilder<double>(
+                  tween: Tween<double>(begin: 0, end: parsedVal),
+                  duration: Duration(
+                    milliseconds: (900 + (parsedVal * 1.0).toInt()).clamp(900, 1800),
+                  ),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, val, child) {
+                    final displayStr = isInteger
+                        ? "${val.toInt()}${hasK ? 'K' : ''}"
+                        : "${val.toStringAsFixed(1)}${hasK ? 'K' : ''}";
+                    return Text(
+                      displayStr,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
+                )
+              else
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               const SizedBox(width: 4),
               Text(unit, style: TextStyle(color: Colors.grey[400], fontSize: 11)),
             ],

@@ -7,17 +7,20 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-// 🌟 1. เพิ่ม Import 2 ตัวนี้เข้ามาเพื่อจัดการระบบแจ้งเตือน
-import 'package:firebase_messaging/firebase_messaging.dart';
+// 🌟 Import เพื่อจัดการระบบแจ้งเตือน
 import '../../services/notification_service.dart';
 
 import '../../constants.dart';
 import '../home/home_screen.dart';
 import '../orders/purchase_order_screen.dart';
 
-const Color kDarkBg = Color(0xFF0F0F11);
-const Color kGlowPurple = Color(0xFF2A2A35);
-const Color kCardDark = Color(0xFF1C1C1E);
+const Color kDarkBg = Color(0xFF0C0C0E);
+const Color kCardDark = Color(0xFF18181B);
+const Color kGlowPurple = Color(0xFF7B2CBF);
+const Color kGlowViolet = Color(0xFF4A3080);
+const Color kLimeGreen = Color(0xFFD2E862);
+const Color kLimeGreenBright = Color(0xFFE4FA63);
+const Color kPremiumGold = Color(0xFFFFC107);
 const Color kPrimaryWhite = Colors.white;
 
 class LoginScreen extends StatefulWidget {
@@ -27,7 +30,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends State<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
@@ -36,6 +40,39 @@ class _LoginScreenState extends State<LoginScreen> {
   String? error;
   bool showPass = false;
   bool isRegister = false;
+
+  late AnimationController _animController;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _fadeAnim = CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    );
+    _slideAnim = Tween<Offset>(
+      begin: const Offset(0, 0.08),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animController,
+      curve: Curves.easeOutCubic,
+    ));
+    _animController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animController.dispose();
+    emailCtrl.dispose();
+    passCtrl.dispose();
+    super.dispose();
+  }
 
   String _getFriendlyErrorMessage(String serverError) {
     String msg = serverError.toLowerCase();
@@ -109,14 +146,14 @@ class _LoginScreenState extends State<LoginScreen> {
           // 🧹 ล้างแคชข้อมูลของ User เก่าทิ้งทันทีเพื่อให้ User ใหม่ได้ข้อมูลของตัวเอง 100%
           PurchaseOrderScreen.clearCache();
 
-          // 🌟 2. เพิ่มโค้ดดึงและอัปโหลด FCM Token ทันทีที่ล็อกอินสำเร็จ!
+          // 🌟 ดึงและอัปโหลด FCM Token ทันทีที่ล็อกอินสำเร็จ!
           try {
             String? fcmToken = await NotificationService.getFcmToken();
             if (fcmToken != null) {
               await NotificationService.uploadTokenToServer(fcmToken);
             }
           } catch (fcmError) {
-            print("FCM Token Upload Failed: $fcmError");
+            debugPrint("FCM Token Upload Failed: $fcmError");
           }
 
           if (mounted) {
@@ -146,11 +183,11 @@ class _LoginScreenState extends State<LoginScreen> {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                backgroundColor: kPrimaryWhite,
+                backgroundColor: kLimeGreen,
                 behavior: SnackBarBehavior.floating,
                 margin: EdgeInsets.all(20),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(10)),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
             );
@@ -182,63 +219,110 @@ class _LoginScreenState extends State<LoginScreen> {
   InputDecoration _buildInputDecoration(String label, IconData icon) {
     return InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: Colors.grey, fontSize: 14),
-      prefixIcon: Icon(icon, color: Colors.white70, size: 20),
+      labelStyle: TextStyle(
+        color: Colors.white.withValues(alpha: 0.5),
+        fontSize: 14,
+        fontWeight: FontWeight.w500,
+      ),
+      floatingLabelStyle: const TextStyle(
+        color: kLimeGreen,
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+      ),
+      prefixIcon: Padding(
+        padding: const EdgeInsets.only(left: 16, right: 12),
+        child: Icon(
+          icon,
+          color: Colors.white.withValues(alpha: 0.7),
+          size: 20,
+        ),
+      ),
+      prefixIconConstraints: const BoxConstraints(minWidth: 48),
       filled: true,
-      fillColor: Colors.white.withOpacity(0.05),
+      fillColor: Colors.white.withValues(alpha: 0.04),
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide.none,
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.05)),
+        borderRadius: BorderRadius.circular(18),
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: kPrimaryWhite, width: 1.5),
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: kLimeGreen, width: 1.6),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(16),
-        borderSide: const BorderSide(color: Colors.redAccent),
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.2),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.6),
       ),
     );
   }
 
-  Widget _buildBrandLogo(double width) {
+  Widget _buildBrandLogo() {
     return Container(
-      width: width,
-      height: 104,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      width: 88,
+      height: 88,
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.32),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        color: const Color(0xFF1E1E24),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: kLimeGreen.withValues(alpha: 0.35),
+          width: 1.4,
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.white.withOpacity(0.06),
+            color: kLimeGreen.withValues(alpha: 0.22),
             blurRadius: 30,
-            spreadRadius: -8,
+            spreadRadius: -2,
+            offset: const Offset(0, 8),
+          ),
+          BoxShadow(
+            color: kGlowPurple.withValues(alpha: 0.3),
+            blurRadius: 40,
+            spreadRadius: -6,
+            offset: const Offset(0, 14),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: ClipRect(
-          child: Align(
-            alignment: const Alignment(0, 0.02),
-            heightFactor: 0.38,
-            child: Transform.scale(
-              scale: 2.2,
-              child: Image.asset(
-                'assets/icon/app_icon.png',
-                width: width - 24,
-                fit: BoxFit.contain,
-                filterQuality: FilterQuality.high,
+        borderRadius: BorderRadius.circular(24),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    Colors.white.withValues(alpha: 0.08),
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.4),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
               ),
             ),
-          ),
+            Image.asset(
+              'assets/icon/app_icon.png',
+              width: 64,
+              height: 64,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(
+                  Icons.architecture_rounded,
+                  color: kLimeGreen,
+                  size: 42,
+                );
+              },
+            ),
+          ],
         ),
       ),
     );
@@ -247,40 +331,29 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final screenSize = MediaQuery.sizeOf(context);
-    final isCompact = screenSize.height < 680;
-    final contentWidth = screenSize.width < 390 ? screenSize.width - 40 : 360.0;
+    final isCompact = screenSize.height < 700;
+    final contentWidth = screenSize.width < 390 ? screenSize.width - 36 : 360.0;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light,
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: kDarkBg,
+        systemNavigationBarDividerColor: kDarkBg,
+      ),
       child: Scaffold(
         backgroundColor: kDarkBg,
         body: Stack(
           children: [
+            // 🌌 1. Ambient Glow Orbs
             Positioned(
-              top: -110,
-              right: -90,
+              top: -80,
+              right: -60,
               child: Container(
-                width: 310,
-                height: 310,
+                width: 320,
+                height: 320,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: kGlowPurple.withOpacity(0.42),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 80, sigmaY: 80),
-                  child: Container(color: Colors.transparent),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -150,
-              left: -120,
-              child: Container(
-                width: 300,
-                height: 300,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withOpacity(0.025),
+                  color: kGlowPurple.withValues(alpha: 0.35),
                 ),
                 child: BackdropFilter(
                   filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
@@ -288,83 +361,152 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
+            Positioned(
+              top: 180,
+              left: -80,
+              child: Container(
+                width: 260,
+                height: 260,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: kLimeGreen.withValues(alpha: 0.12),
+                ),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -100,
+              right: -50,
+              child: Container(
+                width: 280,
+                height: 280,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: kGlowViolet.withValues(alpha: 0.25),
+                ),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+            ),
+
+            // 🌟 2. Interactive Content with Entrance Animation
             SafeArea(
               child: Center(
                 child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
                   padding: EdgeInsets.symmetric(
                     horizontal: 20,
-                    vertical: isCompact ? 18 : 32,
+                    vertical: isCompact ? 16 : 28,
                   ),
-                  child: SizedBox(
-                    width: contentWidth,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        _buildBrandLogo(contentWidth),
-                        SizedBox(height: isCompact ? 18 : 26),
-                        Text(
-                          isRegister ? 'CREATE YOUR ACCOUNT' : 'WELCOME BACK',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.white,
-                            letterSpacing: 1.8,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Professional system for modern\nconstruction management.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.white54,
-                            height: 1.45,
-                          ),
-                        ),
-                        SizedBox(height: isCompact ? 22 : 30),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-                            child: Container(
-                              padding: EdgeInsets.all(isCompact ? 20 : 24),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.055),
-                                borderRadius: BorderRadius.circular(28),
-                                border: Border.all(
-                                  color: Colors.white.withOpacity(0.1),
+                  child: FadeTransition(
+                    opacity: _fadeAnim,
+                    child: SlideTransition(
+                      position: _slideAnim,
+                      child: SizedBox(
+                        width: contentWidth,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // 🌟 Brand Logo with Glass Highlight
+                            _buildBrandLogo(),
+                            const SizedBox(height: 16),
+
+                            // 🏷️ Brand Name Text
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text(
+                                  'WALL',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                    letterSpacing: 3.2,
+                                  ),
                                 ),
-                              ),
-                              child: Form(
-                                key: _formKey,
-                                child: Column(
-                                  children: [
-                                    TextFormField(
-                                      controller: emailCtrl,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                Text(
+                                  'CRAFT',
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.w900,
+                                    color: kLimeGreen,
+                                    letterSpacing: 3.2,
+                                    shadows: [
+                                      Shadow(
+                                        color: kLimeGreen.withValues(alpha: 0.5),
+                                        blurRadius: 16,
                                       ),
-                                      keyboardType: TextInputType.emailAddress,
-                                      decoration: _buildInputDecoration(
-                                        'Email Address',
-                                        Icons.alternate_email_rounded,
-                                      ),
-                                      validator: (v) => (v ?? '').contains('@')
-                                          ? null
-                                          : 'รูปแบบอีเมลไม่ถูกต้อง',
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: isCompact ? 24 : 32),
+
+                            // 🪟 Glass Form Card
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                                child: Container(
+                                  padding: EdgeInsets.all(isCompact ? 20 : 24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.04),
+                                    borderRadius: BorderRadius.circular(28),
+                                    border: Border.all(
+                                      color: Colors.white.withValues(alpha: 0.12),
+                                      width: 1.2,
                                     ),
-                                    const SizedBox(height: 16),
-                                    TextFormField(
-                                      controller: passCtrl,
-                                      obscureText: !showPass,
-                                      style: const TextStyle(
-                                        color: Colors.white,
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(alpha: 0.3),
+                                        blurRadius: 30,
+                                        offset: const Offset(0, 15),
                                       ),
-                                      decoration:
-                                          _buildInputDecoration(
+                                    ],
+                                  ),
+                                  child: Form(
+                                    key: _formKey,
+                                    child: Column(
+                                      children: [
+                                        // 📧 Email Field
+                                        TextFormField(
+                                          controller: emailCtrl,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          keyboardType:
+                                              TextInputType.emailAddress,
+                                          decoration: _buildInputDecoration(
+                                            'Email Address',
+                                            Icons.alternate_email_rounded,
+                                          ),
+                                          validator: (v) =>
+                                              (v ?? '').contains('@')
+                                                  ? null
+                                                  : 'รูปแบบอีเมลไม่ถูกต้อง',
+                                        ),
+                                        const SizedBox(height: 16),
+
+                                        // 🔒 Password Field
+                                        TextFormField(
+                                          controller: passCtrl,
+                                          obscureText: !showPass,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 15,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                          decoration: _buildInputDecoration(
                                             'Password',
-                                            Icons.lock_open_rounded,
+                                            Icons.lock_outline_rounded,
                                           ).copyWith(
                                             suffixIcon: IconButton(
                                               onPressed: () => setState(
@@ -374,128 +516,192 @@ class _LoginScreenState extends State<LoginScreen> {
                                                 showPass
                                                     ? Icons.visibility_rounded
                                                     : Icons
-                                                          .visibility_off_rounded,
-                                                color: Colors.grey,
+                                                        .visibility_off_rounded,
+                                                color: Colors.white.withValues(
+                                                  alpha: 0.5,
+                                                ),
                                                 size: 20,
                                               ),
                                             ),
                                           ),
-                                      validator: (v) => (v ?? '').length >= 6
-                                          ? null
-                                          : 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',
-                                    ),
-                                    if (error != null) ...[
-                                      const SizedBox(height: 16),
-                                      Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: Colors.redAccent.withOpacity(
-                                            0.1,
-                                          ),
-                                          borderRadius: BorderRadius.circular(
-                                            12,
-                                          ),
+                                          validator: (v) => (v ?? '').length >= 6
+                                              ? null
+                                              : 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',
                                         ),
-                                        child: Row(
-                                          children: [
-                                            const Icon(
-                                              Icons.error_outline_rounded,
-                                              color: Colors.redAccent,
-                                              size: 18,
+
+                                        // ⚠️ Error Message Display
+                                        if (error != null) ...[
+                                          const SizedBox(height: 16),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                              vertical: 10,
                                             ),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Text(
-                                                error!,
-                                                style: const TextStyle(
-                                                  color: Colors.redAccent,
-                                                  fontSize: 13,
-                                                  height: 1.2,
-                                                ),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFFFF5252)
+                                                  .withValues(alpha: 0.12),
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: const Color(0xFFFF5252)
+                                                    .withValues(alpha: 0.3),
                                               ),
                                             ),
-                                          ],
-                                        ),
-                                      ),
-                                    ],
-                                    SizedBox(height: isCompact ? 22 : 28),
-                                    SizedBox(
-                                      width: double.infinity,
-                                      height: 56,
-                                      child: ElevatedButton(
-                                        onPressed: loading ? null : submitForm,
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: kPrimaryWhite,
-                                          foregroundColor: Colors.black,
-                                          elevation: 0,
-                                          shape: RoundedRectangleBorder(
-                                            borderRadius: BorderRadius.circular(
-                                              16,
-                                            ),
-                                          ),
-                                        ),
-                                        child: loading
-                                            ? const SizedBox(
-                                                width: 22,
-                                                height: 22,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                      color: Colors.black,
-                                                      strokeWidth: 3,
+                                            child: Row(
+                                              children: [
+                                                const Icon(
+                                                  Icons.error_outline_rounded,
+                                                  color: Color(0xFFFF5252),
+                                                  size: 18,
+                                                ),
+                                                const SizedBox(width: 10),
+                                                Expanded(
+                                                  child: Text(
+                                                    error!,
+                                                    style: const TextStyle(
+                                                      color: Color(0xFFFF8A80),
+                                                      fontSize: 12.5,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                      height: 1.25,
                                                     ),
-                                              )
-                                            : Text(
-                                                isRegister
-                                                    ? 'CREATE ACCOUNT'
-                                                    : 'SIGN IN',
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w900,
-                                                  letterSpacing: 1.2,
+                                                  ),
                                                 ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+
+                                        SizedBox(height: isCompact ? 20 : 26),
+
+                                        // 🚀 Sign In / Register Button (Neon Lime Glow)
+                                        Container(
+                                          width: double.infinity,
+                                          height: 54,
+                                          decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(18),
+                                            gradient: const LinearGradient(
+                                              colors: [
+                                                kLimeGreenBright,
+                                                kLimeGreen,
+                                              ],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            ),
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: kLimeGreen.withValues(
+                                                  alpha: loading ? 0.1 : 0.38,
+                                                ),
+                                                blurRadius: 22,
+                                                spreadRadius: -2,
+                                                offset: const Offset(0, 8),
                                               ),
+                                            ],
+                                          ),
+                                          child: ElevatedButton(
+                                            onPressed:
+                                                loading ? null : submitForm,
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor:
+                                                  Colors.transparent,
+                                              shadowColor: Colors.transparent,
+                                              foregroundColor:
+                                                  const Color(0xFF141800),
+                                              elevation: 0,
+                                              shape: RoundedRectangleBorder(
+                                                borderRadius:
+                                                    BorderRadius.circular(18),
+                                              ),
+                                            ),
+                                            child: loading
+                                                ? const SizedBox(
+                                                    width: 22,
+                                                    height: 22,
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      color: Color(0xFF141800),
+                                                      strokeWidth: 2.8,
+                                                    ),
+                                                  )
+                                                : Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment.center,
+                                                    children: [
+                                                      Text(
+                                                        isRegister
+                                                            ? 'CREATE ACCOUNT'
+                                                            : 'SIGN IN',
+                                                        style: const TextStyle(
+                                                          fontSize: 15,
+                                                          fontWeight:
+                                                              FontWeight.w900,
+                                                          letterSpacing: 1.2,
+                                                          color:
+                                                              Color(0xFF141800),
+                                                        ),
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      const Icon(
+                                                        Icons
+                                                            .arrow_forward_rounded,
+                                                        size: 18,
+                                                        color:
+                                                            Color(0xFF141800),
+                                                      ),
+                                                    ],
+                                                  ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+
+                            // 🔄 Switch Mode (Sign in <-> Sign up)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  isRegister
+                                      ? 'Already have an account? '
+                                      : 'New to WallCraft? ',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white.withValues(alpha: 0.55),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () => setState(() {
+                                    isRegister = !isRegister;
+                                    error = null;
+                                  }),
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    child: Text(
+                                      isRegister ? 'Sign In' : 'Switch',
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        color: kLimeGreen,
+                                        fontWeight: FontWeight.bold,
+                                        decoration: TextDecoration.underline,
+                                        decorationColor: kLimeGreen,
                                       ),
                                     ),
-                                  ],
+                                  ),
                                 ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 22),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              isRegister
-                                  ? 'Already have an account? '
-                                  : 'New to WallCraft? ',
-                              style: const TextStyle(color: Colors.white54),
-                            ),
-                            GestureDetector(
-                              onTap: () => setState(() {
-                                isRegister = !isRegister;
-                                error = null;
-                              }),
-                              child: const Text(
-                                'Switch',
-                                style: TextStyle(
-                                  color: kPrimaryWhite,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              ],
                             ),
                           ],
                         ),
-                        SizedBox(height: isCompact ? 24 : 34),
-                        Text(
-                          'WALLCRAFT CMS • v1.0.2',
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: Colors.white.withOpacity(0.2),
-                            letterSpacing: 2.6,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),

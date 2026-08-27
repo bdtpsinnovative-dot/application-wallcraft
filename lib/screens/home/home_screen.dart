@@ -632,14 +632,14 @@ class _HomeDashboardState extends State<_HomeDashboard>
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
-              final isNarrow = constraints.maxWidth < 280;
+              final isNarrow = constraints.maxWidth < 320;
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: isNarrow ? 1 : 1.1,
+                crossAxisSpacing: 14,
+                mainAxisSpacing: 14,
+                childAspectRatio: isNarrow ? 0.96 : 1.02,
                 children: [
                   _buildGlassMenuCard(
                     0,
@@ -820,41 +820,108 @@ class _HomeDashboardState extends State<_HomeDashboard>
 
     return Container(
       padding: EdgeInsets.symmetric(
-        vertical: 25,
-        horizontal: isNarrow ? 16 : 24,
+        vertical: 18,
+        horizontal: isNarrow ? 12 : 20,
       ),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [kCardPurpleStart, kCardPurpleEnd],
+          colors: [Color(0xFF9D7CE0), Color(0xFF7251B8), Color(0xFF4A3080)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.22),
+          width: 1.2,
+        ),
         boxShadow: [
           BoxShadow(
-            color: kGlowPurple.withOpacity(0.4),
-            blurRadius: 20,
+            color: kGlowPurple.withValues(alpha: 0.4),
+            blurRadius: 22,
             offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_hasTeam) ...[
-            Align(
-              alignment: Alignment.centerRight,
-              child: _buildScopeToggle(systemView: false, compact: isNarrow),
-            ),
-            const SizedBox(height: 14),
-          ],
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _statItem('Me', '$_myOrders'),
-              Container(width: 1, height: 40, color: Colors.black12),
-              _statItem('Team', '$_teamOrders'),
-              Container(width: 1, height: 40, color: Colors.black12),
-              _statItem('Total', '$_totalOrders', isHighlight: true),
+              AnimatedBuilder(
+                animation: _systemHeaderController,
+                builder: (context, child) {
+                  final motion = Curves.easeInOut.transform(
+                    _systemHeaderController.value,
+                  );
+                  return Transform.rotate(
+                    angle: 0.12 * motion,
+                    alignment: Alignment.center,
+                    child: child,
+                  );
+                },
+                child: const Icon(
+                  Icons.groups_rounded,
+                  color: Colors.white,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'TEAM ACTIVITY',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const Spacer(),
+              if (_hasTeam || _isAdmin)
+                _buildScopeToggle(systemView: false, compact: isNarrow)
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    isNarrow ? 'MY' : 'MY STATS',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _statItem('Me', _myOrders)),
+              Container(
+                width: 1,
+                height: 42,
+                color: Colors.white.withValues(alpha: 0.18),
+              ),
+              Expanded(child: _statItem('Team', _teamOrders)),
+              Container(
+                width: 1,
+                height: 42,
+                color: Colors.white.withValues(alpha: 0.18),
+              ),
+              Expanded(
+                child: _statItem(
+                  'Total',
+                  _totalOrders,
+                  isHighlight: true,
+                ),
+              ),
             ],
           ),
         ],
@@ -947,7 +1014,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
           const SizedBox(height: 16),
           Row(
             children: [
-              Expanded(child: _adminStatItem('แผนงาน', '$_systemPlanTotal')),
+              Expanded(child: _adminStatItem('แผนงาน', _systemPlanTotal)),
               Container(
                 width: 1,
                 height: 42,
@@ -956,7 +1023,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
               Expanded(
                 child: _adminStatItem(
                   'สำเร็จ',
-                  '$_systemPlanCompleted',
+                  _systemPlanCompleted,
                   valueColor: const Color(0xFF1E6A3A),
                 ),
               ),
@@ -968,7 +1035,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
               Expanded(
                 child: _adminStatItem(
                   'ไม่สำเร็จ',
-                  '$_systemPlanUnsuccessful',
+                  _systemPlanUnsuccessful,
                   valueColor: const Color(0xFFA42D24),
                 ),
               ),
@@ -977,7 +1044,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
                 height: 42,
                 color: const Color(0xFF4A3100).withValues(alpha: 0.16),
               ),
-              Expanded(child: _adminStatItem('Projects', '$_totalOrders')),
+              Expanded(child: _adminStatItem('Projects', _totalOrders)),
             ],
           ),
         ],
@@ -985,7 +1052,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
     );
   }
 
-  Widget _adminStatItem(String label, String value, {Color? valueColor}) {
+  Widget _adminStatItem(String label, int value, {Color? valueColor}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -993,9 +1060,8 @@ class _HomeDashboardState extends State<_HomeDashboard>
           height: 28,
           child: FittedBox(
             fit: BoxFit.scaleDown,
-            child: Text(
-              value,
-              maxLines: 1,
+            child: _AnimatedCountText(
+              value: value,
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.w900,
@@ -1072,24 +1138,39 @@ class _HomeDashboardState extends State<_HomeDashboard>
     );
   }
 
-  Widget _statItem(String label, String value, {bool isHighlight = false}) {
+  Widget _statItem(String label, int value, {bool isHighlight = false}) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.w900,
-            color: isHighlight ? Colors.white : const Color(0xFF1E1E1E),
+        SizedBox(
+          height: 28,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: _AnimatedCountText(
+              value: value,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: isHighlight ? kLimeGreen : Colors.white,
+              ),
+            ),
           ),
         ),
-        const SizedBox(height: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-            color: Colors.black54,
+        const SizedBox(height: 2),
+        SizedBox(
+          width: double.infinity,
+          height: 14,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Colors.white.withValues(alpha: 0.8),
+              ),
+            ),
           ),
         ),
       ],
@@ -1123,56 +1204,105 @@ class _HomeDashboardState extends State<_HomeDashboard>
           splashColor: iconColor.withOpacity(0.3),
           highlightColor: iconColor.withOpacity(0.1),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: iconColor.withOpacity(0.15),
+                    color: iconColor.withValues(alpha: 0.15),
                   ),
-                  child: Icon(icon, color: iconColor, size: 24),
+                  child: Icon(icon, color: iconColor, size: 22),
                 ),
-                const Spacer(),
-                SizedBox(
-                  width: double.infinity,
-                  height: 20,
-                  child: FittedBox(
-                    alignment: Alignment.centerLeft,
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      title,
-                      maxLines: 1,
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white,
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: double.infinity,
+                      height: 20,
+                      child: FittedBox(
+                        alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          title,
+                          maxLines: 1,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 4),
-                SizedBox(
-                  width: double.infinity,
-                  height: 15,
-                  child: FittedBox(
-                    alignment: Alignment.centerLeft,
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      subtitle,
-                      maxLines: 1,
-                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    const SizedBox(height: 2),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 15,
+                      child: FittedBox(
+                        alignment: Alignment.centerLeft,
+                        fit: BoxFit.scaleDown,
+                        child: Text(
+                          subtitle,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
+                  ],
                 ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+// ==========================================================
+// 3. _AnimatedCountText (นับเลขวิ่งแบบมีชีวิต นุ่มนวลชะลอตอนจบ)
+// ==========================================================
+class _AnimatedCountText extends StatelessWidget {
+  final int value;
+  final TextStyle style;
+  final Duration? duration;
+  final Curve curve;
+
+  const _AnimatedCountText({
+    super.key,
+    required this.value,
+    required this.style,
+    this.duration,
+    this.curve = Curves.easeOutCubic,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // 🚀 คำนวณความเร็วตามขนาดตัวเลข: ยิ่งเลขเยอะ ยิ่งวิ่งพุ่งเร็วและใช้เวลานานขึ้นเล็กน้อย
+    final animDuration = duration ??
+        Duration(
+          milliseconds: (900 + (value * 1.0).toInt()).clamp(900, 1800),
+        );
+
+    return TweenAnimationBuilder<double>(
+      tween: Tween<double>(begin: 0, end: value.toDouble()),
+      duration: animDuration,
+      curve: curve,
+      builder: (context, val, child) {
+        return Text(
+          val.toInt().toString(),
+          style: style,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        );
+      },
     );
   }
 }
