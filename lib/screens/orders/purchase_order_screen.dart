@@ -1,30 +1,30 @@
 // lib/screens/orders/purchase_order_screen.dart
 import 'dart:convert';
 import 'dart:ui';
-import 'dart:io'; 
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:dropdown_search/dropdown_search.dart'; 
-import 'package:geolocator/geolocator.dart'; 
-import 'package:device_info_plus/device_info_plus.dart'; 
-import 'dart:async'; 
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:async';
 import '../../constants.dart';
 import '../../services/api_service.dart';
 import 'order_history_screen.dart';
 import '../notifications/NotificationScreen.dart';
 
 import 'components/product_item_card.dart';
-import 'components/add_project_dialog.dart'; 
-import 'components/customer_info_card.dart'; 
-import 'components/project_select_card.dart'; 
+import 'components/add_project_dialog.dart';
+import 'components/customer_info_card.dart';
+import 'components/project_select_card.dart';
 
-const Color kDarkBg = Color(0xFF000000); 
-const Color kGlowPurple = Color(0xFF111111); 
-const Color kCardDark = Color(0xFF1C1C1E); 
-const Color kPrimaryColor = Color(0xFFFFFFFF); 
-const Color kLimeGreen = Color(0xFFD2E862); 
+const Color kDarkBg = Color(0xFF000000);
+const Color kGlowPurple = Color(0xFF111111);
+const Color kCardDark = Color(0xFF1C1C1E);
+const Color kPrimaryColor = Color(0xFFFFFFFF);
+const Color kLimeGreen = Color(0xFFD2E862);
 
 class PurchaseOrderScreen extends StatefulWidget {
   const PurchaseOrderScreen({super.key});
@@ -38,20 +38,21 @@ class PurchaseOrderScreen extends StatefulWidget {
   State<PurchaseOrderScreen> createState() => _PurchaseOrderScreenState();
 }
 
-class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerProviderStateMixin {
+class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
+    with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _companyDropdownKey = GlobalKey<DropdownSearchState<dynamic>>();
   bool _startAnimation = false;
 
   String? _selectedCustomerType;
   // 🌟 เก็บเป็น Map เพื่อจำชื่อบริษัท
-  Map<String, dynamic>? _selectedCompany; 
-  bool _isTypeManuallySelected = false; 
-  
+  Map<String, dynamic>? _selectedCompany;
+  bool _isTypeManuallySelected = false;
+
   final _nameCtrl = TextEditingController();
-  final _contactCtrl = TextEditingController(); 
-  
-  List<dynamic> _selectedProjects = []; 
+  final _contactCtrl = TextEditingController();
+
+  List<dynamic> _selectedProjects = [];
   List<ProductItem> _orderItems = [ProductItem()];
   List<dynamic> _projectTypes = []; // 🟢 เพิ่มตัวนี้
   List<dynamic> _customerTypes = [];
@@ -153,15 +154,16 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
 
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) return; // ไม่ได้เปิด GPS
-      
+
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
         if (permission == LocationPermission.denied) return; // ไม่อนุญาต
       }
-      
-      if (permission == LocationPermission.deniedForever) return; // ไม่อนุญาตถาวร
-      
+
+      if (permission == LocationPermission.deniedForever)
+        return; // ไม่อนุญาตถาวร
+
       Position position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
         timeLimit: const Duration(seconds: 3),
@@ -224,7 +226,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     } else {
       _fetchDropdownData();
     }
-    
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) setState(() => _startAnimation = true);
     });
@@ -268,7 +270,12 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     }
   }
 
-  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+  double _calculateDistance(
+    double lat1,
+    double lon1,
+    double lat2,
+    double lon2,
+  ) {
     return Geolocator.distanceBetween(lat1, lon1, lat2, lon2); // returns meters
   }
 
@@ -303,15 +310,20 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         if (vp['companies'] != null && vp['companies']['name'] != null) {
           final compName = vp['companies']['name'].toString().toLowerCase();
           if (compName.contains(lowerFilter)) {
-            final Map<String, dynamic> companyData = Map<String, dynamic>.from(vp['companies']);
-            final plannedDate = DateTime.tryParse(vp['planned_date']?.toString() ?? '');
+            final Map<String, dynamic> companyData = Map<String, dynamic>.from(
+              vp['companies'],
+            );
+            final plannedDate = DateTime.tryParse(
+              vp['planned_date']?.toString() ?? '',
+            );
             final endTime = vp['end_time']?.toString();
             final isPending = vp['status'] == null || vp['status'] == 'pending';
             var isOverdue = false;
             if (isPending && plannedDate != null) {
               final endParts = endTime?.split(':') ?? [];
               final endMinutes = endParts.length >= 2
-                  ? ((int.tryParse(endParts[0]) ?? 23) * 60 + (int.tryParse(endParts[1]) ?? 59))
+                  ? ((int.tryParse(endParts[0]) ?? 23) * 60 +
+                        (int.tryParse(endParts[1]) ?? 59))
                   : 23 * 60 + 59;
               final endDateTime = DateTime(
                 plannedDate.toLocal().year,
@@ -323,10 +335,10 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
               isOverdue = endDateTime.isBefore(DateTime.now());
             }
             visitPlanResults.add({
-              ...companyData, 
+              ...companyData,
               'is_visit_plan': true,
               'is_visit_plan_overdue': isOverdue,
-              'visit_plan_data': vp // แนบข้อมูลแผนงานทั้งหมดไปใช้ตอนเลือก
+              'visit_plan_data': vp, // แนบข้อมูลแผนงานทั้งหมดไปใช้ตอนเลือก
             });
           }
         }
@@ -336,8 +348,16 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       final aOverdue = a['is_visit_plan_overdue'] == true;
       final bOverdue = b['is_visit_plan_overdue'] == true;
       if (aOverdue != bOverdue) return aOverdue ? -1 : 1;
-      final aDate = DateTime.tryParse(a['visit_plan_data']?['planned_date']?.toString() ?? '') ?? DateTime.now();
-      final bDate = DateTime.tryParse(b['visit_plan_data']?['planned_date']?.toString() ?? '') ?? DateTime.now();
+      final aDate =
+          DateTime.tryParse(
+            a['visit_plan_data']?['planned_date']?.toString() ?? '',
+          ) ??
+          DateTime.now();
+      final bDate =
+          DateTime.tryParse(
+            b['visit_plan_data']?['planned_date']?.toString() ?? '',
+          ) ??
+          DateTime.now();
       return aDate.compareTo(bDate);
     });
     results.addAll(visitPlanResults);
@@ -352,19 +372,24 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           if (compName.contains(lowerFilter)) {
             // เช็คว่าไม่ได้เป็น Visit Plan ไปแล้ว
             if (!results.any((r) => r['id'] == p['company']['id'])) {
-              
-              final Map<String, dynamic> pipelineCompanyData = Map<String, dynamic>.from(p['company']);
-              
+              final Map<String, dynamic> pipelineCompanyData =
+                  Map<String, dynamic>.from(p['company']);
+
               bool isNearby = false;
-              if (_currentPosition != null && pipelineCompanyData['lat'] != null && pipelineCompanyData['lng'] != null) {
+              if (_currentPosition != null &&
+                  pipelineCompanyData['lat'] != null &&
+                  pipelineCompanyData['lng'] != null) {
                 double distance = Geolocator.distanceBetween(
-                  _currentPosition!.latitude, 
-                  _currentPosition!.longitude, 
-                  (pipelineCompanyData['lat'] as num).toDouble(), 
-                  (pipelineCompanyData['lng'] as num).toDouble()
+                  _currentPosition!.latitude,
+                  _currentPosition!.longitude,
+                  (pipelineCompanyData['lat'] as num).toDouble(),
+                  (pipelineCompanyData['lng'] as num).toDouble(),
                 );
-                debugPrint("[GPS Debug] Company: ${pipelineCompanyData['name']}, User: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}, Comp: ${pipelineCompanyData['lat']}, ${pipelineCompanyData['lng']}, Distance: ${distance}m");
-                if (distance <= 750) { // 750 meters
+                debugPrint(
+                  "[GPS Debug] Company: ${pipelineCompanyData['name']}, User: ${_currentPosition!.latitude}, ${_currentPosition!.longitude}, Comp: ${pipelineCompanyData['lat']}, ${pipelineCompanyData['lng']}, Distance: ${distance}m",
+                );
+                if (distance <= 750) {
+                  // 750 meters
                   isNearby = true;
                   pipelineCompanyData['distance_m'] = distance;
                 }
@@ -374,7 +399,7 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
               bool isTeam = p['is_team'] == true && !isMine;
               bool isGlobal = p['is_global'] == true && !isMine && !isTeam;
               bool isTeamOrGlobal = isTeam || isGlobal;
-              
+
               List<dynamic> targetProjects = [];
               if (p['projects'] != null) {
                 for (var proj in p['projects']) {
@@ -383,24 +408,25 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                   }
                 }
               }
-              
-              if (targetProjects.isEmpty && !isNearby && !isTeamOrGlobal) continue;
-              
+
+              if (targetProjects.isEmpty && !isNearby && !isTeamOrGlobal)
+                continue;
+
               pipelineResults.add({
-                ...pipelineCompanyData, 
+                ...pipelineCompanyData,
                 'is_pipeline': true,
                 'is_nearby': isNearby,
                 'is_mine': isMine,
                 'is_team': isTeam,
                 'is_global': isGlobal,
                 'projects': targetProjects,
-                'api_index': apiIndex++
+                'api_index': apiIndex++,
               });
             }
           }
         }
       }
-      
+
       // Sort logic:
       // 1. ALL NEARBY companies (both ours 🏢 and team 👥) that are in proximity come FIRST at the very top! (sorted closest distance first)
       // 2. Below nearby: Our personal companies (🏢) sorted by frequency (api_index)
@@ -428,25 +454,29 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         bool aTeam = a['is_team'] == true || a['is_global'] == true;
         bool bTeam = b['is_team'] == true || b['is_global'] == true;
         if (!aTeam && bTeam) return -1; // ของเรามาก่อนของทีมเสมอ
-        if (aTeam && !bTeam) return 1;  // ของทีมไปอยู่ท้ายเสมอ
+        if (aTeam && !bTeam) return 1; // ของทีมไปอยู่ท้ายเสมอ
 
-        return (a['api_index'] as int? ?? 0).compareTo(b['api_index'] as int? ?? 0);
+        return (a['api_index'] as int? ?? 0).compareTo(
+          b['api_index'] as int? ?? 0,
+        );
       });
-      
+
       results.addAll(pipelineResults);
     }
 
     // 3. 🏢 ดึงบริษัททั้งหมดจากฐานข้อมูลมา "ต่อท้ายลิสต์" (แบบธรรมดา)
     String urlStr = '${AppConfig.baseUrl}/companies?q=$filter';
-    if (_isTypeManuallySelected && _selectedCustomerType != null && _selectedCustomerType!.isNotEmpty) {
-       urlStr += '&type_id=$_selectedCustomerType';
+    if (_isTypeManuallySelected &&
+        _selectedCustomerType != null &&
+        _selectedCustomerType!.isNotEmpty) {
+      urlStr += '&type_id=$_selectedCustomerType';
     }
     final url = Uri.parse(urlStr);
     try {
       final response = await ApiService.get(url);
       if (response.statusCode == 200) {
         final apiCompanies = jsonDecode(response.body) as List<dynamic>;
-        
+
         // กรองเอาบริษัทที่มีใน Results ไปแล้วออก จะได้ไม่ขึ้นซ้ำ
         final existingIds = results.map((c) => c['id']).toSet();
         for (var ac in apiCompanies) {
@@ -458,9 +488,11 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           }
         }
       }
-    } catch (e) { debugPrint('Error fetching all companies: $e'); }
+    } catch (e) {
+      debugPrint('Error fetching all companies: $e');
+    }
 
-    return results; 
+    return results;
   }
 
   Future<bool> _createNewProject(String projectName) async {
@@ -475,13 +507,17 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         setState(() {
           _projects.add(newProject);
           _selectedProjects = List.from(_selectedProjects)..add(newProject);
+          _syncProductItemsToSelectedProjects();
         });
-        return true; 
+        return true;
       }
-    } catch (e) { 
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'))); 
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
-    return false; 
+    return false;
   }
 
   void _showSimpleDialog(String title, String msg) {
@@ -489,13 +525,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: kCardDark,
-        title: Text(title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: Text(msg, style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx), 
-            child: const Text("ตกลง", style: TextStyle(color: kPrimaryColor))
-          )
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("ตกลง", style: TextStyle(color: kPrimaryColor)),
+          ),
         ],
       ),
     );
@@ -506,143 +548,192 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     LocationPermission permission;
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      if (mounted) _showSimpleDialog("กรุณาเปิด GPS", "คุณต้องเปิดใช้งานตำแหน่งที่ตั้ง (Location) ก่อนทำการบันทึกข้อมูลครับ");
+      if (mounted)
+        _showSimpleDialog(
+          "กรุณาเปิด GPS",
+          "คุณต้องเปิดใช้งานตำแหน่งที่ตั้ง (Location) ก่อนทำการบันทึกข้อมูลครับ",
+        );
       return null;
     }
     permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        if (mounted) _showSimpleDialog("สิทธิ์ถูกปฏิเสธ", "แอปต้องการสิทธิ์เข้าถึงตำแหน่งเพื่อยืนยันจุดที่บันทึกข้อมูลครับ");
+        if (mounted)
+          _showSimpleDialog(
+            "สิทธิ์ถูกปฏิเสธ",
+            "แอปต้องการสิทธิ์เข้าถึงตำแหน่งเพื่อยืนยันจุดที่บันทึกข้อมูลครับ",
+          );
         return null;
       }
     }
     if (permission == LocationPermission.deniedForever) {
-      if (mounted) _showSimpleDialog("สิทธิ์ถูกปิดกั้นถาวร", "กรุณาเข้าไปเปิดสิทธิ์ตำแหน่ง (Location) ในหน้าตั้งค่าของเครื่องครับ");
+      if (mounted)
+        _showSimpleDialog(
+          "สิทธิ์ถูกปิดกั้นถาวร",
+          "กรุณาเข้าไปเปิดสิทธิ์ตำแหน่ง (Location) ในหน้าตั้งค่าของเครื่องครับ",
+        );
       return null;
     }
     Position? bestPosition;
     StreamSubscription<Position>? positionStream;
     try {
-      positionStream = Geolocator.getPositionStream(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.best, distanceFilter: 0),
-      ).listen((Position position) {
-        if (bestPosition == null || position.accuracy < bestPosition!.accuracy) {
-          bestPosition = position;
-        }
-      });
+      positionStream =
+          Geolocator.getPositionStream(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.best,
+              distanceFilter: 0,
+            ),
+          ).listen((Position position) {
+            if (bestPosition == null ||
+                position.accuracy < bestPosition!.accuracy) {
+              bestPosition = position;
+            }
+          });
       for (int i = 0; i < 50; i++) {
         await Future.delayed(const Duration(milliseconds: 100));
-        if (bestPosition != null && bestPosition!.accuracy <= 15.0) break; 
+        if (bestPosition != null && bestPosition!.accuracy <= 15.0) break;
       }
       await positionStream.cancel();
-      bestPosition ??= await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high, timeLimit: const Duration(seconds: 3));
+      bestPosition ??= await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+        timeLimit: const Duration(seconds: 3),
+      );
       if (bestPosition!.isMocked) {
-        if (mounted) _showSimpleDialog("ตรวจพบการทุจริต", "กรุณาปิดแอปจำลองตำแหน่ง (Fake GPS) ก่อนบันทึกข้อมูลครับ");
-        return null; 
+        if (mounted)
+          _showSimpleDialog(
+            "ตรวจพบการทุจริต",
+            "กรุณาปิดแอปจำลองตำแหน่ง (Fake GPS) ก่อนบันทึกข้อมูลครับ",
+          );
+        return null;
       }
       if (bestPosition!.accuracy > 150.0) {
-        if (mounted) _showSimpleDialog("สัญญาณ GPS อ่อนมาก", "ความแม่นยำต่ำเกินไป กรุณาเดินออกไปใกล้หน้าต่างหรือที่โล่งเพื่อบันทึกครับ");
-        return null; 
+        if (mounted)
+          _showSimpleDialog(
+            "สัญญาณ GPS อ่อนมาก",
+            "ความแม่นยำต่ำเกินไป กรุณาเดินออกไปใกล้หน้าต่างหรือที่โล่งเพื่อบันทึกครับ",
+          );
+        return null;
       }
       DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
       Map<String, dynamic> deviceData = {};
       if (Platform.isAndroid) {
         AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-        deviceData = {"os": "Android", "brand": androidInfo.brand, "model": androidInfo.model, "version": androidInfo.version.release};
+        deviceData = {
+          "os": "Android",
+          "brand": androidInfo.brand,
+          "model": androidInfo.model,
+          "version": androidInfo.version.release,
+        };
       } else if (Platform.isIOS) {
         IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-        deviceData = {"os": "iOS", "brand": "Apple", "model": iosInfo.utsname.machine, "version": iosInfo.systemVersion};
+        deviceData = {
+          "os": "iOS",
+          "brand": "Apple",
+          "model": iosInfo.utsname.machine,
+          "version": iosInfo.systemVersion,
+        };
       }
       return {
-        "location": {"lat": bestPosition!.latitude, "lng": bestPosition!.longitude, "accuracy": bestPosition!.accuracy, "captured_at": DateTime.now().toIso8601String()},
-        "device": deviceData
+        "location": {
+          "lat": bestPosition!.latitude,
+          "lng": bestPosition!.longitude,
+          "accuracy": bestPosition!.accuracy,
+          "captured_at": DateTime.now().toIso8601String(),
+        },
+        "device": deviceData,
       };
     } catch (e) {
       if (positionStream != null) await positionStream.cancel();
-      if (mounted) _showSimpleDialog("เกิดข้อผิดพลาด", "ไม่สามารถดึงตำแหน่งได้ กรุณาลองใหม่อีกครั้ง");
+      if (mounted)
+        _showSimpleDialog(
+          "เกิดข้อผิดพลาด",
+          "ไม่สามารถดึงตำแหน่งได้ กรุณาลองใหม่อีกครั้ง",
+        );
       return null;
     }
   }
 
   Future<void> _submitOrder() async {
     if (_isLoading) return;
-    FocusScope.of(context).unfocus(); 
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
-    
+
     setState(() => _isLoading = true);
     final auditData = await _getAuditData();
     if (auditData == null) {
       setState(() => _isLoading = false);
-      return; 
+      return;
     }
 
     try {
       final prefs = await SharedPreferences.getInstance();
       final token = prefs.getString('auth_token');
-      final userId = prefs.getString('user_id'); 
-      
+      final userId = prefs.getString('user_id');
+
       List<Map<String, dynamic>> itemsPayload = [];
       for (var item in _orderItems) {
         List<String> itemImagesBase64 = [];
         for (var f in item.itemImages) {
-           itemImagesBase64.add(base64Encode(await f.readAsBytes()));
+          itemImagesBase64.add(base64Encode(await f.readAsBytes()));
         }
         List<Map<String, dynamic>> projectUsages = [];
-      for (var projectId in item.selectedProjectIds) {
-         String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
-         
-         projectUsages.add({
-           'project_id': projectId, 
-           'area_sqm': areaText,
-           
-           // 🌟 🌟 🌟 จุดที่นายถาม คือตรงนี้ครับนาย! 🌟 🌟 🌟
-           // ส่งประเภทโครงการที่เซลส์เลือกในการ์ด แนบไปพร้อมกับโครงการที่ติ๊ก
-           'project_type_id': item.projectTypeId, 
-           'queue_level': item.queueLevel,
-           'project_year': item.projectYearCtrl.text.trim(),
-         });
-      }
+        for (var projectId in item.selectedProjectIds) {
+          String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
 
-      itemsPayload.add({
-        'product_category_id': item.categoryId,
-        'interest_level': item.interestLevel,
-        'note': item.noteCtrl.text,
-        'project_type_id': item.projectTypeId,
-        'queue_level': item.queueLevel,
-        'project_year': item.projectYearCtrl.text.trim(),
-        'project_usage': projectUsages,
-        'images': itemImagesBase64,
-      });
-    }
+          projectUsages.add({
+            'project_id': projectId,
+            'area_sqm': areaText,
+
+            // 🌟 🌟 🌟 จุดที่นายถาม คือตรงนี้ครับนาย! 🌟 🌟 🌟
+            // ส่งประเภทโครงการที่เซลส์เลือกในการ์ด แนบไปพร้อมกับโครงการที่ติ๊ก
+            'project_type_id': item.projectTypeId,
+            'queue_level': item.queueLevel,
+            'project_year': item.projectYearCtrl.text.trim(),
+          });
+        }
+
+        itemsPayload.add({
+          'product_category_id': item.categoryId,
+          'interest_level': item.interestLevel,
+          'note': item.noteCtrl.text,
+          'project_type_id': item.projectTypeId,
+          'queue_level': item.queueLevel,
+          'project_year': item.projectYearCtrl.text.trim(),
+          'project_usage': projectUsages,
+          'images': itemImagesBase64,
+        });
+      }
 
       final response = await ApiService.post(
         Uri.parse('${AppConfig.baseUrl}/orders'),
         body: jsonEncode({
           'token': token,
           'user_id': userId,
-          'customer_type_id': _selectedCustomerType, 
-          'company_id': _selectedCompany?['id'].toString(), 
+          'customer_type_id': _selectedCustomerType,
+          'company_id': _selectedCompany?['id'].toString(),
           'customer_name': _nameCtrl.text,
           'phone': _contactCtrl.text,
           'items': itemsPayload,
-          'audit_log': auditData, 
+          'audit_log': auditData,
         }),
       );
-      
-      if (response.statusCode == 200 || response.statusCode == 201) { 
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         if (mounted) {
           // 🧹 เคลียร์แคชเฉพาะแผนการเข้าพบ (Visit Plan) ของบริษัทนี้ออกทันทีเมื่อเช็คอิน/บันทึกสำเร็จ
           if (_selectedCompany != null) {
             final compId = _selectedCompany?['id']?.toString();
             if (compId != null) {
-              _cachedVisitPlanData?.removeWhere((vp) => 
-                vp['company_id']?.toString() == compId || 
-                vp['companies']?['id']?.toString() == compId
+              _cachedVisitPlanData?.removeWhere(
+                (vp) =>
+                    vp['company_id']?.toString() == compId ||
+                    vp['companies']?['id']?.toString() == compId,
               );
-              _visitPlanData.removeWhere((vp) => 
-                vp['company_id']?.toString() == compId || 
-                vp['companies']?['id']?.toString() == compId
+              _visitPlanData.removeWhere(
+                (vp) =>
+                    vp['company_id']?.toString() == compId ||
+                    vp['companies']?['id']?.toString() == compId,
               );
             }
           }
@@ -651,35 +742,50 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
           _fetchVisitPlans();
 
           NotificationScreen.invalidateCache();
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('บันทึกข้อมูลสำเร็จ'), backgroundColor: Colors.green));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('บันทึกข้อมูลสำเร็จ'),
+              backgroundColor: Colors.green,
+            ),
+          );
           _formKey.currentState?.reset();
           _companyDropdownKey.currentState?.clear();
           setState(() {
-              _nameCtrl.clear();
-              _contactCtrl.clear();
-              _selectedCustomerType = null; 
-              _selectedCompany = null;      
-              _selectedProjects = [];       
-              _orderItems = [ProductItem()]; 
-              _isTypeManuallySelected = false;
+            _nameCtrl.clear();
+            _contactCtrl.clear();
+            _selectedCustomerType = null;
+            _selectedCompany = null;
+            _selectedProjects = [];
+            _orderItems = [ProductItem()];
+            _isTypeManuallySelected = false;
           });
         }
-      } else { throw "เกิดข้อผิดพลาดในการบันทึกข้อมูล"; }
-    } catch (e) { 
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.toString()), backgroundColor: Colors.redAccent)); 
-    } finally { if(mounted) setState(() => _isLoading = false); }
+      } else {
+        throw "เกิดข้อผิดพลาดในการบันทึกข้อมูล";
+      }
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString()),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   // 🚀 ฟังก์ชันบันทึกบริษัทใหม่
   Future<void> _addNewCompany(String name, String? typeId) async {
     final response = await ApiService.post(
-      Uri.parse('${AppConfig.baseUrl}/companies'), 
+      Uri.parse('${AppConfig.baseUrl}/companies'),
       body: jsonEncode({'name': name, 'customer_type_id': typeId}),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       final newComp = jsonDecode(response.body);
       setState(() {
-        _selectedCompany = newComp; 
+        _selectedCompany = newComp;
         if (typeId != null) _selectedCustomerType = typeId;
       });
       _companyDropdownKey.currentState?.changeSelectedItem(newComp);
@@ -689,14 +795,14 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   // 🚀 ฟังก์ชันบันทึกประเภทลูกค้าใหม่
   Future<void> _addNewCustomerType(String name) async {
     final response = await ApiService.post(
-      Uri.parse('${AppConfig.baseUrl}/customer_types'), 
+      Uri.parse('${AppConfig.baseUrl}/customer_types'),
       body: jsonEncode({'name': name}),
     );
     if (response.statusCode == 200 || response.statusCode == 201) {
       final newType = jsonDecode(response.body);
       setState(() {
-        _customerTypes.add(newType); 
-        _selectedCustomerType = newType['id'].toString(); 
+        _customerTypes.add(newType);
+        _selectedCustomerType = newType['id'].toString();
       });
     }
   }
@@ -704,16 +810,21 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   // Helper สำหรับหน้าต่าง Dialog
   InputDecoration _dialogInputDecoration(String hint) {
     return InputDecoration(
-      hintText: hint, 
+      hintText: hint,
       hintStyle: TextStyle(color: Colors.grey[400]),
-      enabledBorder: const UnderlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
-      focusedBorder: const UnderlineInputBorder(borderSide: BorderSide(color: kLimeGreen)),
+      enabledBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: Colors.white24),
+      ),
+      focusedBorder: const UnderlineInputBorder(
+        borderSide: BorderSide(color: kLimeGreen),
+      ),
     );
   }
 
   // 🌟🌟🌟 ฟังก์ชันแสดง Dialog กลางจอ (เพิ่มบริษัท) 🌟🌟🌟
   void _showAddCompanyDialog() {
-    String? tempTypeId = _selectedCustomerType; 
+    String? tempTypeId = _selectedCustomerType;
+    String? customerTypeError;
     final companyNameCtrl = TextEditingController();
 
     showDialog(
@@ -721,25 +832,56 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDiaState) => AlertDialog(
           backgroundColor: kCardDark,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Text("เพิ่มบริษัทใหม่", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            "เพิ่มบริษัทใหม่",
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+          ),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               // 🔽 ช่องเลือกประเภทลูกค้าใน Dialog
               DropdownButtonFormField<String>(
                 value: tempTypeId,
-                decoration: _dialogInputDecoration("เลือกประเภทลูกค้า (ไม่บังคับ)"),
+                isExpanded: true,
+                decoration: _dialogInputDecoration("เลือกประเภทลูกค้า *"),
                 dropdownColor: kCardDark,
                 style: const TextStyle(color: Colors.white),
-                items: _customerTypes.map((item) => DropdownMenuItem<String>(
-                  value: item['id'].toString(), 
-                  child: Text(item['name'], style: const TextStyle(color: Colors.white)),
-                )).toList(),
-                onChanged: (val) => setDiaState(() => tempTypeId = val),
+                items: _customerTypes
+                    .map(
+                      (item) => DropdownMenuItem<String>(
+                        value: item['id'].toString(),
+                        child: Text(
+                          item['name'] ?? '-',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (val) => setDiaState(() {
+                  tempTypeId = val;
+                  customerTypeError = null;
+                }),
               ),
+              if (customerTypeError != null) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    customerTypeError!,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
-              
+
               // 📝 ช่องกรอกชื่อบริษัทใน Dialog
               TextField(
                 controller: companyNameCtrl,
@@ -749,15 +891,34 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54))),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text(
+                "ยกเลิก",
+                style: TextStyle(color: Colors.white54),
+              ),
+            ),
             TextButton(
               onPressed: () {
+                if (tempTypeId == null) {
+                  setDiaState(
+                    () =>
+                        customerTypeError = 'กรุณาเลือกประเภทลูกค้าก่อนบันทึก',
+                  );
+                  return;
+                }
                 if (companyNameCtrl.text.isNotEmpty) {
-                  _addNewCompany(companyNameCtrl.text, tempTypeId); 
+                  _addNewCompany(companyNameCtrl.text, tempTypeId);
                   Navigator.pop(ctx);
                 }
               },
-              child: const Text("บันทึก", style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
+              child: const Text(
+                "บันทึก",
+                style: TextStyle(
+                  color: kLimeGreen,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ],
         ),
@@ -773,14 +934,23 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       builder: (ctx) => AlertDialog(
         backgroundColor: kCardDark,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text("เพิ่มประเภทลูกค้าใหม่", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: const Text(
+          "เพิ่มประเภทลูกค้าใหม่",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         content: TextField(
           controller: typeNameCtrl,
           style: const TextStyle(color: Colors.white),
           decoration: _dialogInputDecoration("ชื่อประเภทลูกค้า *"),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("ยกเลิก", style: TextStyle(color: Colors.white54))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text(
+              "ยกเลิก",
+              style: TextStyle(color: Colors.white54),
+            ),
+          ),
           TextButton(
             onPressed: () {
               if (typeNameCtrl.text.isNotEmpty) {
@@ -788,7 +958,10 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
                 Navigator.pop(ctx);
               }
             },
-            child: const Text("บันทึก", style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold)),
+            child: const Text(
+              "บันทึก",
+              style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -798,189 +971,327 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: SystemUiOverlayStyle.light.copyWith(statusBarColor: Colors.transparent),
+      value: SystemUiOverlayStyle.light.copyWith(
+        statusBarColor: Colors.transparent,
+      ),
       child: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(), 
+        onTap: () => FocusScope.of(context).unfocus(),
         child: Scaffold(
           backgroundColor: kDarkBg,
           body: Stack(
             children: [
               Column(
                 children: [
-                  if (_isLoading) const LinearProgressIndicator(color: kLimeGreen, backgroundColor: Colors.transparent),
+                  if (_isLoading)
+                    const LinearProgressIndicator(
+                      color: kLimeGreen,
+                      backgroundColor: Colors.transparent,
+                    ),
                   _buildHeader(context),
                   Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 10),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              children: [
-                                _buildAnimatedCard(
-                                  index: 0,
-                                  child: CustomerInfoCard(
-                                    customerTypes: _customerTypes,
-                                    selectedCustomerType: _selectedCustomerType,
-                                    companyDropdownKey: _companyDropdownKey,
-                                    getCompanies: _getCompanies,
-                                    selectedCompany: _selectedCompany, // 🌟 ส่งข้อมูลเป็น Map
-                                    nameCtrl: _nameCtrl,
-                                    contactCtrl: _contactCtrl,
-                                    onAddCustomerType: _showAddCustomerTypeDialog, // 🌟 เรียก Dialog
-                                    onAddCompany: _showAddCompanyDialog, // 🌟 เรียก Dialog
-                                    onCustomerTypeChanged: (val) {
-                                      setState(() {
-                                        _selectedCustomerType = val;
-                                        _selectedCompany = null;
-                                        _companyDropdownKey.currentState?.clear();
-                                        _isTypeManuallySelected = true; 
-                                      });
-                                    },
-                                    onCompanyChanged: (val) {
-                                      setState(() {
-                                        if (val != null) {
-                                          _selectedCompany = val; 
-                                          if (val['customer_type_id'] != null) {
-                                            _selectedCustomerType = val['customer_type_id'].toString();
-                                            _isTypeManuallySelected = false; 
-                                          }
-                                          // 📅 Visit Plan Logic: Auto-fill everything
-                                          if (val['is_visit_plan'] == true && val['visit_plan_data'] != null) {
-                                            final vp = val['visit_plan_data'];
-                                            
-                                            // Auto-select project
-                                            if (vp['projects'] != null) {
-                                              final p = vp['projects'];
-                                              if (!_projects.any((existing) => existing['id'] == p['id'])) {
-                                                _projects.add(p);
-                                              }
-                                              if (!_selectedProjects.any((sp) => sp['id'] == p['id'])) {
-                                                _selectedProjects = List.from(_selectedProjects)..add(p);
-                                              }
-                                            }
-                                            
-                                            // Auto-fill ProductItem (assuming first item)
-                                            if (_orderItems.isNotEmpty) {
-                                              final firstItem = _orderItems[0];
-                                              
-                                              if (vp['project_type_id'] != null) {
-                                                firstItem.projectTypeId = vp['project_type_id'].toString();
-                                              }
-                                              
-                                              if (vp['product_category_id'] != null) {
-                                                firstItem.categoryId = vp['product_category_id'].toString();
-                                              }
-                                              
-                                              if (vp['project_concept'] != null) {
-                                                firstItem.noteCtrl.text = vp['project_concept'];
-                                              }
-                                            }
-                                          }
-                                          // 🌟 Pipeline Logic: Load active projects (only if not a visit plan)
-                                          else if (val['is_pipeline'] == true && val['projects'] != null) {
-                                            final rawActiveProjs = val['projects'] as List<dynamic>;
-                                            final activeProjs = rawActiveProjs.where((ap) {
-                                               final name = (ap['project_name'] ?? '').toString().trim();
-                                               if (name.isEmpty || name == '-') return false;
-                                               final lower = name.toLowerCase();
-                                               if (lower.contains('ไม่ระบุโครงการ') ||
-                                                   lower.contains('ไม่มีการระบุโครงการ') ||
-                                                   lower.contains('ไม่ระบุชื่อโครงการ') ||
-                                                   lower == 'ไม่ระบุ') {
-                                                 return false;
-                                               }
-                                               return true;
-                                             }).toList();
-                                            
-                                            // Sort _projects so that activeProjs are at the top
-                                            List<dynamic> sortedProjects = [];
-                                            List<dynamic> activeList = [];
-                                            List<dynamic> otherList = [];
-                                            
-                                            for (var p in _projects) {
-                                              if (activeProjs.any((ap) => ap['id'] == p['id'])) {
-                                                p['is_mine'] = true;
-                                                activeList.add(p);
-                                              } else {
-                                                otherList.add(p);
-                                              }
-                                            }
-                                            
-                                            // Ensure all activeProjs are included even if they weren't in _projects
-                                            for (var ap in activeProjs) {
-                                              if (!activeList.any((p) => p['id'] == ap['id'])) {
-                                                activeList.add(ap);
-                                              }
-                                            }
-                                            
-                                            sortedProjects.addAll(activeList);
-                                            sortedProjects.addAll(otherList);
-                                            _projects = sortedProjects;
-                                            
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 10,
+                      ),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          children: [
+                            _buildAnimatedCard(
+                              index: 0,
+                              child: CustomerInfoCard(
+                                customerTypes: _customerTypes,
+                                selectedCustomerType: _selectedCustomerType,
+                                companyDropdownKey: _companyDropdownKey,
+                                getCompanies: _getCompanies,
+                                selectedCompany:
+                                    _selectedCompany, // 🌟 ส่งข้อมูลเป็น Map
+                                nameCtrl: _nameCtrl,
+                                contactCtrl: _contactCtrl,
+                                onAddCustomerType:
+                                    _showAddCustomerTypeDialog, // 🌟 เรียก Dialog
+                                onAddCompany:
+                                    _showAddCompanyDialog, // 🌟 เรียก Dialog
+                                onCustomerTypeChanged: (val) {
+                                  setState(() {
+                                    _selectedCustomerType = val;
+                                    _selectedCompany = null;
+                                    _companyDropdownKey.currentState?.clear();
+                                    _isTypeManuallySelected = true;
+                                  });
+                                },
+                                onCompanyChanged: (val) {
+                                  setState(() {
+                                    if (val != null) {
+                                      _selectedCompany = val;
+                                      final customerTypeId =
+                                          val['customer_type_id']?.toString();
+                                      _selectedCustomerType =
+                                          customerTypeId == null ||
+                                              customerTypeId.isEmpty
+                                          ? null
+                                          : customerTypeId;
+                                      _isTypeManuallySelected = false;
+                                      // 📅 Visit Plan Logic: Auto-fill everything
+                                      if (val['is_visit_plan'] == true &&
+                                          val['visit_plan_data'] != null) {
+                                        final vp = val['visit_plan_data'];
 
+                                        // Auto-select project
+                                        if (vp['projects'] != null) {
+                                          final p = vp['projects'];
+                                          if (!_projects.any(
+                                            (existing) =>
+                                                existing['id'] == p['id'],
+                                          )) {
+                                            _projects.add(p);
                                           }
-                                        } else { 
-                                          _selectedCompany = null; 
+                                          if (!_selectedProjects.any(
+                                            (sp) => sp['id'] == p['id'],
+                                          )) {
+                                            _selectedProjects = List.from(
+                                              _selectedProjects,
+                                            )..add(p);
+                                            _syncProductItemsToSelectedProjects();
+                                          }
                                         }
-                                      });
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                _buildAnimatedCard(
-                                  index: 1,
-                                  child: ProjectSelectCard(
-                                    projects: _projects,
-                                    selectedProjects: _selectedProjects,
-                                    onProjectsChanged: (val) => setState(() => _selectedProjects = val),
-                                    onAddProject: () {
-                                      FocusScope.of(context).unfocus();
-                                      _showAddProjectDialog();
-                                    },
-                                  ),
-                                ),
-                                const SizedBox(height: 20),
-                                _buildAnimatedCard(
-                                  index: 2,
-                                  child: _buildSectionCard(
-                                    title: "รายละเอียดสินค้า",
-                                    icon: Icons.inventory_2_rounded,
-                                    padding: 5,
-                                    content: [
-                                      ListView.separated(
-                                        shrinkWrap: true,
-                                        physics: const NeverScrollableScrollPhysics(),
-                                        itemCount: _orderItems.length,
-                                        separatorBuilder: (_, __) => Padding(padding: const EdgeInsets.symmetric(vertical: 20), child: Divider(color: Colors.white.withOpacity(0.1))),
-                                        itemBuilder: (ctx, index) => ProductItemCard(
-  index: index,
-  item: _orderItems[index],
-  productCategories: _productCategories,
-  projects: _selectedProjects,
-  projectTypes: _projectTypes, // 🟢 1. เช็กบรรทัดนี้! ต้องส่งค่านี้ไปด้วยนะครับนาย
-  onDelete: () => setState(() => _orderItems.removeAt(index)),
-),
-                                      ),
-                                      const SizedBox(height: 24),
-                                      _buildAddItemButton(),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: 40),
-                                _buildSubmitButton(),
-                                const SizedBox(height: 60),
-                              ],
+
+                                        // Auto-fill ProductItem (assuming first item)
+                                        if (_orderItems.isNotEmpty) {
+                                          final firstItem = _orderItems[0];
+
+                                          if (vp['project_type_id'] != null) {
+                                            firstItem.projectTypeId =
+                                                vp['project_type_id']
+                                                    .toString();
+                                          }
+
+                                          if (vp['product_category_id'] !=
+                                              null) {
+                                            firstItem.categoryId =
+                                                vp['product_category_id']
+                                                    .toString();
+                                          }
+
+                                          if (vp['project_concept'] != null) {
+                                            firstItem.noteCtrl.text =
+                                                vp['project_concept'];
+                                          }
+                                        }
+                                      }
+                                      // 🌟 Pipeline Logic: Load active projects (only if not a visit plan)
+                                      else if (val['is_pipeline'] == true &&
+                                          val['projects'] != null) {
+                                        final rawActiveProjs =
+                                            val['projects'] as List<dynamic>;
+                                        final activeProjs = rawActiveProjs
+                                            .where((ap) {
+                                              final name =
+                                                  (ap['project_name'] ?? '')
+                                                      .toString()
+                                                      .trim();
+                                              if (name.isEmpty || name == '-')
+                                                return false;
+                                              final lower = name.toLowerCase();
+                                              if (lower.contains(
+                                                    'ไม่ระบุโครงการ',
+                                                  ) ||
+                                                  lower.contains(
+                                                    'ไม่มีการระบุโครงการ',
+                                                  ) ||
+                                                  lower.contains(
+                                                    'ไม่ระบุชื่อโครงการ',
+                                                  ) ||
+                                                  lower == 'ไม่ระบุ') {
+                                                return false;
+                                              }
+                                              return true;
+                                            })
+                                            .toList();
+
+                                        // Sort _projects so that activeProjs are at the top
+                                        List<dynamic> sortedProjects = [];
+                                        List<dynamic> activeList = [];
+                                        List<dynamic> otherList = [];
+
+                                        for (var p in _projects) {
+                                          if (activeProjs.any(
+                                            (ap) => ap['id'] == p['id'],
+                                          )) {
+                                            p['is_mine'] = true;
+                                            activeList.add(p);
+                                          } else {
+                                            otherList.add(p);
+                                          }
+                                        }
+
+                                        // Ensure all activeProjs are included even if they weren't in _projects
+                                        for (var ap in activeProjs) {
+                                          if (!activeList.any(
+                                            (p) => p['id'] == ap['id'],
+                                          )) {
+                                            activeList.add(ap);
+                                          }
+                                        }
+
+                                        sortedProjects.addAll(activeList);
+                                        sortedProjects.addAll(otherList);
+                                        _projects = sortedProjects;
+                                      }
+                                    } else {
+                                      _selectedCompany = null;
+                                      _selectedCustomerType = null;
+                                      _isTypeManuallySelected = false;
+                                    }
+                                  });
+                                },
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 20),
+                            _buildAnimatedCard(
+                              index: 1,
+                              child: ProjectSelectCard(
+                                projects: _projects,
+                                selectedProjects: _selectedProjects,
+                                onProjectsChanged: (val) => setState(() {
+                                  _selectedProjects = val;
+                                  _syncProductItemsToSelectedProjects();
+                                }),
+                                onAddProject: () {
+                                  FocusScope.of(context).unfocus();
+                                  _showAddProjectDialog();
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            _buildAnimatedCard(
+                              index: 2,
+                              child: _buildSectionCard(
+                                title: "รายละเอียดสินค้า",
+                                icon: Icons.inventory_2_rounded,
+                                padding: 5,
+                                content: [
+                                  ListView.separated(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    itemCount: _orderItems.length,
+                                    separatorBuilder: (_, __) => Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 20,
+                                      ),
+                                      child: Divider(
+                                        color: Colors.white.withOpacity(0.1),
+                                      ),
+                                    ),
+                                    itemBuilder: (ctx, index) {
+                                      final item = _orderItems[index];
+                                      final itemProjects =
+                                          item.targetProjectId == null
+                                          ? _selectedProjects
+                                          : _selectedProjects
+                                                .where(
+                                                  (project) =>
+                                                      _projectId(project) ==
+                                                      item.targetProjectId,
+                                                )
+                                                .toList();
+                                      return ProductItemCard(
+                                        key: ValueKey(item),
+                                        index: index,
+                                        item: item,
+                                        productCategories: _productCategories,
+                                        projects: itemProjects,
+                                        projectTypes: _projectTypes,
+                                        lockProjectSelection:
+                                            item.targetProjectId != null,
+                                        onDelete: () => setState(
+                                          () => _orderItems.removeAt(index),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                  const SizedBox(height: 24),
+                                  _buildAddItemButton(),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 40),
+                            _buildSubmitButton(),
+                            const SizedBox(height: 60),
+                          ],
                         ),
                       ),
-                    ],
+                    ),
                   ),
+                ],
+              ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String? _projectId(dynamic project) => project?['id']?.toString();
+
+  ProductItem _newProductItemForProject(dynamic project) {
+    final projectId = _projectId(project);
+    final item = ProductItem(targetProjectId: projectId);
+    if (projectId != null) {
+      item.selectedProjectIds.add(projectId);
+      item.projectAreaControllers[projectId] = TextEditingController();
+    }
+    return item;
+  }
+
+  void _assignItemToProject(ProductItem item, dynamic project) {
+    final projectId = _projectId(project);
+    item.targetProjectId = projectId;
+    item.selectedProjectIds
+      ..clear()
+      ..addAll(projectId == null ? const [] : [projectId]);
+    if (projectId != null) {
+      item.projectAreaControllers.putIfAbsent(
+        projectId,
+        () => TextEditingController(),
+      );
+    }
+  }
+
+  void _syncProductItemsToSelectedProjects() {
+    final projectsById = <String, dynamic>{
+      for (final project in _selectedProjects)
+        if (_projectId(project) != null) _projectId(project)!: project,
+    };
+
+    _orderItems.removeWhere(
+      (item) =>
+          item.targetProjectId != null &&
+          !projectsById.containsKey(item.targetProjectId),
+    );
+
+    for (final entry in projectsById.entries) {
+      final alreadyHasItem = _orderItems.any(
+        (item) => item.targetProjectId == entry.key,
+      );
+      if (alreadyHasItem) continue;
+
+      final unassignedItem = _orderItems.cast<ProductItem?>().firstWhere(
+        (item) => item?.targetProjectId == null,
+        orElse: () => null,
+      );
+      if (unassignedItem != null) {
+        _assignItemToProject(unassignedItem, entry.value);
+      } else {
+        _orderItems.add(_newProductItemForProject(entry.value));
+      }
+    }
+
+    if (_orderItems.isEmpty) {
+      _orderItems.add(ProductItem());
+    }
   }
 
   // --- Widgets ---
@@ -989,15 +1300,26 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
       color: Colors.transparent,
       child: InkWell(
         onTap: () {
-          FocusScope.of(context).unfocus(); 
-          setState(() => _orderItems.add(ProductItem()));
+          FocusScope.of(context).unfocus();
+          setState(() {
+            if (_selectedProjects.isEmpty) {
+              _orderItems.add(ProductItem());
+            } else {
+              _orderItems.add(
+                _newProductItemForProject(_selectedProjects.first),
+              );
+            }
+          });
         },
         borderRadius: BorderRadius.circular(16),
         child: Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 14),
           decoration: BoxDecoration(
-            border: Border.all(color: kPrimaryColor.withOpacity(0.5), width: 1.5),
+            border: Border.all(
+              color: kPrimaryColor.withOpacity(0.5),
+              width: 1.5,
+            ),
             borderRadius: BorderRadius.circular(16),
             color: kPrimaryColor.withOpacity(0.05),
           ),
@@ -1006,7 +1328,14 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
             children: [
               Icon(Icons.add_circle_rounded, color: kPrimaryColor, size: 20),
               SizedBox(width: 8),
-              Text("เพิ่มรายการสินค้า", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: kPrimaryColor)),
+              Text(
+                "เพิ่มรายการสินค้า",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: kPrimaryColor,
+                ),
+              ),
             ],
           ),
         ),
@@ -1021,17 +1350,29 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
         onPressed: _isLoading ? null : _submitOrder,
         style: ElevatedButton.styleFrom(
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          backgroundColor: _isLoading ? Colors.white30 : kPrimaryColor, 
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          backgroundColor: _isLoading ? Colors.white30 : kPrimaryColor,
         ),
         child: Center(
           child: _isLoading
               ? const SizedBox(
                   width: 22,
                   height: 22,
-                  child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
+                  ),
                 )
-              : const Text("บันทึก", style: TextStyle(fontSize: 16, color: Colors.black, fontWeight: FontWeight.bold)),
+              : const Text(
+                  "บันทึก",
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.black,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
         ),
       ),
     );
@@ -1040,18 +1381,52 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
   Widget _buildHeader(BuildContext context) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 50, 20, 16),
-      color: kDarkBg.withOpacity(0.95), 
+      color: kDarkBg.withOpacity(0.95),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           GestureDetector(
             onTap: () => Navigator.pop(context),
-            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18)),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
           ),
-          const Text("New Record", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+          const Text(
+            "New Record",
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
+          ),
           GestureDetector(
-            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const OrderHistoryScreen())),
-            child: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle), child: const Icon(Icons.history_rounded, color: Colors.white, size: 22)),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const OrderHistoryScreen(),
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.history_rounded,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
           ),
         ],
       ),
@@ -1070,19 +1445,50 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     );
   }
 
-  Widget _buildSectionCard({required String title, required IconData icon, required List<Widget> content, double padding = 24}) {
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> content,
+    double padding = 24,
+  }) {
     return Container(
-      width: double.infinity, padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(color: kCardDark, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))),
+      width: double.infinity,
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        color: kCardDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: kPrimaryColor.withOpacity(0.15), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: kPrimaryColor, size: 20)),
-            const SizedBox(width: 12),
-            Expanded(child: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
-          ]),
-          Padding(padding: const EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1, color: Colors.white.withOpacity(0.1))),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: kPrimaryColor.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: kPrimaryColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: Divider(height: 1, color: Colors.white.withOpacity(0.1)),
+          ),
           ...content,
         ],
       ),
@@ -1093,15 +1499,19 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen> with TickerPr
     showDialog(
       context: context,
       builder: (ctx) => AddProjectDialog(
-        allProjects: _projects, 
+        allProjects: _projects,
         onSelect: (selectedProject) {
           setState(() {
             if (!_selectedProjects.contains(selectedProject)) {
-              _selectedProjects = List.from(_selectedProjects)..add(selectedProject);
+              _selectedProjects = List.from(_selectedProjects)
+                ..add(selectedProject);
+              _syncProductItemsToSelectedProjects();
             }
           });
         },
-        onSaveNew: (name) async { return await _createNewProject(name); },
+        onSaveNew: (name) async {
+          return await _createNewProject(name);
+        },
       ),
     );
   }

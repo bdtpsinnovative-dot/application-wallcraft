@@ -46,6 +46,7 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
 
   bool _isAdmin = false;
   String _selectedUserId = 'all';
+  String _selectedStatusFilter = 'all';
   List<dynamic> _usersList = [];
 
   Future<void> _checkAdminAndFetchUsers() async {
@@ -92,13 +93,34 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
   }
 
   List<dynamic> get _filteredVisitPlans {
-    if (_selectedUserId == 'all') {
-      return _visitPlans;
-    }
     return _visitPlans.where((p) {
-      final uId = p['user_id'] ?? p['profiles']?['id'];
-      return uId == _selectedUserId;
+      final userMatches =
+          _selectedUserId == 'all' ||
+          (p['user_id'] ?? p['profiles']?['id']) == _selectedUserId;
+      final statusMatches =
+          _selectedStatusFilter == 'all' ||
+          _statusFilterKey(p) == _selectedStatusFilter;
+      return userMatches && statusMatches;
     }).toList();
+  }
+
+  String _statusFilterKey(dynamic plan) {
+    switch (_effectivePlanStatus(plan)) {
+      case 'completed':
+      case 'success':
+        return 'completed';
+      case 'in_progress':
+        return 'in_progress';
+      case 'missed':
+      case 'failed':
+      case 'canceled':
+      case 'cancelled':
+        return 'unsuccessful';
+      case 'overdue':
+        return 'overdue';
+      default:
+        return 'pending';
+    }
   }
 
   List<dynamic> _getEventsForDay(DateTime day) {
@@ -1119,18 +1141,20 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     const Text(
-                      'กรองแผนงานตามเซลส์',
+                      'กรองแผนงาน',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    if (_selectedUserId != 'all')
+                    if (_selectedUserId != 'all' ||
+                        _selectedStatusFilter != 'all')
                       TextButton(
                         onPressed: () {
                           setState(() {
                             _selectedUserId = 'all';
+                            _selectedStatusFilter = 'all';
                           });
                           Navigator.pop(context);
                         },
@@ -1142,7 +1166,100 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                   ],
                 ),
               ),
+              StatefulBuilder(
+                builder: (context, setSheetState) {
+                  const statusFilters = [
+                    ('all', 'ทั้งหมด', Icons.apps_rounded, Colors.white70),
+                    ('pending', 'วางแผน', Icons.schedule_rounded, Colors.amber),
+                    (
+                      'in_progress',
+                      'ดำเนินการ',
+                      Icons.autorenew_rounded,
+                      Colors.lightBlueAccent,
+                    ),
+                    (
+                      'completed',
+                      'สำเร็จ',
+                      Icons.check_circle_rounded,
+                      Colors.greenAccent,
+                    ),
+                    (
+                      'unsuccessful',
+                      'ไม่สำเร็จ',
+                      Icons.cancel_rounded,
+                      Colors.redAccent,
+                    ),
+                    (
+                      'overdue',
+                      'เลยกำหนด',
+                      Icons.warning_rounded,
+                      Colors.deepOrangeAccent,
+                    ),
+                  ];
+
+                  return Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'สถานะแผนงาน',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: statusFilters.map((filter) {
+                            final isSelected =
+                                _selectedStatusFilter == filter.$1;
+                            return ChoiceChip(
+                              label: Text(filter.$2),
+                              avatar: Icon(filter.$3, size: 16),
+                              selected: isSelected,
+                              onSelected: (_) {
+                                setState(() {
+                                  _selectedStatusFilter = filter.$1;
+                                });
+                                setSheetState(() {});
+                              },
+                              labelStyle: TextStyle(
+                                color: isSelected ? Colors.black : Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              backgroundColor: Colors.white10,
+                              selectedColor: filter.$4,
+                              side: BorderSide(
+                                color: isSelected ? filter.$4 : Colors.white24,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               const Divider(color: Colors.white12, height: 1),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'ผู้รับผิดชอบ',
+                    style: TextStyle(
+                      color: Colors.white70,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ),
               Builder(
                 builder: (context) {
                   final namedUsers = _usersList.where((u) {
@@ -1552,6 +1669,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                             onTap: _showUserFilterDialog,
                             child: Builder(
                               builder: (context) {
+                                final hasActiveFilter =
+                                    _selectedUserId != 'all' ||
+                                    _selectedStatusFilter != 'all';
                                 final selectedUser = _selectedUserId != 'all'
                                     ? _usersList.firstWhere(
                                         (u) =>
@@ -1588,11 +1708,11 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                 return Container(
                                   padding: const EdgeInsets.all(8),
                                   decoration: BoxDecoration(
-                                    color: _selectedUserId != 'all'
+                                    color: hasActiveFilter
                                         ? kLimeGreen.withOpacity(0.2)
                                         : kCardDark,
                                     border: Border.all(
-                                      color: _selectedUserId != 'all'
+                                      color: hasActiveFilter
                                           ? kLimeGreen
                                           : Colors.white24,
                                     ),
@@ -1600,7 +1720,7 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                                   ),
                                   child: Icon(
                                     Icons.filter_list_rounded,
-                                    color: _selectedUserId != 'all'
+                                    color: hasActiveFilter
                                         ? kLimeGreen
                                         : Colors.white70,
                                     size: 18,

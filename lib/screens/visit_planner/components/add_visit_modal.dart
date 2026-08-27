@@ -710,6 +710,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
   void _showAddCompanyDialog() {
     final companyNameCtrl = TextEditingController();
     String? selectedTypeId;
+    String? customerTypeError;
     showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -727,9 +728,8 @@ class _AddVisitModalState extends State<AddVisitModal> {
             children: [
               DropdownButtonFormField<String>(
                 value: selectedTypeId,
-                decoration: _dialogInputDecoration(
-                  'เลือกประเภทลูกค้า (ไม่บังคับ)',
-                ),
+                isExpanded: true,
+                decoration: _dialogInputDecoration('เลือกประเภทลูกค้า *'),
                 dropdownColor: kCardDark,
                 style: const TextStyle(color: Colors.white),
                 items: _customerTypes
@@ -738,14 +738,31 @@ class _AddVisitModalState extends State<AddVisitModal> {
                         value: item['id'].toString(),
                         child: Text(
                           item['name']?.toString() ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.white),
                         ),
                       ),
                     )
                     .toList(),
-                onChanged: (value) =>
-                    setDialogState(() => selectedTypeId = value),
+                onChanged: (value) => setDialogState(() {
+                  selectedTypeId = value;
+                  customerTypeError = null;
+                }),
               ),
+              if (customerTypeError != null) ...[
+                const SizedBox(height: 6),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    customerTypeError!,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               TextField(
                 controller: companyNameCtrl,
@@ -765,6 +782,13 @@ class _AddVisitModalState extends State<AddVisitModal> {
             ),
             TextButton(
               onPressed: () {
+                if (selectedTypeId == null) {
+                  setDialogState(
+                    () =>
+                        customerTypeError = 'กรุณาเลือกประเภทลูกค้าก่อนบันทึก',
+                  );
+                  return;
+                }
                 final name = companyNameCtrl.text.trim();
                 if (name.isEmpty) return;
                 Navigator.pop(dialogContext);
@@ -1200,134 +1224,130 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                         ),
                                       ),
                                     ),
-                                    itemBuilder:
-                                        (context, item, isSelected, isFocused) {
-                                          final isPipe =
-                                              item['isPipeline'] == true;
-                                          final projCount =
-                                              (item['projectCount'] as int?) ??
-                                              0;
-                                          final source =
-                                              item['pipelineSource']?.toString();
-                                          final sourceColor = source == 'mine'
-                                              ? kLimeGreen
-                                              : source == 'team'
-                                              ? Colors.lightBlueAccent
-                                              : Colors.amber;
-                                          final sourceIcon = source == 'mine'
-                                              ? Icons.person_outline
-                                              : source == 'team'
-                                              ? Icons.groups_outlined
-                                              : Icons.auto_awesome_outlined;
-                                          final sourceDescription =
-                                              source == 'mine'
-                                              ? 'ประวัติของคุณ'
-                                              : source == 'team'
-                                              ? 'ประวัติทีม'
-                                              : 'รายการแนะนำ';
-                                          return Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 16,
-                                              vertical: 12,
+                                    itemBuilder: (context, item, isSelected, isFocused) {
+                                      final isPipe = item['isPipeline'] == true;
+                                      final projCount =
+                                          (item['projectCount'] as int?) ?? 0;
+                                      final source = item['pipelineSource']
+                                          ?.toString();
+                                      final sourceColor = source == 'mine'
+                                          ? kLimeGreen
+                                          : source == 'team'
+                                          ? Colors.lightBlueAccent
+                                          : Colors.amber;
+                                      final sourceIcon = source == 'mine'
+                                          ? Icons.person_outline
+                                          : source == 'team'
+                                          ? Icons.groups_outlined
+                                          : Icons.auto_awesome_outlined;
+                                      final sourceDescription = source == 'mine'
+                                          ? 'ประวัติของคุณ'
+                                          : source == 'team'
+                                          ? 'ประวัติทีม'
+                                          : 'รายการแนะนำ';
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 12,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          border: Border(
+                                            bottom: BorderSide(
+                                              color: Colors.white.withOpacity(
+                                                0.05,
+                                              ),
                                             ),
-                                            decoration: BoxDecoration(
-                                              border: Border(
-                                                bottom: BorderSide(
-                                                  color: Colors.white
-                                                      .withOpacity(0.05),
+                                          ),
+                                          color: isSelected
+                                              ? kLimeGreen.withOpacity(0.1)
+                                              : Colors.transparent,
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                item['name'] ?? '',
+                                                style: TextStyle(
+                                                  color: isSelected
+                                                      ? kLimeGreen
+                                                      : (isPipe
+                                                            ? Colors.amber[100]
+                                                            : Colors.white),
+                                                  fontWeight: isPipe
+                                                      ? FontWeight.bold
+                                                      : FontWeight.normal,
+                                                  fontSize: 13,
                                                 ),
                                               ),
-                                              color: isSelected
-                                                  ? kLimeGreen.withOpacity(0.1)
-                                                  : Colors.transparent,
                                             ),
-                                            child: Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    item['name'] ?? '',
-                                                    style: TextStyle(
-                                                      color: isSelected
-                                                          ? kLimeGreen
-                                                          : (isPipe
-                                                                ? Colors
-                                                                      .amber[100]
-                                                                : Colors.white),
-                                                      fontWeight: isPipe
-                                                          ? FontWeight.bold
-                                                          : FontWeight.normal,
-                                                      fontSize: 13,
-                                                    ),
+                                            if (isPipe) ...[
+                                              Semantics(
+                                                label: sourceDescription,
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: sourceColor
+                                                        .withOpacity(0.15),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
+                                                        ),
+                                                  ),
+                                                  child: Icon(
+                                                    sourceIcon,
+                                                    color: sourceColor,
+                                                    size: 15,
                                                   ),
                                                 ),
-                                                if (isPipe) ...[
-                                                  Semantics(
-                                                    label: sourceDescription,
-                                                    child: Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 6,
-                                                          vertical: 2,
+                                              ),
+                                              if (projCount > 0) ...[
+                                                const SizedBox(width: 6),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 6,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: Colors.white
+                                                        .withOpacity(0.08),
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          4,
                                                         ),
-                                                    decoration: BoxDecoration(
-                                                      color: sourceColor
-                                                          .withOpacity(0.15),
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            4,
-                                                          ),
-                                                    ),
-                                                    child: Icon(
-                                                      sourceIcon,
-                                                      color: sourceColor,
-                                                      size: 15,
-                                                    ),
                                                   ),
+                                                  child: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(
+                                                        Icons.folder_outlined,
+                                                        color: Colors.white70,
+                                                        size: 13,
+                                                      ),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        '$projCount',
+                                                        style: const TextStyle(
+                                                          color: Colors.white70,
+                                                          fontSize: 10,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                    ],
                                                   ),
-                                                  if (projCount > 0) ...[
-                                                    const SizedBox(width: 6),
-                                                    Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 6,
-                                                            vertical: 2,
-                                                          ),
-                                                      decoration: BoxDecoration(
-                                                        color: Colors.white
-                                                            .withOpacity(0.08),
-                                                        borderRadius:
-                                                            BorderRadius.circular(
-                                                              4,
-                                                            ),
-                                                      ),
-                                                      child: Row(
-                                                        mainAxisSize:
-                                                            MainAxisSize.min,
-                                                        children: [
-                                                          const Icon(
-                                                            Icons.folder_outlined,
-                                                            color: Colors.white70,
-                                                            size: 13,
-                                                          ),
-                                                          const SizedBox(width: 3),
-                                                          Text(
-                                                            '$projCount',
-                                                            style: const TextStyle(
-                                                              color: Colors.white70,
-                                                              fontSize: 10,
-                                                              fontWeight:
-                                                                  FontWeight.bold,
-                                                            ),
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ],
+                                                ),
                                               ],
-                                            ),
-                                          );
-                                        },
+                                            ],
+                                          ],
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
                               ),
@@ -1411,8 +1431,7 @@ class _AddVisitModalState extends State<AddVisitModal> {
                                           final isPipe =
                                               item['isPipeline'] == true;
                                           final usageCount =
-                                              (item['usageCount'] as int?) ??
-                                              0;
+                                              (item['usageCount'] as int?) ?? 0;
                                           final sourceColor = isMine
                                               ? kLimeGreen
                                               : isTeam

@@ -388,7 +388,7 @@ class _HomeDashboard extends StatefulWidget {
 }
 
 class _HomeDashboardState extends State<_HomeDashboard>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   String _displayName = "...";
   String? _avatarUrl;
   bool _isAdmin = false;
@@ -396,11 +396,18 @@ class _HomeDashboardState extends State<_HomeDashboard>
   int _myOrders = 0;
   int _teamOrders = 0;
   int _totalOrders = 0;
+  int _systemPlanTotal = 0;
+  int _systemPlanCompleted = 0;
+  int _systemPlanUnsuccessful = 0;
+  bool _hasTeam = false;
+  bool _isSystemAdminView = false;
+  bool _hasInitializedActivityView = false;
 
   bool _isLoading = true;
   String? _errorMessage;
 
   late AnimationController _controller;
+  late AnimationController _systemHeaderController;
 
   @override
   void initState() {
@@ -409,6 +416,10 @@ class _HomeDashboardState extends State<_HomeDashboard>
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
+    _systemHeaderController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2500),
+    )..repeat(reverse: true);
     _controller.forward();
     refreshData();
   }
@@ -416,6 +427,7 @@ class _HomeDashboardState extends State<_HomeDashboard>
   @override
   void dispose() {
     _controller.dispose();
+    _systemHeaderController.dispose();
     super.dispose();
   }
 
@@ -428,10 +440,10 @@ class _HomeDashboardState extends State<_HomeDashboard>
     }
 
     try {
-      await Future.wait([
-        _loadUserProfile(),
-        _fetchStats(),
-      ]).timeout(const Duration(seconds: 15));
+      await _loadUserProfile();
+      await _fetchStats(
+        scope: _activityScope,
+      ).timeout(const Duration(seconds: 15));
     } on SocketException {
       if (mounted)
         setState(
@@ -472,6 +484,11 @@ class _HomeDashboardState extends State<_HomeDashboard>
           _displayName = data['full_name'] ?? "User";
           _avatarUrl = data['avatar_url'];
           _isAdmin = (data['role'] == 'admin');
+          _hasTeam = data['team_id'] != null;
+          if (!_hasInitializedActivityView) {
+            _isSystemAdminView = _isAdmin;
+            _hasInitializedActivityView = true;
+          }
           widget.onRoleChecked(_isAdmin);
         });
       }
@@ -480,27 +497,55 @@ class _HomeDashboardState extends State<_HomeDashboard>
     }
   }
 
-  Future<void> _fetchStats() async {
+  String? get _activityScope {
+    if (!_isSystemAdminView) return null;
+    if (_isAdmin) return 'system';
+    return _hasTeam ? 'team' : null;
+  }
+
+  Future<void> _fetchStats({String? scope}) async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('auth_token');
     if (token == null) throw Exception("No token");
 
     final response = await ApiService.post(
       Uri.parse('${AppConfig.baseUrl}/dashboard/stats'),
-      body: jsonEncode({'token': token}),
+      body: jsonEncode({'token': token, if (scope != null) 'scope': scope}),
     );
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
+      final visitPlanStats = data['visitPlanStats'] as Map<String, dynamic>?;
       if (mounted) {
         setState(() {
           _myOrders = data['myOrders'] ?? 0;
           _teamOrders = data['teamOrders'] ?? 0;
           _totalOrders = data['totalOrders'] ?? 0;
+          _systemPlanTotal = visitPlanStats?['total'] ?? 0;
+          _systemPlanCompleted = visitPlanStats?['completed'] ?? 0;
+          _systemPlanUnsuccessful = visitPlanStats?['unsuccessful'] ?? 0;
         });
       }
     } else {
       throw Exception("Failed to load stats");
+    }
+  }
+
+  Future<void> _toggleSystemActivityView() async {
+    if (!_hasTeam && _isAdmin) return;
+    if (!_hasTeam && !_isAdmin) return;
+
+    final showSystemView = !_isSystemAdminView;
+    setState(() => _isSystemAdminView = showSystemView);
+
+    try {
+      await _fetchStats(scope: _activityScope);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSystemAdminView = !showSystemView);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ไม่สามารถเปลี่ยนมุมมองข้อมูลได้')),
+      );
     }
   }
 
@@ -585,100 +630,106 @@ class _HomeDashboardState extends State<_HomeDashboard>
             ),
           ),
           const SizedBox(height: 16),
-          GridView.count(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            crossAxisCount: 2,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 16,
-            childAspectRatio: 1.1,
-            children: [
-              _buildGlassMenuCard(
-                0,
-                'Lead&Checkin',
-                'ลีด&เช็คอิน',
-                Icons.add_circle_outline_rounded,
-                Colors.blueAccent,
-                () async {
-                  await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const PurchaseOrderScreen(),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isNarrow = constraints.maxWidth < 280;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: 2,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
+                childAspectRatio: isNarrow ? 1 : 1.1,
+                children: [
+                  _buildGlassMenuCard(
+                    0,
+                    'Lead&Checkin',
+                    'ลีด&เช็คอิน',
+                    Icons.add_circle_outline_rounded,
+                    Colors.blueAccent,
+                    () async {
+                      await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const PurchaseOrderScreen(),
+                        ),
+                      );
+                      if (mounted) {
+                        refreshData(isSilent: true);
+                        // ถ้ากลับออกมา ให้สั่งแอบรีเฟรชหน้าแผนงานด้วยทันที
+                        final homeState = context
+                            .findAncestorStateOfType<_HomeScreenState>();
+                        homeState?._visitPlannerKey.currentState
+                            ?.refreshVisitPlans(isSilent: true);
+                      }
+                    },
+                  ),
+                  _buildGlassMenuCard(
+                    1,
+                    'Price Check',
+                    'เช็คราคาสินค้า',
+                    Icons.price_check_rounded,
+                    Colors.orangeAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PriceCheckScreen(),
+                      ),
                     ),
-                  );
-                  if (mounted) {
-                    refreshData(isSilent: true);
-                    // ถ้ากลับออกมา ให้สั่งแอบรีเฟรชหน้าแผนงานด้วยทันที
-                    final homeState = context
-                        .findAncestorStateOfType<_HomeScreenState>();
-                    homeState?._visitPlannerKey.currentState?.refreshVisitPlans(
-                      isSilent: true,
-                    );
-                  }
-                },
-              ),
-              _buildGlassMenuCard(
-                1,
-                'Price Check',
-                'เช็คราคาสินค้า',
-                Icons.price_check_rounded,
-                Colors.orangeAccent,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PriceCheckScreen(),
                   ),
-                ),
-              ),
-              _buildGlassMenuCard(
-                2,
-                'AI Expert',
-                'AIผู้เชี่ยวชาญ',
-                Icons.auto_awesome_rounded,
-                Colors.purpleAccent,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AiChatHubScreen()),
-                ),
-              ),
-              _buildGlassMenuCard(
-                3,
-                'AI Search',
-                'ค้นหารูปด้วยAI',
-                Icons.image_search_rounded,
-                Colors.cyanAccent,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => AiSearchScreen()),
-                ),
-              ),
-              _buildGlassMenuCard(
-                4,
-                'Pool Project',
-                'โปรเจกต์ทั้งหมด',
-                Icons.workspaces_rounded,
-                Colors.indigoAccent,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PoolProjectScreen(),
+                  _buildGlassMenuCard(
+                    2,
+                    'AI Expert',
+                    'AIผู้เชี่ยวชาญ',
+                    Icons.auto_awesome_rounded,
+                    Colors.purpleAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AiChatHubScreen(),
+                      ),
+                    ),
                   ),
-                ),
-              ),
-              _buildGlassMenuCard(
-                5,
-                'เช็คการขนส่ง',
-                'ติดตามสถานะ',
-                Icons.local_shipping_rounded,
-                Colors.pinkAccent,
-                () => Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const TrackingScreen(),
+                  _buildGlassMenuCard(
+                    3,
+                    'AI Search',
+                    'ค้นหารูปด้วยAI',
+                    Icons.image_search_rounded,
+                    Colors.cyanAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => AiSearchScreen()),
+                    ),
                   ),
-                ),
-              ),
-            ],
+                  _buildGlassMenuCard(
+                    4,
+                    'Pool Project',
+                    'โปรเจกต์ทั้งหมด',
+                    Icons.workspaces_rounded,
+                    Colors.indigoAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PoolProjectScreen(),
+                      ),
+                    ),
+                  ),
+                  _buildGlassMenuCard(
+                    5,
+                    'เช็คการขนส่ง',
+                    'ติดตามสถานะ',
+                    Icons.local_shipping_rounded,
+                    Colors.pinkAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const TrackingScreen(),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           const SizedBox(height: 40),
         ],
@@ -762,8 +813,16 @@ class _HomeDashboardState extends State<_HomeDashboard>
   }
 
   Widget _buildPurpleStatsCard() {
+    if (_isSystemAdminView) {
+      return _buildAdminSystemStatsCard();
+    }
+    final isNarrow = MediaQuery.sizeOf(context).width < 340;
+
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 25, horizontal: 24),
+      padding: EdgeInsets.symmetric(
+        vertical: 25,
+        horizontal: isNarrow ? 16 : 24,
+      ),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [kCardPurpleStart, kCardPurpleEnd],
@@ -779,15 +838,236 @@ class _HomeDashboardState extends State<_HomeDashboard>
           ),
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
         children: [
-          _statItem('Me', '$_myOrders'),
-          Container(width: 1, height: 40, color: Colors.black12),
-          _statItem('Team', '$_teamOrders'),
-          Container(width: 1, height: 40, color: Colors.black12),
-          _statItem('Total', '$_totalOrders', isHighlight: true),
+          if (_hasTeam) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: _buildScopeToggle(systemView: false, compact: isNarrow),
+            ),
+            const SizedBox(height: 14),
+          ],
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _statItem('Me', '$_myOrders'),
+              Container(width: 1, height: 40, color: Colors.black12),
+              _statItem('Team', '$_teamOrders'),
+              Container(width: 1, height: 40, color: Colors.black12),
+              _statItem('Total', '$_totalOrders', isHighlight: true),
+            ],
+          ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAdminSystemStatsCard() {
+    final isNarrow = MediaQuery.sizeOf(context).width < 340;
+
+    return Container(
+      padding: EdgeInsets.symmetric(
+        vertical: 18,
+        horizontal: isNarrow ? 12 : 20,
+      ),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFE8A3), Color(0xFFFFC44D), Color(0xFFC88810)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFFFE9A8), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: kPremiumGold.withValues(alpha: 0.35),
+            blurRadius: 22,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              AnimatedBuilder(
+                animation: _systemHeaderController,
+                builder: (context, child) {
+                  final motion = Curves.easeInOut.transform(
+                    _systemHeaderController.value,
+                  );
+                  return Transform.rotate(
+                    angle: 0.12 * motion,
+                    alignment: Alignment.center,
+                    child: child,
+                  );
+                },
+                child: const Icon(
+                  Icons.insights_rounded,
+                  color: Color(0xFF4A3100),
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'SYSTEM ACTIVITY',
+                style: TextStyle(
+                  color: Color(0xFF4A3100),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const Spacer(),
+              if (_hasTeam)
+                _buildScopeToggle(systemView: true, compact: isNarrow)
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4A3100).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    isNarrow ? 'ALL' : 'ALL TEAMS',
+                    style: const TextStyle(
+                      color: Color(0xFF4A3100),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _adminStatItem('แผนงาน', '$_systemPlanTotal')),
+              Container(
+                width: 1,
+                height: 42,
+                color: const Color(0xFF4A3100).withValues(alpha: 0.16),
+              ),
+              Expanded(
+                child: _adminStatItem(
+                  'สำเร็จ',
+                  '$_systemPlanCompleted',
+                  valueColor: const Color(0xFF1E6A3A),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 42,
+                color: const Color(0xFF4A3100).withValues(alpha: 0.16),
+              ),
+              Expanded(
+                child: _adminStatItem(
+                  'ไม่สำเร็จ',
+                  '$_systemPlanUnsuccessful',
+                  valueColor: const Color(0xFFA42D24),
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 42,
+                color: const Color(0xFF4A3100).withValues(alpha: 0.16),
+              ),
+              Expanded(child: _adminStatItem('Projects', '$_totalOrders')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _adminStatItem(String label, String value, {Color? valueColor}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SizedBox(
+          height: 28,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              maxLines: 1,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w900,
+                color: valueColor ?? const Color(0xFF3D2700),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 2),
+        SizedBox(
+          width: double.infinity,
+          height: 14,
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              label,
+              maxLines: 1,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                color: Color(0xFF6B4700),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildScopeToggle({required bool systemView, bool compact = false}) {
+    final color = systemView ? const Color(0xFF4A3100) : kPremiumGold;
+    final label = systemView
+        ? 'TEAM VIEW'
+        : (_isAdmin ? 'SYSTEM VIEW' : 'TEAM ACTIVITY');
+    final icon = systemView
+        ? Icons.groups_rounded
+        : (_isAdmin ? Icons.insights_rounded : Icons.groups_rounded);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: _toggleSystemActivityView,
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 6 : 8,
+            vertical: 5,
+          ),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.14),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: color, size: 14),
+              if (!compact) ...[
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -857,18 +1137,36 @@ class _HomeDashboardState extends State<_HomeDashboard>
                   child: Icon(icon, color: iconColor, size: 24),
                 ),
                 const Spacer(),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                SizedBox(
+                  width: double.infinity,
+                  height: 20,
+                  child: FittedBox(
+                    alignment: Alignment.centerLeft,
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                SizedBox(
+                  width: double.infinity,
+                  height: 15,
+                  child: FittedBox(
+                    alignment: Alignment.centerLeft,
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      subtitle,
+                      maxLines: 1,
+                      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                    ),
+                  ),
                 ),
               ],
             ),

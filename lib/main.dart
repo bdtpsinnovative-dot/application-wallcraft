@@ -1,5 +1,6 @@
 //lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -25,8 +26,10 @@ void main() async {
       options: DefaultFirebaseOptions.currentPlatform,
     );
 
-    // 🔔 ตั้งค่าพื้นฐาน Notification (ขอสิทธิ์)
-    await NotificationService.initNotification();
+    // Notifications currently use mobile-only plugins and dart:io.
+    if (!kIsWeb) {
+      await NotificationService.initNotification();
+    }
 
     print("✅ Load .env and Firebase success");
   } catch (e) {

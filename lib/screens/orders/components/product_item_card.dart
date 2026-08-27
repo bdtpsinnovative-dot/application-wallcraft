@@ -14,6 +14,7 @@ const Color kPrimaryColor = Color(0xFFFFFFFF);
 
 // --- 1. Class Model ---
 class ProductItem {
+  String? targetProjectId;
   String? categoryId;
   String? interestLevel;
   String? projectTypeId; // 🌟 1. เพิ่มตัวเก็บค่า "ประเภทโครงการ"
@@ -26,7 +27,7 @@ class ProductItem {
   List<String> selectedProjectIds = [];
   Map<String, TextEditingController> projectAreaControllers = {};
 
-  ProductItem({this.categoryId});
+  ProductItem({this.categoryId, this.targetProjectId});
 }
 
 // --- 2. ตัว Widget การ์ดสินค้า ---
@@ -38,6 +39,7 @@ class ProductItemCard extends StatefulWidget {
   final List<dynamic>
   projectTypes; // 🌟 2. เพิ่มตัวแปรรับ List ประเภทโครงการจากหน้าหลัก
   final VoidCallback onDelete;
+  final bool lockProjectSelection;
 
   const ProductItemCard({
     super.key,
@@ -47,6 +49,7 @@ class ProductItemCard extends StatefulWidget {
     required this.projects,
     required this.projectTypes, // 🌟 อย่าลืมส่งค่านี้มาจากหน้าหลักด้วยนะครับ
     required this.onDelete,
+    this.lockProjectSelection = false,
   });
 
   @override
@@ -341,6 +344,121 @@ class _ProductItemCardState extends State<ProductItemCard> {
     return Icons.domain_rounded;
   }
 
+  Widget _buildLockedProjectUsage(dynamic project) {
+    final projectId = project['id'].toString();
+    final projectName = project['project_name']?.toString() ?? '-';
+    final projectIcon = _getIconForProject(project);
+    final areaController = widget.item.projectAreaControllers.putIfAbsent(
+      projectId,
+      () => TextEditingController(),
+    );
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.black,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kPrimaryColor.withOpacity(0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: kPrimaryColor.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(projectIcon, color: kPrimaryColor, size: 21),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'โครงการที่เลือก',
+                      style: TextStyle(color: Colors.white54, fontSize: 11),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      projectName,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              const Icon(
+                Icons.verified_rounded,
+                color: kPrimaryColor,
+                size: 20,
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'จำนวนพื้นที่',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 50,
+            child: TextFormField(
+              controller: areaController,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              decoration: InputDecoration(
+                hintText: '0',
+                hintStyle: TextStyle(color: Colors.grey.shade700),
+                suffixText: 'ตร.ม.',
+                suffixStyle: const TextStyle(
+                  color: Colors.white54,
+                  fontSize: 12,
+                ),
+                filled: true,
+                fillColor: kInputBg,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: kPrimaryColor),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -614,161 +732,179 @@ class _ProductItemCardState extends State<ProductItemCard> {
           const SizedBox(height: 24),
 
           if (widget.projects.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.black,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.2)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: const [
-                      Text(
-                        "การใช้งานในโครงการ",
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13,
-                          color: Colors.white,
-                        ),
-                      ),
-                      Text(
-                        "จำนวน / ตร.ม.",
-                        style: TextStyle(fontSize: 12, color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-
-                  ...widget.projects.map((p) {
-                    String pid = p['id'];
-                    bool isChecked = widget.item.selectedProjectIds.contains(
-                      pid,
-                    );
-                    widget.item.projectAreaControllers.putIfAbsent(
-                      pid,
-                      () => TextEditingController(),
-                    );
-                    final icon = _getIconForProject(p);
-
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 28,
-                            height: 28,
-                            child: Checkbox(
-                              value: isChecked,
-                              activeColor: kPrimaryColor,
-                              checkColor: Colors.black,
-                              side: const BorderSide(
-                                color: Colors.grey,
-                                width: 1.5,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                              onChanged: (val) {
-                                setState(() {
-                                  if (val == true) {
-                                    widget.item.selectedProjectIds.add(pid);
-                                  } else {
-                                    // ตอนเอาติ๊กออก
-                                    widget.item.selectedProjectIds.remove(pid);
-                                    widget.item.projectAreaControllers[pid]
-                                        ?.clear();
-
-                                    // 🌟 🌟 เพิ่ม Logic ตรงนี้:
-                                    // ถ้าลบโครงการออกจนหมด (ว่างเปล่า) ให้เคลียร์ประเภทโครงการเป็น null
-                                    if (widget
-                                        .item
-                                        .selectedProjectIds
-                                        .isEmpty) {
-                                      widget.item.projectTypeId = null;
-                                    }
-                                  }
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            icon,
-                            size: 16,
-                            color: isChecked ? kPrimaryColor : Colors.white38,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              p['project_name'],
+            widget.lockProjectSelection && widget.projects.length == 1
+                ? _buildLockedProjectUsage(widget.projects.first)
+                : Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.black,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: const [
+                            Text(
+                              "การใช้งานในโครงการ",
                               style: TextStyle(
+                                fontWeight: FontWeight.bold,
                                 fontSize: 13,
-                                color: isChecked ? kPrimaryColor : Colors.grey,
-                                fontWeight: isChecked
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          SizedBox(
-                            width: 80,
-                            height: 45,
-                            child: TextFormField(
-                              controller:
-                                  widget.item.projectAreaControllers[pid],
-                              enabled: isChecked,
-                              keyboardType: TextInputType.number,
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 13,
-                              ),
-                              decoration: InputDecoration(
-                                hintText: "0",
-                                hintStyle: TextStyle(
-                                  color: Colors.grey.shade700,
-                                  fontSize: 13,
-                                ),
-                                contentPadding: const EdgeInsets.symmetric(
-                                  vertical: 8,
-                                ),
-                                filled: true,
-                                fillColor: isChecked
-                                    ? kInputBg
-                                    : Colors.transparent,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: Colors.white.withOpacity(0.1),
-                                  ),
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide(
-                                    color: Colors.white.withOpacity(0.3),
-                                  ),
-                                ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: const BorderSide(
-                                    color: kPrimaryColor,
-                                  ),
-                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ],
-              ),
-            ),
+                            Text(
+                              "จำนวน / ตร.ม.",
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        ...widget.projects.map((p) {
+                          final String pid = p['id'].toString();
+                          bool isChecked = widget.item.selectedProjectIds
+                              .contains(pid);
+                          widget.item.projectAreaControllers.putIfAbsent(
+                            pid,
+                            () => TextEditingController(),
+                          );
+                          final icon = _getIconForProject(p);
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 16.0),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 28,
+                                  height: 28,
+                                  child: widget.lockProjectSelection
+                                      ? const Icon(
+                                          Icons.check_circle_rounded,
+                                          color: kPrimaryColor,
+                                          size: 23,
+                                        )
+                                      : Checkbox(
+                                          value: isChecked,
+                                          activeColor: kPrimaryColor,
+                                          checkColor: Colors.black,
+                                          side: const BorderSide(
+                                            color: Colors.grey,
+                                            width: 1.5,
+                                          ),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              6,
+                                            ),
+                                          ),
+                                          onChanged: (val) {
+                                            setState(() {
+                                              if (val == true) {
+                                                widget.item.selectedProjectIds
+                                                    .add(pid);
+                                              } else {
+                                                widget.item.selectedProjectIds
+                                                    .remove(pid);
+                                                widget
+                                                    .item
+                                                    .projectAreaControllers[pid]
+                                                    ?.clear();
+                                                if (widget
+                                                    .item
+                                                    .selectedProjectIds
+                                                    .isEmpty) {
+                                                  widget.item.projectTypeId =
+                                                      null;
+                                                }
+                                              }
+                                            });
+                                          },
+                                        ),
+                                ),
+                                const SizedBox(width: 8),
+                                Icon(
+                                  icon,
+                                  size: 16,
+                                  color: isChecked
+                                      ? kPrimaryColor
+                                      : Colors.white38,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    p['project_name'],
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: isChecked
+                                          ? kPrimaryColor
+                                          : Colors.grey,
+                                      fontWeight: isChecked
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                SizedBox(
+                                  width: 80,
+                                  height: 45,
+                                  child: TextFormField(
+                                    controller:
+                                        widget.item.projectAreaControllers[pid],
+                                    enabled: isChecked,
+                                    keyboardType: TextInputType.number,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 13,
+                                    ),
+                                    decoration: InputDecoration(
+                                      hintText: "0",
+                                      hintStyle: TextStyle(
+                                        color: Colors.grey.shade700,
+                                        fontSize: 13,
+                                      ),
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                            vertical: 8,
+                                          ),
+                                      filled: true,
+                                      fillColor: isChecked
+                                          ? kInputBg
+                                          : Colors.transparent,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: Colors.white.withOpacity(0.1),
+                                        ),
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: BorderSide(
+                                          color: Colors.white.withOpacity(0.3),
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                        borderSide: const BorderSide(
+                                          color: kPrimaryColor,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }).toList(),
+                      ],
+                    ),
+                  ),
 
           const SizedBox(height: 24),
 
