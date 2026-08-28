@@ -959,6 +959,10 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
           '${weekStart.year}${weekStart.month.toString().padLeft(2, '0')}${weekStart.day.toString().padLeft(2, '0')}';
       final tempDir = await getTemporaryDirectory();
 
+      final box = context.findRenderObject() as RenderBox?;
+      final Rect? sharePositionOrigin =
+          box != null ? box.localToGlobal(Offset.zero) & box.size : null;
+
       if (!paginated || weekPlans.length <= 5) {
         final imageBytes = await _weekScreenshotController.captureFromLongWidget(
           InheritedTheme.captureAll(
@@ -976,26 +980,37 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
           pixelRatio: 2,
         );
 
-        await Gal.putImageBytes(imageBytes, name: 'weekly_visit_plan_$weekLabel');
+        bool savedToGallery = false;
+        try {
+          await Gal.putImageBytes(imageBytes, name: 'weekly_visit_plan_$weekLabel');
+          savedToGallery = true;
+        } catch (galError) {
+          debugPrint('Gal save warning: $galError');
+        }
 
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('บันทึกรูปแผนงานลงเครื่องแล้ว'),
-            backgroundColor: kLimeGreen,
-          ),
-        );
+        if (mounted && savedToGallery) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('บันทึกรูปแผนงานลงเครื่องแล้ว'),
+              backgroundColor: kLimeGreen,
+            ),
+          );
+        }
 
         final imageFile = File(
           '${tempDir.path}/weekly_visit_plan_$weekLabel.png',
         );
         await imageFile.writeAsBytes(imageBytes);
-        await Share.shareXFiles([
-          XFile(imageFile.path),
-        ], text: 'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)}');
+
+        await Share.shareXFiles(
+          [XFile(imageFile.path)],
+          text: 'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)}',
+          sharePositionOrigin: sharePositionOrigin,
+        );
       } else {
         final totalPages = (weekPlans.length + 4) ~/ 5;
         final List<XFile> shareFiles = [];
+        bool savedToGallery = false;
 
         for (int i = 0; i < totalPages; i++) {
           final chunk = weekPlans.skip(i * 5).take(5).toList();
@@ -1021,10 +1036,15 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
             pixelRatio: 2,
           );
 
-          await Gal.putImageBytes(
-            imageBytes,
-            name: 'weekly_visit_plan_${weekLabel}_p${i + 1}',
-          );
+          try {
+            await Gal.putImageBytes(
+              imageBytes,
+              name: 'weekly_visit_plan_${weekLabel}_p${i + 1}',
+            );
+            savedToGallery = true;
+          } catch (galError) {
+            debugPrint('Gal save warning: $galError');
+          }
 
           final imageFile = File(
             '${tempDir.path}/weekly_visit_plan_${weekLabel}_p${i + 1}.png',
@@ -1033,18 +1053,20 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
           shareFiles.add(XFile(imageFile.path));
         }
 
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('บันทึกรูปแผนงานครบทั้ง $totalPages หน้าลงเครื่องแล้ว'),
-            backgroundColor: kLimeGreen,
-          ),
-        );
+        if (mounted && savedToGallery) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('บันทึกรูปแผนงานครบทั้ง $totalPages หน้าลงเครื่องแล้ว'),
+              backgroundColor: kLimeGreen,
+            ),
+          );
+        }
 
         await Share.shareXFiles(
           shareFiles,
           text:
               'แผนการเข้าพบลูกค้า ${_formatWeekRange(weekStart)} (ทั้งหมด $totalPages หน้า)',
+          sharePositionOrigin: sharePositionOrigin,
         );
       }
     } catch (error) {
