@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -46,12 +47,14 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen>
+    with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   final GlobalKey<_HomeDashboardState> _homeKey = GlobalKey();
   final GlobalKey<VisitPlannerScreenState> _visitPlannerKey = GlobalKey();
 
   bool _isAdmin = false;
+  bool _hasTodayVisitPlans = false;
 
   late final Widget _homeDashboard;
   late final Widget _visitPlannerScreen; // 🌟 เปลี่นเป็นแผนงาน
@@ -59,9 +62,16 @@ class _HomeScreenState extends State<HomeScreen> {
   late final Widget _adminSummaryScreen;
   late final Widget _notificationScreen;
 
+  late AnimationController _navPulseController;
+
   @override
   void initState() {
     super.initState();
+
+    _navPulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
 
     // 🌟 ดักฟังกรณีเปิดแอปจาก Notification ที่ถูกแตะตอนปิดแอปไปแล้ว
     FirebaseMessaging.instance.getInitialMessage().then((
@@ -75,6 +85,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _homeDashboard = _HomeDashboard(
       key: _homeKey,
       onRoleChecked: _updateAdminStatus,
+      onTodayPlansChecked: (hasPlans) {
+        if (_hasTodayVisitPlans != hasPlans && mounted) {
+          setState(() => _hasTodayVisitPlans = hasPlans);
+        }
+      },
     );
     _visitPlannerScreen = VisitPlannerScreen(
       key: _visitPlannerKey,
@@ -267,7 +282,11 @@ class _HomeScreenState extends State<HomeScreen> {
     if (_isAdmin) {
       return [
         _buildNavItem(Icons.grid_view_rounded, 0),
-        _buildNavItem(Icons.calendar_month_rounded, 1), // 🌟 เปลี่ยนไอคอน
+        _buildNavItem(
+          Icons.calendar_month_rounded,
+          1,
+          hasBadge: _hasTodayVisitPlans,
+        ),
         _buildNavItem(Icons.analytics_rounded, 2),
         _buildNavItem(Icons.notifications_rounded, 3),
         _buildNavItem(Icons.person_rounded, 4),
@@ -275,7 +294,11 @@ class _HomeScreenState extends State<HomeScreen> {
     } else {
       return [
         _buildNavItem(Icons.grid_view_rounded, 0),
-        _buildNavItem(Icons.calendar_month_rounded, 1), // 🌟 เปลี่ยนไอคอน
+        _buildNavItem(
+          Icons.calendar_month_rounded,
+          1,
+          hasBadge: _hasTodayVisitPlans,
+        ),
         _buildNavItem(Icons.notifications_rounded, 2),
         _buildNavItem(Icons.person_rounded, 3),
       ];
@@ -355,7 +378,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  BottomNavigationBarItem _buildNavItem(IconData icon, int index) {
+  @override
+  void dispose() {
+    _navPulseController.dispose();
+    super.dispose();
+  }
+
+  BottomNavigationBarItem _buildNavItem(
+    IconData icon,
+    int index, {
+    bool hasBadge = false,
+  }) {
     bool isSelected = _selectedIndex == index;
     Color iconColor = (icon == Icons.analytics_rounded && isSelected)
         ? kPremiumGold
@@ -368,7 +401,46 @@ class _HomeScreenState extends State<HomeScreen> {
         curve: Curves.easeOutCubic,
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
-          child: Icon(icon, size: 22, color: iconColor),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Icon(icon, size: 22, color: iconColor),
+              if (hasBadge)
+                Positioned(
+                  top: -2,
+                  right: -2,
+                  child: AnimatedBuilder(
+                    animation: _navPulseController,
+                    builder: (context, _) {
+                      final scale = 1.0 + (_navPulseController.value * 0.3);
+                      final glowAlpha =
+                          0.5 + (_navPulseController.value * 0.5);
+                      return Transform.scale(
+                        scale: scale,
+                        child: Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            color: Colors.amberAccent,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.amberAccent.withValues(
+                                  alpha: glowAlpha,
+                                ),
+                                blurRadius:
+                                    6 + (_navPulseController.value * 4),
+                                spreadRadius: 1,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
       label: '',
@@ -381,7 +453,12 @@ class _HomeScreenState extends State<HomeScreen> {
 // ==========================================================
 class _HomeDashboard extends StatefulWidget {
   final Function(bool) onRoleChecked;
-  const _HomeDashboard({super.key, required this.onRoleChecked});
+  final Function(bool)? onTodayPlansChecked;
+  const _HomeDashboard({
+    super.key,
+    required this.onRoleChecked,
+    this.onTodayPlansChecked,
+  });
 
   @override
   State<_HomeDashboard> createState() => _HomeDashboardState();
@@ -403,11 +480,18 @@ class _HomeDashboardState extends State<_HomeDashboard>
   bool _isSystemAdminView = false;
   bool _hasInitializedActivityView = false;
 
+  // 🔴 Context-Aware Live Statuses (Online Synced)
+  bool _hasTodayVisitPlans = false;
+  bool _isCheckedInToday = false;
+  bool _hasPoolOrders = false;
+
   bool _isLoading = true;
   String? _errorMessage;
 
   late AnimationController _controller;
   late AnimationController _systemHeaderController;
+  late AnimationController _livePulseController;
+  late AnimationController _shimmerController;
 
   @override
   void initState() {
@@ -420,6 +504,14 @@ class _HomeDashboardState extends State<_HomeDashboard>
       vsync: this,
       duration: const Duration(milliseconds: 2500),
     )..repeat(reverse: true);
+    _livePulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3200),
+    )..repeat();
     _controller.forward();
     refreshData();
   }
@@ -428,6 +520,8 @@ class _HomeDashboardState extends State<_HomeDashboard>
   void dispose() {
     _controller.dispose();
     _systemHeaderController.dispose();
+    _livePulseController.dispose();
+    _shimmerController.dispose();
     super.dispose();
   }
 
@@ -524,10 +618,73 @@ class _HomeDashboardState extends State<_HomeDashboard>
           _systemPlanTotal = visitPlanStats?['total'] ?? 0;
           _systemPlanCompleted = visitPlanStats?['completed'] ?? 0;
           _systemPlanUnsuccessful = visitPlanStats?['unsuccessful'] ?? 0;
+          _hasPoolOrders = _totalOrders > 0;
         });
       }
     } else {
       throw Exception("Failed to load stats");
+    }
+
+    // 🌐 1. เช็คแผนงานวันนี้จาก Cloud (Visit Plans Online Status)
+    try {
+      final plansRes = await ApiService.getWeeklyVisitPlansBoard();
+      if (plansRes.statusCode == 200) {
+        final plansData = jsonDecode(plansRes.body);
+        final plansList = (plansData is List)
+            ? plansData
+            : (plansData['plans'] ?? plansData['data'] ?? []);
+
+        final now = DateTime.now();
+        final todayPrefix =
+            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+        bool hasToday = false;
+        for (var p in plansList) {
+          final pDate = (p['planned_date'] ?? '').toString();
+          final pStatus = (p['status'] ?? 'pending').toString().toLowerCase();
+          final isDeleted = p['is_deleted'] == true;
+          if (!isDeleted && pDate.startsWith(todayPrefix) && pStatus != 'completed') {
+            hasToday = true;
+            break;
+          }
+        }
+        if (mounted) {
+          setState(() => _hasTodayVisitPlans = hasToday);
+          widget.onTodayPlansChecked?.call(hasToday);
+        }
+      }
+    } catch (_) {}
+
+    // 🌐 2. เช็คการเช็คอินวันนี้สำหรับเซล (Lead & Checkin Online Status)
+    // 👑 แอดมิน: ข้ามการตรวจสอบตามคำสั่ง
+    if (!_isAdmin) {
+      try {
+        final ordersRes = await ApiService.get(
+          Uri.parse('${AppConfig.baseUrl}/orders?limit=10'),
+        );
+        if (ordersRes.statusCode == 200) {
+          final ordersData = jsonDecode(ordersRes.body);
+          final ordersList = (ordersData is List)
+              ? ordersData
+              : (ordersData['orders'] ?? ordersData['data'] ?? []);
+
+          final now = DateTime.now();
+          final todayPrefix =
+              '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+          bool checkedIn = false;
+          for (var ord in ordersList) {
+            final cAt = (ord['created_at'] ?? '').toString();
+            if (cAt.startsWith(todayPrefix)) {
+              checkedIn = true;
+              break;
+            }
+          }
+          if (mounted) {
+            setState(() => _isCheckedInToday = checkedIn);
+          }
+        }
+      } catch (_) {}
     }
   }
 
@@ -663,6 +820,12 @@ class _HomeDashboardState extends State<_HomeDashboard>
                             ?.refreshVisitPlans(isSilent: true);
                       }
                     },
+                    badgeText: _isAdmin
+                        ? null // 👑 แอดมิน: ไม่แสดงจุดเตือนเช็คอินตามคำสั่ง
+                        : (_isCheckedInToday ? '✓ เช็คอินแล้ว' : '● ยังไม่เช็คอิน'),
+                    badgeColor: _isAdmin
+                        ? null
+                        : (_isCheckedInToday ? kLimeGreen : Colors.amberAccent),
                   ),
                   _buildGlassMenuCard(
                     1,
@@ -713,6 +876,8 @@ class _HomeDashboardState extends State<_HomeDashboard>
                         builder: (context) => const PoolProjectScreen(),
                       ),
                     ),
+                    badgeText: _hasPoolOrders ? 'POOL' : null,
+                    badgeColor: Colors.cyanAccent,
                   ),
                   _buildGlassMenuCard(
                     5,
@@ -758,13 +923,42 @@ class _HomeDashboardState extends State<_HomeDashboard>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                _getGreeting(),
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
+              Row(
+                children: [
+                  Text(
+                    _getGreeting(),
+                    style: TextStyle(
+                      color: Colors.grey[400],
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  AnimatedBuilder(
+                    animation: _livePulseController,
+                    builder: (context, _) {
+                      return Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: kLimeGreen,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: kLimeGreen.withValues(
+                                alpha:
+                                    0.4 + (_livePulseController.value * 0.5),
+                              ),
+                              blurRadius:
+                                  6 + (_livePulseController.value * 3),
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               Row(
@@ -829,160 +1023,194 @@ class _HomeDashboardState extends State<_HomeDashboard>
     );
   }
 
+  Widget _buildShimmerSweep() {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _shimmerController,
+        builder: (context, _) {
+          final alignX = -2.5 + (_shimmerController.value * 5.0);
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment(alignX, -1.0),
+                  end: Alignment(alignX + 1.0, 1.0),
+                  colors: [
+                    Colors.transparent,
+                    Colors.white.withValues(alpha: 0.15),
+                    Colors.transparent,
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   Widget _buildPurpleStatsCard() {
     if (_isSystemAdminView) {
       return _buildAdminSystemStatsCard();
     }
     final isNarrow = MediaQuery.sizeOf(context).width < 340;
 
-    return Container(
-      padding: EdgeInsets.symmetric(
-        vertical: 18,
-        horizontal: isNarrow ? 12 : 20,
-      ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF9D7CE0), Color(0xFF7251B8), Color(0xFF4A3080)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.22),
-          width: 1.2,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: kGlowPurple.withValues(alpha: 0.4),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
+    return Stack(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            vertical: 18,
+            horizontal: isNarrow ? 12 : 20,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF9D7CE0), Color(0xFF7251B8), Color(0xFF4A3080)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.22),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: kGlowPurple.withValues(alpha: 0.4),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedBuilder(
-                animation: _systemHeaderController,
-                builder: (context, child) {
-                  final motion = Curves.easeInOut.transform(
-                    _systemHeaderController.value,
-                  );
-                  return Transform.rotate(
-                    angle: 0.12 * motion,
-                    alignment: Alignment.center,
-                    child: child,
-                  );
-                },
-                child: const Icon(
-                  Icons.groups_rounded,
-                  color: Colors.white,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 8),
-              const Text(
-                'TEAM ACTIVITY',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const Spacer(),
-              if (_hasTeam || _isAdmin)
-                _buildScopeToggle(systemView: false)
-              else
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Text(
-                    'MY STATS',
-                    style: TextStyle(
+              Row(
+                children: [
+                  AnimatedBuilder(
+                    animation: _systemHeaderController,
+                    builder: (context, child) {
+                      final motion = Curves.easeInOut.transform(
+                        _systemHeaderController.value,
+                      );
+                      return Transform.rotate(
+                        angle: 0.12 * motion,
+                        alignment: Alignment.center,
+                        child: child,
+                      );
+                    },
+                    child: const Icon(
+                      Icons.groups_rounded,
                       color: Colors.white,
-                      fontSize: 9,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 0.6,
+                      size: 18,
                     ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'TEAM ACTIVITY',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.1,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (_hasTeam || _isAdmin)
+                    _buildScopeToggle(systemView: false)
+                  else
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Text(
+                        'MY STATS',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: _statItem('Me', _myOrders)),
+                  Container(
+                    width: 1,
+                    height: 42,
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                  Expanded(child: _statItem('Team', _teamOrders)),
+                  Container(
+                    width: 1,
+                    height: 42,
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                  Expanded(
+                    child: _statItem(
+                      'Total',
+                      _totalOrders,
+                      isHighlight: true,
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(child: _statItem('Me', _myOrders)),
-              Container(
-                width: 1,
-                height: 42,
-                color: Colors.white.withValues(alpha: 0.18),
-              ),
-              Expanded(child: _statItem('Team', _teamOrders)),
-              Container(
-                width: 1,
-                height: 42,
-                color: Colors.white.withValues(alpha: 0.18),
-              ),
-              Expanded(
-                child: _statItem(
-                  'Total',
-                  _totalOrders,
-                  isHighlight: true,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+        ),
+        Positioned.fill(child: _buildShimmerSweep()),
+      ],
     );
   }
 
   Widget _buildAdminSystemStatsCard() {
     final isNarrow = MediaQuery.sizeOf(context).width < 340;
 
-    return Container(
-      padding: EdgeInsets.symmetric(
-        vertical: 18,
-        horizontal: isNarrow ? 12 : 20,
-      ),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFFFE8A3), Color(0xFFFFC44D), Color(0xFFC88810)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFFFFE9A8), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: kPremiumGold.withValues(alpha: 0.35),
-            blurRadius: 22,
-            offset: const Offset(0, 10),
+    return Stack(
+      children: [
+        Container(
+          padding: EdgeInsets.symmetric(
+            vertical: 18,
+            horizontal: isNarrow ? 12 : 20,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFFFFE8A3), Color(0xFFFFC44D), Color(0xFFC88810)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFFFFE9A8), width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: kPremiumGold.withValues(alpha: 0.35),
+                blurRadius: 22,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedBuilder(
-                animation: _systemHeaderController,
-                builder: (context, child) {
-                  final motion = Curves.easeInOut.transform(
-                    _systemHeaderController.value,
-                  );
-                  return Transform.rotate(
-                    angle: 0.12 * motion,
+              Row(
+                children: [
+                  AnimatedBuilder(
+                    animation: _systemHeaderController,
+                    builder: (context, child) {
+                      final motion = Curves.easeInOut.transform(
+                        _systemHeaderController.value,
+                      );
+                      return Transform.rotate(
+                        angle: 0.12 * motion,
                     alignment: Alignment.center,
                     child: child,
                   );
@@ -1066,7 +1294,10 @@ class _HomeDashboardState extends State<_HomeDashboard>
           ),
         ],
       ),
-    );
+    ),
+    Positioned.fill(child: _buildShimmerSweep()),
+  ],
+);
   }
 
   Widget _adminStatItem(String label, int value, {Color? valueColor}) {
@@ -1209,84 +1440,232 @@ class _HomeDashboardState extends State<_HomeDashboard>
     String subtitle,
     IconData icon,
     Color iconColor,
-    VoidCallback? onTap,
-  ) {
-    return FadeTransition(
-      opacity: Tween<double>(begin: 0, end: 1).animate(
-        CurvedAnimation(
-          parent: _controller,
-          curve: Interval(index * 0.1, 1.0, curve: Curves.easeOut),
-        ),
+    VoidCallback? onTap, {
+    String? badgeText,
+    Color? badgeColor,
+  }) {
+    final animation = CurvedAnimation(
+      parent: _controller,
+      curve: Interval(
+        (index * 0.08).clamp(0.0, 0.7),
+        1.0,
+        curve: Curves.easeOutCubic,
       ),
-      child: Material(
-        color: const Color(0xFF1C1C1E),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: Colors.white.withOpacity(0.05)),
-        ),
-        child: InkWell(
+    );
+
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.15),
+          end: Offset.zero,
+        ).animate(animation),
+        child: _BouncingMenuCard(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          splashColor: iconColor.withOpacity(0.3),
-          highlightColor: iconColor.withOpacity(0.1),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: iconColor.withValues(alpha: 0.15),
-                  ),
-                  child: Icon(icon, color: iconColor, size: 22),
-                ),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      width: double.infinity,
-                      height: 20,
-                      child: FittedBox(
-                        alignment: Alignment.centerLeft,
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          title,
-                          maxLines: 1,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 15,
-                      child: FittedBox(
-                        alignment: Alignment.centerLeft,
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          subtitle,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+          child: Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFF1C1C1E),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.35),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      AnimatedBuilder(
+                        animation: _livePulseController,
+                        builder: (context, _) {
+                          final floatY = math.sin(
+                            (_livePulseController.value * math.pi) +
+                                (index * 0.9),
+                          ) * 2.2;
+                          return Transform.translate(
+                            offset: Offset(0, floatY),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: iconColor.withValues(alpha: 0.16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: iconColor.withValues(
+                                      alpha: 0.22 * _livePulseController.value,
+                                    ),
+                                    blurRadius: 8,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(icon, color: iconColor, size: 22),
+                            ),
+                          );
+                        },
+                      ),
+                      if (badgeText != null)
+                        AnimatedBuilder(
+                          animation: _livePulseController,
+                          builder: (context, _) {
+                            final scale =
+                                1.0 + (_livePulseController.value * 0.08);
+                            final glowAlpha =
+                                0.25 + (_livePulseController.value * 0.35);
+                            return Transform.scale(
+                              scale: scale,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 7,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: (badgeColor ?? kLimeGreen)
+                                      .withValues(alpha: 0.2),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: (badgeColor ?? kLimeGreen)
+                                        .withValues(alpha: 0.7),
+                                    width: 1.0,
+                                  ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (badgeColor ?? kLimeGreen)
+                                          .withValues(alpha: glowAlpha),
+                                      blurRadius: 10,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                                child: Text(
+                                  badgeText,
+                                  style: TextStyle(
+                                    color: badgeColor ?? kLimeGreen,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: 20,
+                        child: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 15,
+                        child: FittedBox(
+                          alignment: Alignment.centerLeft,
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            subtitle,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[500],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ==========================================================
+// 2.5. _BouncingMenuCard (การ์ดยุบตัว 0.95x เมื่อกดสัมผัสแบบ Tactile)
+// ==========================================================
+class _BouncingMenuCard extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _BouncingMenuCard({
+    required this.child,
+    this.onTap,
+  });
+
+  @override
+  State<_BouncingMenuCard> createState() => _BouncingMenuCardState();
+}
+
+class _BouncingMenuCardState extends State<_BouncingMenuCard>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _pressController;
+  late Animation<double> _scaleAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    _pressController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 90),
+      reverseDuration: const Duration(milliseconds: 140),
+    );
+    _scaleAnimation = Tween<double>(begin: 1.0, end: 0.95).animate(
+      CurvedAnimation(parent: _pressController, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pressController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => _pressController.forward(),
+      onTapUp: (_) {
+        _pressController.reverse();
+        widget.onTap?.call();
+      },
+      onTapCancel: () => _pressController.reverse(),
+      child: AnimatedBuilder(
+        animation: _scaleAnimation,
+        builder: (context, child) => Transform.scale(
+          scale: _scaleAnimation.value,
+          child: child,
+        ),
+        child: widget.child,
       ),
     );
   }
