@@ -57,6 +57,11 @@ class ProductItemCard extends StatefulWidget {
 }
 
 class _ProductItemCardState extends State<ProductItemCard> {
+  bool get _hasProject =>
+      widget.item.selectedProjectIds.isNotEmpty ||
+      widget.item.targetProjectId != null ||
+      (widget.lockProjectSelection && widget.projects.isNotEmpty);
+
   @override
   void initState() {
     super.initState();
@@ -563,7 +568,7 @@ class _ProductItemCardState extends State<ProductItemCard> {
               autovalidateMode: AutovalidateMode.onUserInteraction,
               isExpanded: true,
               decoration: _inputDecoration(
-                "ประเภทโครงการ *",
+                _hasProject ? "ประเภทโครงการ *" : "ประเภทโครงการ (ไม่บังคับ)",
                 Icons.domain_rounded,
               ),
               dropdownColor: kCardDark,
@@ -593,8 +598,9 @@ class _ProductItemCardState extends State<ProductItemCard> {
               }).toList(),
               onChanged: (val) =>
                   setState(() => widget.item.projectTypeId = val),
-              validator: (v) =>
-                  v == null ? 'กรุณาระบุประเภทโครงการด้วยครับ' : null,
+              validator: (v) => _hasProject && (v == null || v.isEmpty)
+                  ? 'กรุณาระบุประเภทโครงการด้วยครับ'
+                  : null,
             ),
             const SizedBox(height: 16),
 
