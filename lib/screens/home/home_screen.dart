@@ -1087,23 +1087,10 @@ class _HomeDashboardState extends State<_HomeDashboard>
             children: [
               Row(
                 children: [
-                  AnimatedBuilder(
-                    animation: _systemHeaderController,
-                    builder: (context, child) {
-                      final motion = Curves.easeInOut.transform(
-                        _systemHeaderController.value,
-                      );
-                      return Transform.rotate(
-                        angle: 0.12 * motion,
-                        alignment: Alignment.center,
-                        child: child,
-                      );
-                    },
-                    child: const Icon(
-                      Icons.groups_rounded,
-                      color: Colors.white,
-                      size: 18,
-                    ),
+                  const Icon(
+                    Icons.groups_rounded,
+                    color: Colors.white,
+                    size: 18,
                   ),
                   const SizedBox(width: 8),
                   const Text(
@@ -1203,24 +1190,11 @@ class _HomeDashboardState extends State<_HomeDashboard>
             children: [
               Row(
                 children: [
-                  AnimatedBuilder(
-                    animation: _systemHeaderController,
-                    builder: (context, child) {
-                      final motion = Curves.easeInOut.transform(
-                        _systemHeaderController.value,
-                      );
-                      return Transform.rotate(
-                        angle: 0.12 * motion,
-                    alignment: Alignment.center,
-                    child: child,
-                  );
-                },
-                child: const Icon(
-                  Icons.insights_rounded,
-                  color: Color(0xFF4A3100),
-                  size: 18,
-                ),
-              ),
+                  const Icon(
+                    Icons.insights_rounded,
+                    color: Color(0xFF4A3100),
+                    size: 18,
+                  ),
               const SizedBox(width: 8),
               const Text(
                 'SYSTEM ACTIVITY',
@@ -1484,34 +1458,44 @@ class _HomeDashboardState extends State<_HomeDashboard>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      AnimatedBuilder(
-                        animation: _livePulseController,
-                        builder: (context, _) {
-                          final floatY = math.sin(
-                            (_livePulseController.value * math.pi) +
-                                (index * 0.9),
-                          ) * 2.2;
-                          return Transform.translate(
-                            offset: Offset(0, floatY),
-                            child: Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: iconColor.withValues(alpha: 0.16),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: iconColor.withValues(
-                                      alpha: 0.22 * _livePulseController.value,
+                      if (index == 4)
+                        AnimatedBuilder(
+                          animation: _livePulseController,
+                          builder: (context, _) {
+                            final floatY = math.sin(
+                              (_livePulseController.value * math.pi) +
+                                  (index * 0.9),
+                            ) * 2.2;
+                            return Transform.translate(
+                              offset: Offset(0, floatY),
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: iconColor.withValues(alpha: 0.16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: iconColor.withValues(
+                                        alpha: 0.22 * _livePulseController.value,
+                                      ),
+                                      blurRadius: 8,
                                     ),
-                                    blurRadius: 8,
-                                  ),
-                                ],
+                                  ],
+                                ),
+                                child: Icon(icon, color: iconColor, size: 22),
                               ),
-                              child: Icon(icon, color: iconColor, size: 22),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        )
+                      else
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: iconColor.withValues(alpha: 0.16),
+                          ),
+                          child: Icon(icon, color: iconColor, size: 22),
+                        ),
                       if (badgeText != null)
                         AnimatedBuilder(
                           animation: _livePulseController,
