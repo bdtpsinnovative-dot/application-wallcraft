@@ -26,10 +26,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
+  final confirmPassCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   bool loading = false;
   bool showPass = false;
+  bool showConfirmPass = false;
   bool isRegister = false;
   bool _showAccountChooser = false;
   bool _rememberedAccountsLoaded = false;
@@ -63,6 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     emailCtrl.dispose();
     passCtrl.dispose();
+    confirmPassCtrl.dispose();
     super.dispose();
   }
 
@@ -258,6 +261,7 @@ class _LoginScreenState extends State<LoginScreen> {
       isRegister = false;
       emailCtrl.text = email ?? '';
       passCtrl.clear();
+      confirmPassCtrl.clear();
       error = message;
       _formKey.currentState?.reset();
     });
@@ -269,6 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
       isRegister = true;
       emailCtrl.clear();
       passCtrl.clear();
+      confirmPassCtrl.clear();
       error = null;
       _formKey.currentState?.reset();
     });
@@ -280,6 +285,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _showAccountChooser = true;
       isRegister = false;
       passCtrl.clear();
+      confirmPassCtrl.clear();
       error = null;
       _formKey.currentState?.reset();
     });
@@ -288,6 +294,14 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> submitForm() async {
     FocusScope.of(context).unfocus();
     if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    if (isRegister && passCtrl.text != confirmPassCtrl.text) {
+      setState(() {
+        error = 'รหัสผ่านทั้งสองช่องไม่ตรงกัน';
+      });
+      return;
+    }
+
     setState(() {
       loading = true;
       error = null;
@@ -583,6 +597,38 @@ class _LoginScreenState extends State<LoginScreen> {
               ? null
               : 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',
         ),
+        if (isRegister) ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: confirmPassCtrl,
+            obscureText: !showConfirmPass,
+            textInputAction: TextInputAction.done,
+            autofillHints: const [AutofillHints.newPassword],
+            onFieldSubmitted: (_) => submitForm(),
+            style: const TextStyle(color: Colors.white, fontSize: 14),
+            decoration: _inputDecoration(
+              label: 'ยืนยันรหัสผ่าน',
+              icon: Icons.lock_outline_rounded,
+              suffixIcon: IconButton(
+                visualDensity: VisualDensity.compact,
+                onPressed: () => setState(() => showConfirmPass = !showConfirmPass),
+                icon: Icon(
+                  showConfirmPass
+                      ? Icons.visibility_rounded
+                      : Icons.visibility_off_rounded,
+                  color: Colors.white.withValues(alpha: 0.45),
+                  size: 20,
+                ),
+              ),
+            ),
+            validator: (value) {
+              if (!isRegister) return null;
+              if ((value ?? '').isEmpty) return 'กรุณากรอกยืนยันรหัสผ่าน';
+              if (value != passCtrl.text) return 'รหัสผ่านทั้งสองช่องไม่ตรงกัน';
+              return null;
+            },
+          ),
+        ],
         if (error != null) ...[const SizedBox(height: 14), _buildErrorBanner()],
         const SizedBox(height: 22),
         SizedBox(
@@ -611,6 +657,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   isRegister = !isRegister;
                   error = null;
                   passCtrl.clear();
+                  confirmPassCtrl.clear();
                   _formKey.currentState?.reset();
                 }),
           child: Text(
