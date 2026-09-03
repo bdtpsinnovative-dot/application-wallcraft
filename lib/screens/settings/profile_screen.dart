@@ -8,11 +8,11 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:image_cropper/image_cropper.dart';
 import '../../constants.dart';
 import '../auth/login_screen.dart';
 import '../orders/purchase_order_screen.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import 'package:path_provider/path_provider.dart';
 import 'custom_crop_screen.dart';
 
@@ -128,6 +128,14 @@ class _ProfileScreenState extends State<ProfileScreen>
             }
           });
           _animController.forward();
+        }
+        try {
+          await AuthService.updateCurrentRememberedAccountProfile(
+            displayName: profile['full_name']?.toString(),
+            avatarUrl: profile['avatar_url']?.toString(),
+          );
+        } catch (cacheError) {
+          debugPrint('Could not cache remembered profile: $cacheError');
         }
       } else if (response.statusCode == 401) {
         _logout();
@@ -370,6 +378,14 @@ class _ProfileScreenState extends State<ProfileScreen>
           .timeout(const Duration(seconds: 15));
 
       if (response.statusCode == 200) {
+        try {
+          await AuthService.updateCurrentRememberedAccountProfile(
+            displayName: nameCtrl.text,
+            avatarUrl: finalAvatarUrl,
+          );
+        } catch (cacheError) {
+          debugPrint('Could not cache updated profile: $cacheError');
+        }
         if (mounted) {
           setState(() {
             avatarUrl = finalAvatarUrl;
@@ -421,8 +437,7 @@ class _ProfileScreenState extends State<ProfileScreen>
 
   Future<void> _logout() async {
     PurchaseOrderScreen.clearCache();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    await AuthService.signOut();
 
     if (!mounted) return;
 

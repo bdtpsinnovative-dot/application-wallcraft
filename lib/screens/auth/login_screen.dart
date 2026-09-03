@@ -1,27 +1,20 @@
-// lib/screens/auth/login_screen.dart
 import 'dart:convert';
 import 'dart:io';
-import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:shared_preferences/shared_preferences.dart';
-
-// 🌟 Import เพื่อจัดการระบบแจ้งเตือน
-import '../../services/notification_service.dart';
 
 import '../../constants.dart';
+import '../../services/auth_service.dart';
+import '../../services/notification_service.dart';
 import '../home/home_screen.dart';
 import '../orders/purchase_order_screen.dart';
 
 const Color kDarkBg = Color(0xFF0C0C0E);
 const Color kCardDark = Color(0xFF18181B);
 const Color kGlowPurple = Color(0xFF7B2CBF);
-const Color kGlowViolet = Color(0xFF4A3080);
 const Color kLimeGreen = Color(0xFFD2E862);
-const Color kLimeGreenBright = Color(0xFFE4FA63);
-const Color kPremiumGold = Color(0xFFFFC107);
-const Color kPrimaryWhite = Colors.white;
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -30,81 +23,271 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final emailCtrl = TextEditingController();
   final passCtrl = TextEditingController();
   final _formKey = GlobalKey<FormState>();
 
   bool loading = false;
-  String? error;
   bool showPass = false;
   bool isRegister = false;
-
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
+  bool _showAccountChooser = false;
+  bool _rememberedAccountsLoaded = false;
+  String? error;
+  List<RememberedAccount> _rememberedAccounts = const [];
 
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    );
-    _fadeAnim = CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    );
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.08),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animController,
-      curve: Curves.easeOutCubic,
-    ));
-    _animController.forward();
+    _loadRememberedAccounts();
+  }
+
+  Future<void> _loadRememberedAccounts() async {
+    try {
+      final accounts = await AuthService.loadRememberedAccounts();
+      if (!mounted) return;
+      setState(() {
+        _rememberedAccounts = accounts;
+        _showAccountChooser = accounts.isNotEmpty;
+        _rememberedAccountsLoaded = true;
+      });
+    } catch (loadError) {
+      debugPrint(
+        '[AuthService] Could not load remembered accounts: $loadError',
+      );
+      if (mounted) setState(() => _rememberedAccountsLoaded = true);
+    }
   }
 
   @override
   void dispose() {
-    _animController.dispose();
     emailCtrl.dispose();
     passCtrl.dispose();
     super.dispose();
   }
 
   String _getFriendlyErrorMessage(String serverError) {
-    String msg = serverError.toLowerCase();
-
-    if (msg.contains('invalid login credentials') ||
-        msg.contains('invalid_grant')) {
+    final message = serverError.toLowerCase();
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid_grant')) {
       return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
     }
-    if (msg.contains('email not confirmed')) {
-      return 'กรุณายืนยันอีเมลใน Inbox ของคุณก่อนเข้าใช้งาน';
+    if (message.contains('email not confirmed')) {
+      return 'กรุณายืนยันอีเมลก่อนเข้าใช้งาน';
     }
-    if (msg.contains('user already registered') ||
-        msg.contains('already exists')) {
-      return 'อีเมลนี้ถูกลงทะเบียนไปแล้ว กรุณาล็อกอิน';
+    if (message.contains('user already registered') ||
+        message.contains('already exists')) {
+      return 'อีเมลนี้ถูกลงทะเบียนแล้ว กรุณาเข้าสู่ระบบ';
     }
-    if (msg.contains('password') && msg.contains('6 characters')) {
-      return 'รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร';
+    if (message.contains('password') && message.contains('6 characters')) {
+      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
     }
-    if (msg.contains('email') && msg.contains('required')) {
-      return 'กรุณากรอกอีเมลให้ครบถ้วน';
+    if (message.contains('rate limit')) {
+      return 'ทำรายการบ่อยเกินไป กรุณารอสักครู่';
     }
-    if (msg.contains('rate limit')) {
-      return 'คุณทำรายการบ่อยเกินไป กรุณารอสักครู่';
+    return 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+  }
+
+  Future<void> _finishAuthentication() async {
+    PurchaseOrderScreen.clearCache();
+    try {
+      final fcmToken = await NotificationService.getFcmToken();
+      if (fcmToken != null) {
+        await NotificationService.uploadTokenToServer(fcmToken);
+      }
+    } catch (fcmError) {
+      debugPrint('FCM Token Upload Failed: $fcmError');
     }
 
-    return 'เกิดข้อผิดพลาด ($serverError)';
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, _, _) => const HomeScreen(),
+        transitionsBuilder: (_, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
+  Future<void> _quickSignIn(RememberedAccount account) async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final result = await AuthService.signInRememberedAccount(account);
+      if (result == AuthRefreshResult.refreshed) {
+        await _finishAuthentication();
+      } else if (result == AuthRefreshResult.invalid) {
+        _showManualLogin(
+          email: account.email,
+          message: 'รหัสผ่านที่จำไว้ใช้ไม่ได้ กรุณากรอกรหัสผ่านล่าสุด',
+        );
+      } else {
+        _showManualLogin(
+          email: account.email,
+          message: 'เชื่อมต่อระบบไม่ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
+        );
+      }
+    } catch (quickSignInError) {
+      _showManualLogin(
+        email: account.email,
+        message: _getFriendlyErrorMessage('$quickSignInError'),
+      );
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _forgetRememberedAccount(RememberedAccount account) async {
+    try {
+      await AuthService.forgetRememberedAccount(account.email);
+      if (!mounted) return;
+      setState(() {
+        _rememberedAccounts = _rememberedAccounts
+            .where((saved) => saved.email != account.email)
+            .toList(growable: false);
+        if (_rememberedAccounts.isEmpty) {
+          _showAccountChooser = false;
+          emailCtrl.clear();
+          passCtrl.clear();
+        }
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('นำ ${account.label} ออกจากเครื่องนี้แล้ว'),
+          backgroundColor: kCardDark,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => error = 'ไม่สามารถลบบัญชีที่จำไว้ได้ กรุณาลองใหม่');
+      }
+    }
+  }
+
+  void _showAccountOptions() {
+    showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      backgroundColor: const Color(0xFF151518),
+      builder: (sheetContext) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'จัดการบัญชีที่จำไว้',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 360),
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: _rememberedAccounts.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, index) {
+                    final account = _rememberedAccounts[index];
+                    final avatarUrl = account.avatarUrl?.trim() ?? '';
+                    return ListTile(
+                      dense: true,
+                      visualDensity: const VisualDensity(vertical: -1),
+                      tileColor: Colors.white.withValues(alpha: 0.055),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      leading: CircleAvatar(
+                        backgroundColor: kGlowPurple,
+                        foregroundImage: avatarUrl.isEmpty
+                            ? null
+                            : NetworkImage(avatarUrl),
+                        child: Text(
+                          account.initial,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        account.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        tooltip: 'ลบโปรไฟล์นี้ออก',
+                        onPressed: () async {
+                          Navigator.pop(sheetContext);
+                          await _forgetRememberedAccount(account);
+                        },
+                        icon: const Icon(
+                          Icons.delete_outline_rounded,
+                          color: Color(0xFFFF6B6B),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showManualLogin({String? email, String? message}) {
+    if (!mounted) return;
+    setState(() {
+      _showAccountChooser = false;
+      isRegister = false;
+      emailCtrl.text = email ?? '';
+      passCtrl.clear();
+      error = message;
+      _formKey.currentState?.reset();
+    });
+  }
+
+  void _showRegistration() {
+    setState(() {
+      _showAccountChooser = false;
+      isRegister = true;
+      emailCtrl.clear();
+      passCtrl.clear();
+      error = null;
+      _formKey.currentState?.reset();
+    });
+  }
+
+  void _showChooser() {
+    if (_rememberedAccounts.isEmpty) return;
+    setState(() {
+      _showAccountChooser = true;
+      isRegister = false;
+      passCtrl.clear();
+      error = null;
+      _formKey.currentState?.reset();
+    });
   }
 
   Future<void> submitForm() async {
     FocusScope.of(context).unfocus();
-    if (!_formKey.currentState!.validate()) return;
-
+    if (!(_formKey.currentState?.validate() ?? false)) return;
     setState(() {
       loading = true;
       error = null;
@@ -112,7 +295,6 @@ class _LoginScreenState extends State<LoginScreen>
 
     try {
       final url = isRegister ? AppConfig.registerUrl : AppConfig.loginUrl;
-
       final response = await http.post(
         url,
         headers: {'Content-Type': 'application/json'},
@@ -121,93 +303,51 @@ class _LoginScreenState extends State<LoginScreen>
           'password': passCtrl.text,
         }),
       );
-
-      final data = jsonDecode(response.body);
+      final decoded = jsonDecode(response.body);
+      final data = decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : <String, dynamic>{};
 
       if (response.statusCode == 200) {
         if (data['session'] != null) {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('auth_token', data['session']['access_token']);
-
-          if (data['session']['refresh_token'] != null) {
-            await prefs.setString(
-              'refresh_token',
-              data['session']['refresh_token'],
-            );
+          final persisted = await AuthService.persistLoginSession(
+            response: data,
+            email: emailCtrl.text.trim(),
+            password: passCtrl.text,
+          );
+          if (!persisted) {
+            throw const FormatException('Login response has no access token');
           }
-
-          if (data['user'] != null && data['user']['id'] != null) {
-            await prefs.setString('user_id', data['user']['id']);
-          } else if (data['session']['user'] != null &&
-              data['session']['user']['id'] != null) {
-            await prefs.setString('user_id', data['session']['user']['id']);
-          }
-
-          // 🧹 ล้างแคชข้อมูลของ User เก่าทิ้งทันทีเพื่อให้ User ใหม่ได้ข้อมูลของตัวเอง 100%
-          PurchaseOrderScreen.clearCache();
-
-          // 🌟 ดึงและอัปโหลด FCM Token ทันทีที่ล็อกอินสำเร็จ!
-          try {
-            String? fcmToken = await NotificationService.getFcmToken();
-            if (fcmToken != null) {
-              await NotificationService.uploadTokenToServer(fcmToken);
-            }
-          } catch (fcmError) {
-            debugPrint("FCM Token Upload Failed: $fcmError");
-          }
-
-          if (mounted) {
-            Navigator.pushReplacement(
-              context,
-              PageRouteBuilder(
-                pageBuilder: (_, __, ___) => const HomeScreen(),
-                transitionsBuilder: (_, a, __, c) =>
-                    FadeTransition(opacity: a, child: c),
-              ),
-            );
-          }
-        } else {
-          if (isRegister && mounted) {
-            setState(() {
-              error = null;
-              isRegister = false;
-              passCtrl.clear();
-            });
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'สมัครสมาชิกสำเร็จ! กรุณาเข้าสู่ระบบ',
-                  style: TextStyle(
-                    color: Colors.black,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                backgroundColor: kLimeGreen,
-                behavior: SnackBarBehavior.floating,
-                margin: EdgeInsets.all(20),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
+          await _finishAuthentication();
+        } else if (isRegister && mounted) {
+          setState(() {
+            isRegister = false;
+            passCtrl.clear();
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'สมัครสมาชิกสำเร็จ กรุณาเข้าสู่ระบบ',
+                style: TextStyle(
+                  color: Colors.black,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-            );
-          }
+              backgroundColor: kLimeGreen,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
         }
       } else {
-        throw data['error'] ?? 'Authentication failed (${response.statusCode})';
+        throw data['error'] ?? 'Authentication failed';
       }
     } on SocketException {
-      if (mounted) {
-        setState(
-          () => error =
-              'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบอินเทอร์เน็ต',
-        );
-      }
-    } catch (e) {
+      if (mounted) setState(() => error = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    } catch (submitError) {
       if (mounted) {
         setState(
           () => error = _getFriendlyErrorMessage(
-            e.toString().replaceAll('Exception:', '').trim(),
+            submitError.toString().replaceAll('Exception:', '').trim(),
           ),
         );
       }
@@ -216,123 +356,285 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  InputDecoration _buildInputDecoration(String label, IconData icon) {
-    return InputDecoration(
-      labelText: label,
-      labelStyle: TextStyle(
-        color: Colors.white.withValues(alpha: 0.5),
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
+  Widget _buildLogo() {
+    return Container(
+      width: 58,
+      height: 58,
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        color: kCardDark,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: kLimeGreen.withValues(alpha: 0.28)),
+        boxShadow: [
+          BoxShadow(
+            color: kLimeGreen.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
       ),
-      floatingLabelStyle: const TextStyle(
-        color: kLimeGreen,
-        fontSize: 14,
-        fontWeight: FontWeight.w600,
-      ),
-      prefixIcon: Padding(
-        padding: const EdgeInsets.only(left: 16, right: 12),
-        child: Icon(
-          icon,
-          color: Colors.white.withValues(alpha: 0.7),
-          size: 20,
-        ),
-      ),
-      prefixIconConstraints: const BoxConstraints(minWidth: 48),
-      filled: true,
-      fillColor: Colors.white.withValues(alpha: 0.04),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: kLimeGreen, width: 1.6),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.2),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
-        borderSide: const BorderSide(color: Color(0xFFFF5252), width: 1.6),
+      child: Image.asset(
+        'assets/icon/app_icon.png',
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        errorBuilder: (_, _, _) =>
+            const Icon(Icons.architecture_rounded, color: kLimeGreen, size: 30),
       ),
     );
   }
 
-  Widget _buildBrandLogo() {
-    return Container(
-      width: 88,
-      height: 88,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E24),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: kLimeGreen.withValues(alpha: 0.35),
-          width: 1.4,
+  Widget _buildBrand() {
+    return RichText(
+      text: const TextSpan(
+        style: TextStyle(
+          fontSize: 19,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 2.4,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: kLimeGreen.withValues(alpha: 0.22),
-            blurRadius: 30,
-            spreadRadius: -2,
-            offset: const Offset(0, 8),
+        children: [
+          TextSpan(
+            text: 'WALL',
+            style: TextStyle(color: Colors.white),
           ),
-          BoxShadow(
-            color: kGlowPurple.withValues(alpha: 0.3),
-            blurRadius: 40,
-            spreadRadius: -6,
-            offset: const Offset(0, 14),
+          TextSpan(
+            text: 'CRAFT',
+            style: TextStyle(color: kLimeGreen),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.white.withValues(alpha: 0.08),
-                    Colors.transparent,
-                    Colors.black.withValues(alpha: 0.4),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+    );
+  }
+
+  Widget _buildRememberedAccountCard(RememberedAccount account) {
+    final avatarUrl = account.avatarUrl?.trim() ?? '';
+    return Material(
+      color: Colors.white.withValues(alpha: 0.045),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: loading ? null : () => _quickSignIn(account),
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 22,
+                backgroundColor: kGlowPurple,
+                foregroundImage: avatarUrl.isEmpty
+                    ? null
+                    : NetworkImage(avatarUrl),
+                child: Text(
+                  account.initial,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
               ),
-            ),
-            Image.asset(
-              'assets/icon/app_icon.png',
-              width: 64,
-              height: 64,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
-              errorBuilder: (context, error, stackTrace) {
-                return const Icon(
-                  Icons.architecture_rounded,
-                  color: kLimeGreen,
-                  size: 42,
-                );
-              },
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  account.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration({
+    required String label,
+    required IconData icon,
+    Widget? suffixIcon,
+  }) {
+    final radius = BorderRadius.circular(12);
+    return InputDecoration(
+      labelText: label,
+      isDense: true,
+      labelStyle: TextStyle(
+        color: Colors.white.withValues(alpha: 0.48),
+        fontSize: 13,
+      ),
+      floatingLabelStyle: const TextStyle(color: kLimeGreen, fontSize: 13),
+      prefixIcon: Icon(
+        icon,
+        color: Colors.white.withValues(alpha: 0.55),
+        size: 20,
+      ),
+      suffixIcon: suffixIcon,
+      filled: true,
+      fillColor: Colors.white.withValues(alpha: 0.035),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.09)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.09)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: const BorderSide(color: kLimeGreen, width: 1.4),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: const BorderSide(color: Color(0xFFFF6B6B)),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: radius,
+        borderSide: const BorderSide(color: Color(0xFFFF6B6B), width: 1.4),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFF5252).withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: const Color(0xFFFF5252).withValues(alpha: 0.24),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Color(0xFFFF7B7B),
+            size: 20,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              error!,
+              style: const TextStyle(
+                color: Color(0xFFFF9A9A),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForm() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: emailCtrl,
+          keyboardType: TextInputType.emailAddress,
+          textInputAction: TextInputAction.next,
+          autofillHints: const [AutofillHints.email],
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: _inputDecoration(
+            label: 'อีเมล',
+            icon: Icons.alternate_email_rounded,
+          ),
+          validator: (value) =>
+              (value ?? '').contains('@') ? null : 'รูปแบบอีเมลไม่ถูกต้อง',
+        ),
+        const SizedBox(height: 12),
+        TextFormField(
+          controller: passCtrl,
+          obscureText: !showPass,
+          textInputAction: TextInputAction.done,
+          autofillHints: isRegister
+              ? const [AutofillHints.newPassword]
+              : const [AutofillHints.password],
+          onFieldSubmitted: (_) => submitForm(),
+          style: const TextStyle(color: Colors.white, fontSize: 14),
+          decoration: _inputDecoration(
+            label: 'รหัสผ่าน',
+            icon: Icons.lock_outline_rounded,
+            suffixIcon: IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: () => setState(() => showPass = !showPass),
+              icon: Icon(
+                showPass
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+                color: Colors.white.withValues(alpha: 0.45),
+                size: 20,
+              ),
+            ),
+          ),
+          validator: (value) => (value ?? '').length >= 6
+              ? null
+              : 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',
+        ),
+        if (error != null) ...[const SizedBox(height: 14), _buildErrorBanner()],
+        const SizedBox(height: 22),
+        SizedBox(
+          height: 48,
+          child: FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: kLimeGreen,
+              foregroundColor: const Color(0xFF141800),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            onPressed: loading ? null : submitForm,
+            child: Text(
+              isRegister ? 'สร้างบัญชี' : 'เข้าสู่ระบบ',
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          style: TextButton.styleFrom(foregroundColor: kLimeGreen),
+          onPressed: loading
+              ? null
+              : () => setState(() {
+                  isRegister = !isRegister;
+                  error = null;
+                  passCtrl.clear();
+                  _formKey.currentState?.reset();
+                }),
+          child: Text(
+            isRegister
+                ? 'มีบัญชีแล้ว? เข้าสู่ระบบ'
+                : 'ยังไม่มีบัญชี? สร้างบัญชี',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.sizeOf(context);
-    final isCompact = screenSize.height < 700;
-    final contentWidth = screenSize.width < 390 ? screenSize.width - 36 : 360.0;
+    if (!_rememberedAccountsLoaded) {
+      return AnnotatedRegion<SystemUiOverlayStyle>(
+        value: SystemUiOverlayStyle.light,
+        child: Scaffold(
+          backgroundColor: kDarkBg,
+          body: Center(child: _buildLogo()),
+        ),
+      );
+    }
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light.copyWith(
@@ -344,369 +646,231 @@ class _LoginScreenState extends State<LoginScreen>
         backgroundColor: kDarkBg,
         body: Stack(
           children: [
-            // 🌌 1. Ambient Glow Orbs
-            Positioned(
-              top: -80,
-              right: -60,
-              child: Container(
-                width: 320,
-                height: 320,
+            const Positioned.fill(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kGlowPurple.withValues(alpha: 0.35),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
-                  child: Container(color: Colors.transparent),
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Color(0xFF15161A), kDarkBg],
+                    stops: [0, 0.72],
+                  ),
                 ),
               ),
             ),
             Positioned(
-              top: 180,
-              left: -80,
-              child: Container(
-                width: 260,
-                height: 260,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kLimeGreen.withValues(alpha: 0.12),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 90, sigmaY: 90),
-                  child: Container(color: Colors.transparent),
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: -100,
-              right: -50,
-              child: Container(
-                width: 280,
-                height: 280,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: kGlowViolet.withValues(alpha: 0.25),
-                ),
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 100, sigmaY: 100),
-                  child: Container(color: Colors.transparent),
+              top: -145,
+              right: -105,
+              child: IgnorePointer(
+                child: Container(
+                  width: 300,
+                  height: 300,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        kLimeGreen.withValues(alpha: 0.11),
+                        kLimeGreen.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-
-            // 🌟 2. Interactive Content with Entrance Animation
             SafeArea(
               child: Center(
                 child: SingleChildScrollView(
                   physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: isCompact ? 16 : 28,
+                  padding: EdgeInsets.fromLTRB(
+                    18,
+                    20,
+                    18,
+                    _showAccountChooser ? 88 : 20,
                   ),
-                  child: FadeTransition(
-                    opacity: _fadeAnim,
-                    child: SlideTransition(
-                      position: _slideAnim,
-                      child: SizedBox(
-                        width: contentWidth,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            // 🌟 Brand Logo with Glass Highlight
-                            _buildBrandLogo(),
-                            const SizedBox(height: 16),
-
-                            // 🏷️ Brand Name Text
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
+                  child: Container(
+                    width: double.infinity,
+                    constraints: const BoxConstraints(maxWidth: 420),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: _showAccountChooser ? 2 : 22,
+                      vertical: _showAccountChooser ? 12 : 24,
+                    ),
+                    decoration: BoxDecoration(
+                      color: _showAccountChooser
+                          ? Colors.transparent
+                          : Colors.white.withValues(alpha: 0.035),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: _showAccountChooser
+                            ? Colors.transparent
+                            : Colors.white.withValues(alpha: 0.08),
+                      ),
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          SizedBox(
+                            height: 64,
+                            child: Stack(
+                              alignment: Alignment.center,
                               children: [
-                                const Text(
-                                  'WALL',
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    color: Colors.white,
-                                    letterSpacing: 3.2,
-                                  ),
-                                ),
-                                Text(
-                                  'CRAFT',
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.w900,
-                                    color: kLimeGreen,
-                                    letterSpacing: 3.2,
-                                    shadows: [
-                                      Shadow(
-                                        color: kLimeGreen.withValues(alpha: 0.5),
-                                        blurRadius: 16,
+                                _buildLogo(),
+                                if (!_showAccountChooser &&
+                                    _rememberedAccounts.isNotEmpty)
+                                  Positioned(
+                                    left: 0,
+                                    top: 0,
+                                    child: IconButton(
+                                      visualDensity: VisualDensity.compact,
+                                      tooltip: 'กลับไปเลือกบัญชี',
+                                      onPressed: loading ? null : _showChooser,
+                                      icon: const Icon(
+                                        Icons.arrow_back_ios_new_rounded,
+                                        color: Colors.white,
+                                        size: 19,
                                       ),
-                                    ],
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
-                            SizedBox(height: isCompact ? 24 : 32),
-
-                            // 🪟 Glass Form Card
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(28),
-                              child: BackdropFilter(
-                                filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-                                child: Container(
-                                  padding: EdgeInsets.all(isCompact ? 20 : 24),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.04),
-                                    borderRadius: BorderRadius.circular(28),
-                                    border: Border.all(
-                                      color: Colors.white.withValues(alpha: 0.12),
-                                      width: 1.2,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(alpha: 0.3),
-                                        blurRadius: 30,
-                                        offset: const Offset(0, 15),
-                                      ),
-                                    ],
+                          ),
+                          const SizedBox(height: 12),
+                          Center(child: _buildBrand()),
+                          const SizedBox(height: 16),
+                          Text(
+                            _showAccountChooser
+                                ? 'เลือกบัญชี'
+                                : isRegister
+                                ? 'สร้างบัญชี'
+                                : 'เข้าสู่ระบบ',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            _showAccountChooser
+                                ? 'เลือกบัญชีเพื่อเข้าสู่ระบบ'
+                                : isRegister
+                                ? 'สมัครใช้งาน WallCraft'
+                                : 'ลงชื่อเข้าใช้ WallCraft',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.48),
+                              fontSize: 13,
+                            ),
+                          ),
+                          if (error != null && _showAccountChooser) ...[
+                            const SizedBox(height: 16),
+                            _buildErrorBanner(),
+                          ],
+                          const SizedBox(height: 22),
+                          if (_showAccountChooser) ...[
+                            for (
+                              var index = 0;
+                              index < _rememberedAccounts.length;
+                              index++
+                            ) ...[
+                              _buildRememberedAccountCard(
+                                _rememberedAccounts[index],
+                              ),
+                              if (index < _rememberedAccounts.length - 1)
+                                const SizedBox(height: 8),
+                            ],
+                            const SizedBox(height: 10),
+                            Center(
+                              child: TextButton(
+                                style: TextButton.styleFrom(
+                                  foregroundColor: kLimeGreen,
+                                  minimumSize: Size.zero,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 8,
                                   ),
-                                  child: Form(
-                                    key: _formKey,
-                                    child: Column(
-                                      children: [
-                                        // 📧 Email Field
-                                        TextFormField(
-                                          controller: emailCtrl,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          keyboardType:
-                                              TextInputType.emailAddress,
-                                          decoration: _buildInputDecoration(
-                                            'Email Address',
-                                            Icons.alternate_email_rounded,
-                                          ),
-                                          validator: (v) =>
-                                              (v ?? '').contains('@')
-                                                  ? null
-                                                  : 'รูปแบบอีเมลไม่ถูกต้อง',
-                                        ),
-                                        const SizedBox(height: 16),
-
-                                        // 🔒 Password Field
-                                        TextFormField(
-                                          controller: passCtrl,
-                                          obscureText: !showPass,
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 15,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                          decoration: _buildInputDecoration(
-                                            'Password',
-                                            Icons.lock_outline_rounded,
-                                          ).copyWith(
-                                            suffixIcon: IconButton(
-                                              onPressed: () => setState(
-                                                () => showPass = !showPass,
-                                              ),
-                                              icon: Icon(
-                                                showPass
-                                                    ? Icons.visibility_rounded
-                                                    : Icons
-                                                        .visibility_off_rounded,
-                                                color: Colors.white.withValues(
-                                                  alpha: 0.5,
-                                                ),
-                                                size: 20,
-                                              ),
-                                            ),
-                                          ),
-                                          validator: (v) => (v ?? '').length >= 6
-                                              ? null
-                                              : 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร',
-                                        ),
-
-                                        // ⚠️ Error Message Display
-                                        if (error != null) ...[
-                                          const SizedBox(height: 16),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 14,
-                                              vertical: 10,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFFF5252)
-                                                  .withValues(alpha: 0.12),
-                                              borderRadius:
-                                                  BorderRadius.circular(14),
-                                              border: Border.all(
-                                                color: const Color(0xFFFF5252)
-                                                    .withValues(alpha: 0.3),
-                                              ),
-                                            ),
-                                            child: Row(
-                                              children: [
-                                                const Icon(
-                                                  Icons.error_outline_rounded,
-                                                  color: Color(0xFFFF5252),
-                                                  size: 18,
-                                                ),
-                                                const SizedBox(width: 10),
-                                                Expanded(
-                                                  child: Text(
-                                                    error!,
-                                                    style: const TextStyle(
-                                                      color: Color(0xFFFF8A80),
-                                                      fontSize: 12.5,
-                                                      fontWeight:
-                                                          FontWeight.w500,
-                                                      height: 1.25,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-
-                                        SizedBox(height: isCompact ? 20 : 26),
-
-                                        // 🚀 Sign In / Register Button (Neon Lime Glow)
-                                        Container(
-                                          width: double.infinity,
-                                          height: 54,
-                                          decoration: BoxDecoration(
-                                            borderRadius:
-                                                BorderRadius.circular(18),
-                                            gradient: const LinearGradient(
-                                              colors: [
-                                                kLimeGreenBright,
-                                                kLimeGreen,
-                                              ],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            ),
-                                            boxShadow: [
-                                              BoxShadow(
-                                                color: kLimeGreen.withValues(
-                                                  alpha: loading ? 0.1 : 0.38,
-                                                ),
-                                                blurRadius: 22,
-                                                spreadRadius: -2,
-                                                offset: const Offset(0, 8),
-                                              ),
-                                            ],
-                                          ),
-                                          child: ElevatedButton(
-                                            onPressed:
-                                                loading ? null : submitForm,
-                                            style: ElevatedButton.styleFrom(
-                                              backgroundColor:
-                                                  Colors.transparent,
-                                              shadowColor: Colors.transparent,
-                                              foregroundColor:
-                                                  const Color(0xFF141800),
-                                              elevation: 0,
-                                              shape: RoundedRectangleBorder(
-                                                borderRadius:
-                                                    BorderRadius.circular(18),
-                                              ),
-                                            ),
-                                            child: loading
-                                                ? const SizedBox(
-                                                    width: 22,
-                                                    height: 22,
-                                                    child:
-                                                        CircularProgressIndicator(
-                                                      color: Color(0xFF141800),
-                                                      strokeWidth: 2.8,
-                                                    ),
-                                                  )
-                                                : Row(
-                                                    mainAxisAlignment:
-                                                        MainAxisAlignment.center,
-                                                    children: [
-                                                      Text(
-                                                        isRegister
-                                                            ? 'CREATE ACCOUNT'
-                                                            : 'SIGN IN',
-                                                        style: const TextStyle(
-                                                          fontSize: 15,
-                                                          fontWeight:
-                                                              FontWeight.w900,
-                                                          letterSpacing: 1.2,
-                                                          color:
-                                                              Color(0xFF141800),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 8),
-                                                      const Icon(
-                                                        Icons
-                                                            .arrow_forward_rounded,
-                                                        size: 18,
-                                                        color:
-                                                            Color(0xFF141800),
-                                                      ),
-                                                    ],
-                                                  ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: loading ? null : _showManualLogin,
+                                child: const Text(
+                                  'ใช้บัญชีอื่น',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 22),
-
-                            // 🔄 Switch Mode (Sign in <-> Sign up)
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  isRegister
-                                      ? 'Already have an account? '
-                                      : 'New to WallCraft? ',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.white.withValues(alpha: 0.55),
-                                  ),
-                                ),
-                                GestureDetector(
-                                  onTap: () => setState(() {
-                                    isRegister = !isRegister;
-                                    error = null;
-                                  }),
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    child: Text(
-                                      isRegister ? 'Sign In' : 'Switch',
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: kLimeGreen,
-                                        fontWeight: FontWeight.bold,
-                                        decoration: TextDecoration.underline,
-                                        decorationColor: kLimeGreen,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
+                          ] else
+                            _buildForm(),
+                        ],
                       ),
                     ),
                   ),
                 ),
               ),
             ),
+            if (_showAccountChooser)
+              Positioned(
+                top: MediaQuery.paddingOf(context).top + 2,
+                right: 6,
+                child: IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'จัดการบัญชีที่จำไว้',
+                  onPressed: loading ? null : _showAccountOptions,
+                  icon: const Icon(
+                    Icons.more_horiz_rounded,
+                    color: Colors.white,
+                    size: 26,
+                  ),
+                ),
+              ),
+            if (_showAccountChooser)
+              Positioned(
+                left: 18,
+                right: 18,
+                bottom: MediaQuery.paddingOf(context).bottom + 10,
+                child: Center(
+                  child: SizedBox(
+                    width: 180,
+                    height: 40,
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: kLimeGreen,
+                        backgroundColor: kDarkBg.withValues(alpha: 0.94),
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        side: BorderSide(
+                          color: kLimeGreen.withValues(alpha: 0.8),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                      ),
+                      onPressed: loading ? null : _showRegistration,
+                      child: const Text(
+                        'สร้างบัญชีใหม่',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (loading)
+              const Positioned.fill(
+                child: ColoredBox(
+                  color: Colors.black54,
+                  child: Center(
+                    child: CircularProgressIndicator(color: kLimeGreen),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

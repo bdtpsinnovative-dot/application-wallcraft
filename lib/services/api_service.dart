@@ -8,7 +8,16 @@ import 'auth_service.dart';
 class ApiService {
   static Future<Map<String, String>> _getHeaders() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
+    var token = prefs.getString('auth_token');
+
+    // ตรวจสอบความสดของ Token ล่วงหน้า หากใกล้หมดอายุ ให้แอบต่ออายุเงียบๆ ก่อนยิง
+    if (AuthService.isTokenExpired(token)) {
+      final ok = await AuthService.tryRefreshToken();
+      if (ok) {
+        token = prefs.getString('auth_token');
+      }
+    }
+
     return {
       'Content-Type': 'application/json',
       if (token != null) 'Authorization': 'Bearer $token',
@@ -78,7 +87,9 @@ class ApiService {
 
   static Future<http.Response> getPipeline({String? userId}) async {
     if (userId == null && _pipelineCache != null) return _pipelineCache!;
-    final query = (userId != null && userId.isNotEmpty) ? '?user_id=$userId' : '';
+    final query = (userId != null && userId.isNotEmpty)
+        ? '?user_id=$userId'
+        : '';
     final url = Uri.parse('${AppConfig.baseUrl}/profile/pipeline$query');
     final res = await get(url);
     if (userId == null && res.statusCode == 200) _pipelineCache = res;
@@ -92,9 +103,16 @@ class ApiService {
     final params = <String, String>{'company_id': companyId};
     if (userId != null && userId.isNotEmpty) params['user_id'] = userId;
     final query = params.entries
-        .map((entry) => '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}')
+        .map(
+          (entry) =>
+              '${Uri.encodeQueryComponent(entry.key)}=${Uri.encodeQueryComponent(entry.value)}',
+        )
         .join('&');
-    return await get(Uri.parse('${AppConfig.baseUrl}/profile/visit-plans/project-history?$query'));
+    return await get(
+      Uri.parse(
+        '${AppConfig.baseUrl}/profile/visit-plans/project-history?$query',
+      ),
+    );
   }
 
   static Future<http.Response> getVisitPlans() async {
@@ -165,8 +183,33 @@ class ApiService {
 
   static Future<http.Response> deleteVisitPlan(String id) async {
     final url = Uri.parse('${AppConfig.baseUrl}/visit-plans?id=$id');
+    return await delete(url);
+  }
+
+  static Future<http.Response> delete(Uri uri) async {
     var headers = await _getHeaders();
-    return await http.delete(url, headers: headers);
+    var response = await http.delete(uri, headers: headers);
+    if (response.statusCode == 401) {
+      bool refreshed = await AuthService.tryRefreshToken();
+      if (refreshed) {
+        headers = await _getHeaders();
+        response = await http.delete(uri, headers: headers);
+      }
+    }
+    return response;
+  }
+
+  static Future<http.Response> put(Uri uri, {Object? body}) async {
+    var headers = await _getHeaders();
+    var response = await http.put(uri, headers: headers, body: body);
+    if (response.statusCode == 401) {
+      bool refreshed = await AuthService.tryRefreshToken();
+      if (refreshed) {
+        headers = await _getHeaders();
+        response = await http.put(uri, headers: headers, body: body);
+      }
+    }
+    return response;
   }
 
   static Future<http.Response> get(Uri uri) async {
