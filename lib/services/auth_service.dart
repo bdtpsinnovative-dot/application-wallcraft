@@ -36,7 +36,9 @@ class RememberedAccount {
 }
 
 class AuthService {
-  static const _storage = FlutterSecureStorage();
+  static const _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
   static const _refreshTokenKey = 'wallcraft_refresh_token';
   static const _savedEmailKey = 'wallcraft_saved_email';
   static const _savedPasswordKey = 'wallcraft_saved_password';
@@ -303,7 +305,13 @@ class AuthService {
 
           if (response.statusCode == 401) {
             final decoded = _tryDecodeMap(response.body);
-            if (decoded?['is_invalid_grant'] == true) {
+            final errorMsg = (decoded?['error'] ?? '').toString().toLowerCase();
+            if (decoded?['is_invalid_grant'] == true ||
+                errorMsg.contains('invalid') ||
+                errorMsg.contains('revoked') ||
+                errorMsg.contains('not found') ||
+                errorMsg.contains('expired') ||
+                errorMsg.contains('grant')) {
               result = await _silentReAuthenticate();
               return result;
             }

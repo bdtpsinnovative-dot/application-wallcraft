@@ -18,6 +18,7 @@ import '../admin_summary/admin_summary_screen.dart';
 import '../products/price_check_screen.dart';
 import '../../constants.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../pool_project/pool_project_screen.dart';
 import '../auth/login_screen.dart';
 import '../orders/purchase_order_screen.dart';
@@ -563,7 +564,11 @@ class _HomeDashboardState extends State<_HomeDashboard>
 
   Future<void> _loadUserProfile() async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
+    var token = prefs.getString('auth_token');
+    if (AuthService.isTokenExpired(token)) {
+      await AuthService.tryRefreshToken();
+      token = prefs.getString('auth_token');
+    }
     if (token == null) throw Exception("No token");
 
     final response = await ApiService.post(
@@ -599,7 +604,11 @@ class _HomeDashboardState extends State<_HomeDashboard>
 
   Future<void> _fetchStats({String? scope}) async {
     final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('auth_token');
+    var token = prefs.getString('auth_token');
+    if (AuthService.isTokenExpired(token)) {
+      await AuthService.tryRefreshToken();
+      token = prefs.getString('auth_token');
+    }
     if (token == null) throw Exception("No token");
 
     final response = await ApiService.post(

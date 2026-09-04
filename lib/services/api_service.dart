@@ -199,6 +199,23 @@ class ApiService {
     return response;
   }
 
+  static Future<Object?> _patchBodyToken(Object? body) async {
+    if (body is String) {
+      try {
+        final decoded = jsonDecode(body);
+        if (decoded is Map && decoded.containsKey('token')) {
+          final prefs = await SharedPreferences.getInstance();
+          final newToken = prefs.getString('auth_token');
+          if (newToken != null && newToken.isNotEmpty) {
+            decoded['token'] = newToken;
+            return jsonEncode(decoded);
+          }
+        }
+      } catch (_) {}
+    }
+    return body;
+  }
+
   static Future<http.Response> put(Uri uri, {Object? body}) async {
     var headers = await _getHeaders();
     var response = await http.put(uri, headers: headers, body: body);
@@ -206,7 +223,8 @@ class ApiService {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
-        response = await http.put(uri, headers: headers, body: body);
+        final retryBody = await _patchBodyToken(body);
+        response = await http.put(uri, headers: headers, body: retryBody);
       }
     }
     return response;
@@ -232,7 +250,8 @@ class ApiService {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
-        response = await http.post(uri, headers: headers, body: body);
+        final retryBody = await _patchBodyToken(body);
+        response = await http.post(uri, headers: headers, body: retryBody);
       }
     }
     return response;
@@ -245,7 +264,8 @@ class ApiService {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
-        response = await http.patch(uri, headers: headers, body: body);
+        final retryBody = await _patchBodyToken(body);
+        response = await http.patch(uri, headers: headers, body: retryBody);
       }
     }
     return response;
