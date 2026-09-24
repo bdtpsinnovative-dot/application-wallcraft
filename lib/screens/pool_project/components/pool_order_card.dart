@@ -60,8 +60,9 @@ class PoolOrderCard extends StatelessWidget {
             isImportant = p['is_important'] ?? false;
           }
 
-          if (firstProjectName.isEmpty && (p['project_name'] ?? '').toString().trim().isNotEmpty) {
-            firstProjectName = p['project_name'];
+          final pName = (p['project_name'] ?? '').toString().trim();
+          if (firstProjectName.isEmpty && pName.isNotEmpty && pName != '-') {
+            firstProjectName = pName;
           }
           if (firstProjectTypeName == null && p['project_types'] != null) {
             final ptName = p['project_types']['name'];
@@ -84,12 +85,24 @@ class PoolOrderCard extends StatelessWidget {
       }
     }
 
-    if (firstProjectName.isEmpty) firstProjectName = 'ไม่ระบุชื่อโครงการ';
+    if (firstProjectName.isEmpty || firstProjectName == '-') firstProjectName = 'ไม่ระบุชื่อโครงการ';
 
     final saleName = orderData['profiles']?['full_name'] ?? 'ไม่ระบุชื่อเซลล์';
-    String displayCompany = orderData['companies']?['name'] ?? '';
-    if (displayCompany.trim().isEmpty) {
-      displayCompany = fallbackAccountName.isNotEmpty ? fallbackAccountName : 'ไม่ระบุบริษัท/ผู้ติดต่อ';
+    String compName = (orderData['companies']?['name'] ?? '').toString().trim();
+    if (compName.isEmpty && fallbackAccountName.isNotEmpty) {
+      compName = fallbackAccountName.trim();
+    }
+    final custName = (orderData['customer_name'] ?? '').toString().trim();
+
+    String displayCompany = '';
+    if (compName.isNotEmpty && custName.isNotEmpty && compName.toLowerCase() != custName.toLowerCase()) {
+      displayCompany = '$compName ($custName)';
+    } else if (compName.isNotEmpty) {
+      displayCompany = compName;
+    } else if (custName.isNotEmpty) {
+      displayCompany = custName;
+    } else {
+      displayCompany = 'ไม่ระบุบริษัท/ผู้ติดต่อ';
     }
 
     String dateStr = '-';

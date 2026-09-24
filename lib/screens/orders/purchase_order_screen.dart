@@ -480,11 +480,11 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
         // กรองเอาบริษัทที่มีใน Results ไปแล้วออก จะได้ไม่ขึ้นซ้ำ
         final existingIds = results.map((c) => c['id']).toSet();
         for (var ac in apiCompanies) {
-          if (!existingIds.contains(ac['id'])) {
-            results.add({
-              ...ac,
+          if (ac is Map && !existingIds.contains(ac['id'])) {
+            results.add(Map<String, dynamic>.from({
+              ...Map<String, dynamic>.from(ac),
               'is_general': true, // บริษัททั่วไปในระบบ
-            });
+            }));
           }
         }
       }
@@ -659,6 +659,16 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) return;
 
+    if (_selectedCompany == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text("กรุณาเลือกบริษัทก่อนบันทึกข้อมูล"),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
     final auditData = await _getAuditData();
     if (auditData == null) {
@@ -680,9 +690,18 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
         List<Map<String, dynamic>> projectUsages = [];
         for (var projectId in item.selectedProjectIds) {
           String areaText = item.projectAreaControllers[projectId]?.text ?? "0";
+          dynamic matchedProj;
+          for (var p in _projects) {
+            if (p != null && p['id']?.toString() == projectId.toString()) {
+              matchedProj = p;
+              break;
+            }
+          }
+          final pName = matchedProj != null ? (matchedProj['project_name']?.toString() ?? '') : '';
 
           projectUsages.add({
             'project_id': projectId,
+            'project_name': pName,
             'area_sqm': areaText,
 
             // 🌟 🌟 🌟 จุดที่นายถาม คือตรงนี้ครับนาย! 🌟 🌟 🌟
@@ -711,7 +730,8 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
           'token': token,
           'user_id': userId,
           'customer_type_id': _selectedCustomerType,
-          'company_id': _selectedCompany?['id'].toString(),
+          'company_id': _selectedCompany?['id']?.toString(),
+          'company_name': _selectedCompany?['name']?.toString(),
           'customer_name': _nameCtrl.text,
           'phone': _contactCtrl.text,
           'items': itemsPayload,
@@ -900,15 +920,8 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
             ),
             TextButton(
               onPressed: () {
-                if (tempTypeId == null) {
-                  setDiaState(
-                    () =>
-                        customerTypeError = 'กรุณาเลือกประเภทลูกค้าก่อนบันทึก',
-                  );
-                  return;
-                }
-                if (companyNameCtrl.text.isNotEmpty) {
-                  _addNewCompany(companyNameCtrl.text, tempTypeId);
+                if (companyNameCtrl.text.trim().isNotEmpty) {
+                  _addNewCompany(companyNameCtrl.text.trim(), tempTypeId);
                   Navigator.pop(ctx);
                 }
               },
@@ -1016,12 +1029,13 @@ class _PurchaseOrderScreenState extends State<PurchaseOrderScreen>
                                 onCustomerTypeChanged: (val) {
                                   setState(() {
                                     _selectedCustomerType = val;
-                                    _selectedCompany = null;
-                                    _companyDropdownKey.currentState?.clear();
                                     _isTypeManuallySelected = true;
                                   });
                                 },
-                                onCompanyChanged: (val) {
+                                onCompanyChanged: (rawVal) {
+                                  final val = rawVal != null && rawVal is Map
+                                      ? Map<String, dynamic>.from(rawVal)
+                                      : null;
                                   setState(() {
                                     if (val != null) {
                                       _selectedCompany = val;

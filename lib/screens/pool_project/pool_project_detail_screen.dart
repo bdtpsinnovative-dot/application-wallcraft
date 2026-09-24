@@ -517,8 +517,27 @@ Future<void> _saveOrderInfo(String newCustomerName, String newPhone, String newN
 
   @override
   Widget build(BuildContext context) {
-    final ownerName = orderData['customer_name'] ?? 'ไม่ระบุชื่อลูกค้า';
-    final companyName = orderData['companies']?['name'] ?? 'ไม่ระบุชื่อบริษัท';
+    final ownerName = (orderData['customer_name'] ?? '').toString().trim().isNotEmpty
+        ? orderData['customer_name']
+        : 'ไม่ระบุชื่อลูกค้า';
+
+    String fallbackCompany = '';
+    for (var item in items) {
+      final productProjects = item['order_item_projects'] as List? ?? [];
+      for (var p in productProjects) {
+        final acc = (p['account_developer'] ?? p['account_architecture'] ?? p['account_interior'] ?? p['account_contractor'] ?? '').toString().trim();
+        if (acc.isNotEmpty) {
+          fallbackCompany = acc;
+          break;
+        }
+      }
+      if (fallbackCompany.isNotEmpty) break;
+    }
+
+    final rawCompany = (orderData['companies']?['name'] ?? '').toString().trim();
+    final companyName = rawCompany.isNotEmpty
+        ? rawCompany
+        : (fallbackCompany.isNotEmpty ? fallbackCompany : 'ไม่ระบุชื่อบริษัท');
     final orderCustomerTypeName = _relationName(orderData['customer_types']);
     final companyCustomerTypeName = _relationName(orderData['companies']?['customer_types']);
     final customerTypeName = orderCustomerTypeName.isNotEmpty

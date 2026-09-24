@@ -188,12 +188,25 @@ class ApiService {
 
   static Future<http.Response> delete(Uri uri) async {
     var headers = await _getHeaders();
-    var response = await http.delete(uri, headers: headers);
+    http.Response response;
+    try {
+      response = await http.delete(uri, headers: headers);
+    } on SocketException catch (_) {
+      if (AppConfig.isLocalUrl(uri)) {
+        AppConfig.switchToProduction();
+        final failoverUri = AppConfig.remapToActiveBaseUrl(uri);
+        headers = await _getHeaders();
+        response = await http.delete(failoverUri, headers: headers);
+      } else {
+        rethrow;
+      }
+    }
     if (response.statusCode == 401) {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
-        response = await http.delete(uri, headers: headers);
+        final activeUri = AppConfig.remapToActiveBaseUrl(uri);
+        response = await http.delete(activeUri, headers: headers);
       }
     }
     return response;
@@ -218,13 +231,27 @@ class ApiService {
 
   static Future<http.Response> put(Uri uri, {Object? body}) async {
     var headers = await _getHeaders();
-    var response = await http.put(uri, headers: headers, body: body);
+    http.Response response;
+    try {
+      response = await http.put(uri, headers: headers, body: body);
+    } on SocketException catch (_) {
+      if (AppConfig.isLocalUrl(uri)) {
+        AppConfig.switchToProduction();
+        final failoverUri = AppConfig.remapToActiveBaseUrl(uri);
+        headers = await _getHeaders();
+        final retryBody = await _patchBodyToken(body);
+        response = await http.put(failoverUri, headers: headers, body: retryBody);
+      } else {
+        rethrow;
+      }
+    }
     if (response.statusCode == 401) {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
+        final activeUri = AppConfig.remapToActiveBaseUrl(uri);
         final retryBody = await _patchBodyToken(body);
-        response = await http.put(uri, headers: headers, body: retryBody);
+        response = await http.put(activeUri, headers: headers, body: retryBody);
       }
     }
     return response;
@@ -232,12 +259,25 @@ class ApiService {
 
   static Future<http.Response> get(Uri uri) async {
     var headers = await _getHeaders();
-    var response = await http.get(uri, headers: headers);
+    http.Response response;
+    try {
+      response = await http.get(uri, headers: headers);
+    } on SocketException catch (_) {
+      if (AppConfig.isLocalUrl(uri)) {
+        AppConfig.switchToProduction();
+        final failoverUri = AppConfig.remapToActiveBaseUrl(uri);
+        headers = await _getHeaders();
+        response = await http.get(failoverUri, headers: headers);
+      } else {
+        rethrow;
+      }
+    }
     if (response.statusCode == 401) {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
-        response = await http.get(uri, headers: headers);
+        final activeUri = AppConfig.remapToActiveBaseUrl(uri);
+        response = await http.get(activeUri, headers: headers);
       }
     }
     return response;
@@ -245,13 +285,27 @@ class ApiService {
 
   static Future<http.Response> post(Uri uri, {Object? body}) async {
     var headers = await _getHeaders();
-    var response = await http.post(uri, headers: headers, body: body);
+    http.Response response;
+    try {
+      response = await http.post(uri, headers: headers, body: body);
+    } on SocketException catch (_) {
+      if (AppConfig.isLocalUrl(uri)) {
+        AppConfig.switchToProduction();
+        final failoverUri = AppConfig.remapToActiveBaseUrl(uri);
+        headers = await _getHeaders();
+        final retryBody = await _patchBodyToken(body);
+        response = await http.post(failoverUri, headers: headers, body: retryBody);
+      } else {
+        rethrow;
+      }
+    }
     if (response.statusCode == 401) {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
+        final activeUri = AppConfig.remapToActiveBaseUrl(uri);
         final retryBody = await _patchBodyToken(body);
-        response = await http.post(uri, headers: headers, body: retryBody);
+        response = await http.post(activeUri, headers: headers, body: retryBody);
       }
     }
     return response;
@@ -259,13 +313,27 @@ class ApiService {
 
   static Future<http.Response> patch(Uri uri, {Object? body}) async {
     var headers = await _getHeaders();
-    var response = await http.patch(uri, headers: headers, body: body);
+    http.Response response;
+    try {
+      response = await http.patch(uri, headers: headers, body: body);
+    } on SocketException catch (_) {
+      if (AppConfig.isLocalUrl(uri)) {
+        AppConfig.switchToProduction();
+        final failoverUri = AppConfig.remapToActiveBaseUrl(uri);
+        headers = await _getHeaders();
+        final retryBody = await _patchBodyToken(body);
+        response = await http.patch(failoverUri, headers: headers, body: retryBody);
+      } else {
+        rethrow;
+      }
+    }
     if (response.statusCode == 401) {
       bool refreshed = await AuthService.tryRefreshToken();
       if (refreshed) {
         headers = await _getHeaders();
+        final activeUri = AppConfig.remapToActiveBaseUrl(uri);
         final retryBody = await _patchBodyToken(body);
-        response = await http.patch(uri, headers: headers, body: retryBody);
+        response = await http.patch(activeUri, headers: headers, body: retryBody);
       }
     }
     return response;

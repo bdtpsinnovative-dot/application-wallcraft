@@ -9,227 +9,6 @@ const Color kPrimaryColor = Color(0xFFFFFFFF);
 const Color kDarkBg = Color(0xFF000000);
 const Color kLimeGreen = Color(0xFFD2E862);
 
-class OrderFormScreen extends StatefulWidget {
-  const OrderFormScreen({super.key});
-
-  @override
-  State<OrderFormScreen> createState() => _OrderFormScreenState();
-}
-
-class _OrderFormScreenState extends State<OrderFormScreen> {
-  // 1. ตัวแปรเก็บข้อมูลหลัก
-  List<dynamic> _customerTypes = [];
-  String? _selectedCustomerType;
-  Map<String, dynamic>? _selectedCompany;
-
-  final nameCtrl = TextEditingController();
-  final contactCtrl = TextEditingController();
-  final companyDropdownKey = GlobalKey<DropdownSearchState<dynamic>>();
-
-  // 🚀 โมดูล 1: เพิ่มบริษัท (เด้งกลางจอ AlertDialog)
-  void _showAddCompanyDialog() {
-    String? tempTypeId = _selectedCustomerType;
-    final companyNameCtrl = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDiaState) => AlertDialog(
-          backgroundColor: kCardDark,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: const Text(
-            "เพิ่มบริษัทใหม่",
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // 🔽 เลือกประเภทในนี้เลย (กลางจอตามถนัด)
-              DropdownButtonFormField<String>(
-                value: tempTypeId,
-                decoration: _inputDecoration(
-                  "เลือกประเภทลูกค้า (ถ้ามี)",
-                  Icons.category_rounded,
-                ),
-                dropdownColor: kCardDark,
-                style: const TextStyle(color: Colors.white),
-                items: _customerTypes
-                    .map(
-                      (item) => DropdownMenuItem<String>(
-                        value: item['id'].toString(),
-                        child: Text(
-                          item['name'],
-                          style: const TextStyle(color: Colors.white),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (val) => setDiaState(() => tempTypeId = val),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: companyNameCtrl,
-                style: const TextStyle(color: Colors.white),
-                decoration: _inputDecoration(
-                  "ชื่อบริษัท *",
-                  Icons.business_rounded,
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text(
-                "ยกเลิก",
-                style: TextStyle(color: Colors.white54),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                if (companyNameCtrl.text.isNotEmpty) {
-                  _addNewCompany(companyNameCtrl.text, tempTypeId);
-                  Navigator.pop(ctx);
-                }
-              },
-              child: const Text(
-                "บันทึก",
-                style: TextStyle(
-                  color: kLimeGreen,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // 🚀 โมดูล 2: เพิ่มประเภทลูกค้าใหม่ (เด้งกลางจอ AlertDialog)
-  void _showAddCustomerTypeDialog() {
-    final typeNameCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: kCardDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          "เพิ่มประเภทลูกค้าใหม่",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: typeNameCtrl,
-          style: const TextStyle(color: Colors.white),
-          decoration: _inputDecoration(
-            "ชื่อประเภทลูกค้า *",
-            Icons.category_rounded,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              "ยกเลิก",
-              style: TextStyle(color: Colors.white54),
-            ),
-          ),
-          TextButton(
-            onPressed: () {
-              if (typeNameCtrl.text.isNotEmpty) {
-                _addNewCustomerType(typeNameCtrl.text);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text(
-              "บันทึก",
-              style: TextStyle(color: kLimeGreen, fontWeight: FontWeight.bold),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // 🛠️ API 1: บันทึกบริษัทใหม่
-  Future<void> _addNewCompany(String name, String? typeId) async {
-    // 🌟 นายเปลี่ยน URL API ตรงนี้ให้เป็นของนายนะครับ
-    final url = Uri.parse('https://your-api-url.com/api/v1/companies');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'customer_type_id': typeId}),
-    );
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final newComp = jsonDecode(response.body);
-      setState(() {
-        _selectedCompany = newComp; // 🌟 เซฟเป็น Map ทั้งก้อน
-        if (typeId != null) _selectedCustomerType = typeId;
-      });
-      // ✅ ใช้ changeSelectedItem สำหรับเวอร์ชันใหม่ของ DropdownSearch
-      companyDropdownKey.currentState?.changeSelectedItem(newComp);
-    }
-  }
-
-  // 🛠️ API 2: บันทึกประเภทลูกค้าใหม่
-  Future<void> _addNewCustomerType(String name) async {
-    final url = Uri.parse('https://your-api-url.com/api/v1/customer-types');
-    final response = await http.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name}),
-    );
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      final newType = jsonDecode(response.body);
-      setState(() {
-        _customerTypes.add(newType);
-        _selectedCustomerType = newType['id']
-            .toString(); // เลือกให้ทันทีในหน้าหลัก
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: kDarkBg,
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
-        child: CustomerInfoCard(
-          customerTypes: _customerTypes,
-          selectedCustomerType: _selectedCustomerType,
-          companyDropdownKey: companyDropdownKey,
-          getCompanies: (filter) async =>
-              [], // 🌟 ใส่ฟังก์ชันดึงข้อมูลบริษัทของนายตรงนี้
-          selectedCompany: _selectedCompany, // 🌟 ส่งค่า Map ไปให้ Widget
-          nameCtrl: nameCtrl,
-          contactCtrl: contactCtrl,
-          onAddCustomerType:
-              _showAddCustomerTypeDialog, // 🌟 ปุ่มบวกประเภทลูกค้า (กลางจอ)
-          onAddCompany: _showAddCompanyDialog, // 🌟 ปุ่มบวกบริษัท (กลางจอ)
-          onCustomerTypeChanged: (val) {
-            setState(() {
-              _selectedCustomerType = val;
-              _selectedCompany = null;
-              companyDropdownKey.currentState?.clear();
-            });
-          },
-          onCompanyChanged: (val) {
-            setState(() {
-              _selectedCompany = val;
-              if (val != null && val['customer_type_id'] != null) {
-                _selectedCustomerType = val['customer_type_id'].toString();
-              }
-            });
-          },
-        ),
-      ),
-    );
-  }
-}
-
 // -----------------------------------------------------------------------
 // 🛠️ Widget CustomerInfoCard (ฉบับรองรับบริษัท 1,000+ ชื่อ พร้อมช่องค้นหา)
 // -----------------------------------------------------------------------
@@ -240,7 +19,7 @@ class CustomerInfoCard extends StatelessWidget {
   final GlobalKey<DropdownSearchState<dynamic>> companyDropdownKey;
   final Future<List<dynamic>> Function(String) getCompanies;
   final Map<String, dynamic>? selectedCompany;
-  final Function(Map<String, dynamic>?) onCompanyChanged;
+  final Function(dynamic) onCompanyChanged;
   final TextEditingController nameCtrl;
   final TextEditingController contactCtrl;
   final VoidCallback onAddCustomerType;
@@ -263,7 +42,9 @@ class CustomerInfoCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isCustomerTypeLocked = selectedCompany != null;
+    final isCustomerTypeLocked = selectedCompany != null &&
+        selectedCompany!['customer_type_id'] != null &&
+        selectedCompany!['customer_type_id'].toString().isNotEmpty;
 
     return Container(
       padding: const EdgeInsets.all(24),
@@ -321,10 +102,25 @@ class CustomerInfoCard extends StatelessWidget {
                 child: DropdownSearch<dynamic>(
                   key: companyDropdownKey,
                   items: (filter, loadProps) => getCompanies(filter),
-                  itemAsString: (item) => item['name'] ?? '',
+                  itemAsString: (item) => item?['name']?.toString() ?? '',
                   selectedItem: selectedCompany,
-                  onChanged: (val) => onCompanyChanged(val),
-                  compareFn: (i1, i2) => i1?['id'] == i2?['id'],
+                  onChanged: (val) {
+                    if (val == null) {
+                      onCompanyChanged(null);
+                    } else if (val is Map) {
+                      onCompanyChanged(Map<String, dynamic>.from(val));
+                    } else {
+                      onCompanyChanged(val);
+                    }
+                  },
+                  compareFn: (i1, i2) {
+                    if (i1 == null && i2 == null) return true;
+                    if (i1 == null || i2 == null) return false;
+                    final id1 = i1['id']?.toString();
+                    final id2 = i2['id']?.toString();
+                    if (id1 != null && id2 != null) return id1 == id2;
+                    return i1['name'] == i2['name'];
+                  },
                   decoratorProps: DropDownDecoratorProps(
                     baseStyle: const TextStyle(
                       color: Colors.white,
@@ -622,10 +418,10 @@ class CustomerInfoCard extends StatelessWidget {
                   ),
                   decoration: _inputDecoration(
                     isCustomerTypeLocked
-                        ? selectedCustomerType == null
-                              ? "ประเภทลูกค้า (ยังไม่กำหนดในบริษัท)"
-                              : "ประเภทลูกค้า (ตามบริษัท)"
-                        : "ประเภทลูกค้า (ระบุหรือไม่ก็ได้)",
+                        ? "ประเภทลูกค้า (ตามบริษัท)"
+                        : (selectedCompany != null
+                              ? "เลือกประเภทลูกค้า (บริษัทนี้ยังไม่มีประเภท)"
+                              : "ประเภทลูกค้า (ระบุหรือไม่ก็ได้)"),
                     Icons.category_rounded,
                   ),
                   dropdownColor: kCardDark,
