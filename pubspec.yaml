@@ -18,10 +18,9 @@ dependencies:
   # 🔍 ระบบค้นหาและ Dropdown
   dropdown_search: ^6.0.1
 
-  # 🌐 การเชื่อมต่อและฐานข้อมูล
+  # 🌐 การเชื่อมต่อระบบ API และข้อมูลแคช
   http: ^1.6.0
   flutter_dotenv: ^5.2.0
-  supabase_flutter: ^2.0.0
   shared_preferences: ^2.2.2
   flutter_secure_storage: ^10.3.1
 

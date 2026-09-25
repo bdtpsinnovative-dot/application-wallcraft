@@ -13,3 +13,25 @@ Whenever the user asks you to modify code, recover code, or switch branches, you
 4. **No Destructive Restores by Default**: Do not automatically try to restore files from `git log` or check out older commits to "fix" an issue unless the user explicitly commands it and you have verified that no new work will be lost.
 
 By reading this rule, you acknowledge that destroying the user's uncommitted work is the highest severity failure. Always prioritize data preservation.
+
+---
+
+# 🛑 CRITICAL ARCHITECTURAL & SECURITY RULES (STRICTLY ENFORCED)
+
+### 1. Client-Side Only Architecture
+- **`hello_app` เป็น Mobile Client App (Flutter) 100%**
+- **ห้ามเชื่อมต่อไปยัง Supabase หรือ Database โดยตรงเด็ดขาด!**
+- การรับส่งข้อมูลทุกอย่างในแอป **ต้องผ่าน Backend API (`ApiService` / `AppConfig.baseUrl`) เท่านั้น**
+- ตัว Backend (Next.js / Node.js) จะเป็นผู้เดียวที่จัดการติดต่อฐานข้อมูล
+
+### 2. Zero Database Credentials in Client Apps
+- **ห้ามใส่ Supabase URL, Supabase Keys หรือ Database Secrets ใดๆ ลงใน `.env` หรือโค้ดของ `hello_app` เด็ดขาด:**
+  - ❌ `SUPABASE_URL`
+  - ❌ `SUPABASE_ANON_KEY`
+  - ❌ `SUPABASE_SERVICE_ROLE_KEY`
+  - ❌ `DATABASE_URL` หรือรหัสผ่านฐานข้อมูล
+- **เหตุผลความปลอดภัย:** ไฟล์ `.env` ของ `hello_app` ถูกลงทะเบียนใน `assets:` ของ `pubspec.yaml` ทำให้ไฟล์นี้ถูกแพ็กเข้าไฟล์ APK โดยตรง หากใส่คีย์ใดๆ ไว้จะกลายเป็นช่องโหว่ให้ถูกแกะ (Decompile) APK ออกมาดูได้ทันที
+
+### 3. Prohibited Packages
+- **ห้ามติดตั้งหรือ Import `supabase_flutter` หรือ Supabase SDK ในโปรเจกต์นี้เด็ดขาด**
+- การต่อเน็ตเวิร์กของแอปใช้เพียงแพ็กเกจ `http` หรือ REST API client ปกติเท่านั้น

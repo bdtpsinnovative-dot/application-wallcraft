@@ -76,7 +76,4 @@ class AppConfig {
 
   static Uri get aiSearchUrl => Uri.parse('$baseUrl/ai-assistant');
 
-  // 🌟 [เพิ่มใหม่] ดึงค่า Supabase จากไฟล์ .env จ้ะ
-  static String get supabaseUrl => dotenv.env['SUPABASE_URL'] ?? '';
-  static String get supabaseAnonKey => dotenv.env['SUPABASE_ANON_KEY'] ?? '';
 }
