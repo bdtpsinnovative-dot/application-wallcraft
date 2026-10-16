@@ -993,10 +993,106 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
     );
   }
 
+  // 🌟 จัดเรียงตัวกรองคำสั้นและคำยาวประกบคู่กัน (Bin Packing) เพื่อให้วางเรียงต่อกันได้มากที่สุดในแต่ละแถว ไม่เปลืองพื้นที่
+  List<String> _packFilterItems(List<String> items, {double maxRowWidth = 330.0}) {
+    if (items.length <= 1) return items;
+
+    final allItem = items.firstWhere((x) => x == 'ทั้งหมด', orElse: () => '');
+    final others = items.where((x) => x != 'ทั้งหมด' && x.trim().isNotEmpty).toList();
+
+    if (others.isEmpty) return items;
+
+    // คำนวณความกว้างประมาณการของชิปแต่ละอัน (ตัวอักษร + padding/margin/border)
+    double estimateChipWidth(String text) {
+      final displayText = text == 'ทั้งหมด' ? 'ทุกรายการ' : text;
+      return (displayText.length * 7.5) + 30.0;
+    }
+
+    // เรียงคำตามความยาวจากมากไปน้อย (First-Fit Decreasing)
+    others.sort((a, b) => b.length.compareTo(a.length));
+
+    final List<List<String>> rows = [];
+    final List<double> rowWidths = [];
+
+    // แถวแรกเริ่มด้วย 'ทั้งหมด' (ถ้ามี)
+    if (allItem.isNotEmpty) {
+      rows.add([allItem]);
+      rowWidths.add(estimateChipWidth(allItem));
+    }
+
+    for (final item in others) {
+      final w = estimateChipWidth(item);
+      int bestRow = -1;
+      double minRemaining = double.infinity;
+
+      for (int i = 0; i < rows.length; i++) {
+        final remaining = maxRowWidth - (rowWidths[i] + w);
+        if (remaining >= 0 && remaining < minRemaining) {
+          minRemaining = remaining;
+          bestRow = i;
+        }
+      }
+
+      if (bestRow != -1) {
+        rows[bestRow].add(item);
+        rowWidths[bestRow] += w;
+      } else {
+        rows.add([item]);
+        rowWidths.add(w);
+      }
+    }
+
+    final List<String> result = [];
+    for (final row in rows) {
+      result.addAll(row);
+    }
+    return result;
+  }
+
+  Widget _buildFilterChoiceChip({
+    required String label,
+    required bool isSelected,
+    required ValueChanged<bool> onSelected,
+  }) {
+    return ChoiceChip(
+      visualDensity: VisualDensity.compact,
+      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+      showCheckmark: false,
+      label: Text(
+        label,
+        style: TextStyle(
+          color: isSelected ? Colors.black : Colors.white70,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          fontSize: 12,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      selected: isSelected,
+      selectedColor: Colors.white,
+      backgroundColor: const Color(0xFF222226),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: isSelected ? Colors.white : Colors.white.withOpacity(0.08),
+        ),
+      ),
+      onSelected: onSelected,
+    );
+  }
+
   void _showFilterModal() {
     String tempBrand = _selectedBrandFilter;
     String tempStatus = _selectedStatusFilter;
     String tempSale = _selectedSaleFilter;
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final availableWidth = (screenWidth - 32).clamp(280.0, 700.0);
+    final packedBrands = _packFilterItems(_brandFilters, maxRowWidth: availableWidth);
+    final packedStatuses = _packFilterItems(_statusFilters, maxRowWidth: availableWidth);
+    final packedSales = _packFilterItems(_saleFilters, maxRowWidth: availableWidth);
 
     showModalBottomSheet(
       context: context,
@@ -1010,7 +1106,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
           builder: (context, setModalState) {
             return SafeArea(
               child: Container(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
                 constraints: BoxConstraints(
                   maxHeight: MediaQuery.of(context).size.height * 0.85,
                 ),
@@ -1092,28 +1188,13 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                             ),
                             const SizedBox(height: 12),
                             Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _brandFilters.map((brand) {
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: packedBrands.map((brand) {
                                 final isSelected = tempBrand == brand;
-                                return ChoiceChip(
-                                  label: Text(
-                                    brand == 'ทั้งหมด' ? 'ทุกแบรนด์' : brand,
-                                    style: TextStyle(
-                                      color: isSelected ? Colors.black : Colors.white70,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  selected: isSelected,
-                                  selectedColor: Colors.white,
-                                  backgroundColor: const Color(0xFF2C2C2E),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                    side: BorderSide(
-                                      color: isSelected ? Colors.white : Colors.white.withOpacity(0.08),
-                                    ),
-                                  ),
+                                return _buildFilterChoiceChip(
+                                  label: brand == 'ทั้งหมด' ? 'ทุกแบรนด์' : brand,
+                                  isSelected: isSelected,
                                   onSelected: (selected) {
                                     if (selected) {
                                       setModalState(() => tempBrand = brand);
@@ -1141,28 +1222,13 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                             ),
                             const SizedBox(height: 12),
                             Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              children: _statusFilters.map((status) {
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: packedStatuses.map((status) {
                                 final isSelected = tempStatus == status;
-                                return ChoiceChip(
-                                  label: Text(
-                                    status == 'ทั้งหมด' ? 'ทุกสถานะ' : status,
-                                    style: TextStyle(
-                                      color: isSelected ? Colors.black : Colors.white70,
-                                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  selected: isSelected,
-                                  selectedColor: Colors.white,
-                                  backgroundColor: const Color(0xFF2C2C2E),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(20),
-                                    side: BorderSide(
-                                      color: isSelected ? Colors.white : Colors.white.withOpacity(0.08),
-                                    ),
-                                  ),
+                                return _buildFilterChoiceChip(
+                                  label: status == 'ทั้งหมด' ? 'ทุกสถานะ' : status,
+                                  isSelected: isSelected,
                                   onSelected: (selected) {
                                     if (selected) {
                                       setModalState(() => tempStatus = status);
@@ -1191,28 +1257,13 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                               ),
                               const SizedBox(height: 12),
                               Wrap(
-                                spacing: 8,
-                                runSpacing: 8,
-                                children: _saleFilters.map((sale) {
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: packedSales.map((sale) {
                                   final isSelected = tempSale == sale;
-                                  return ChoiceChip(
-                                    label: Text(
-                                      sale == 'ทั้งหมด' ? 'ทุกคน' : sale,
-                                      style: TextStyle(
-                                        color: isSelected ? Colors.black : Colors.white70,
-                                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                    selected: isSelected,
-                                    selectedColor: Colors.white,
-                                    backgroundColor: const Color(0xFF2C2C2E),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                      side: BorderSide(
-                                        color: isSelected ? Colors.white : Colors.white.withOpacity(0.08),
-                                      ),
-                                    ),
+                                  return _buildFilterChoiceChip(
+                                    label: sale == 'ทั้งหมด' ? 'ทุกคน' : sale,
+                                    isSelected: isSelected,
                                     onSelected: (selected) {
                                       if (selected) {
                                         setModalState(() => tempSale = sale);
