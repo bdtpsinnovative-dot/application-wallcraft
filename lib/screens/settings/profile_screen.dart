@@ -19,6 +19,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import 'custom_crop_screen.dart';
 import 'faq_screen.dart';
+import 'change_password_screen.dart';
 import '../teams/teams_screen.dart';
 
 // 🎨 Palette สีสไตล์ Monochrome Dark Luxury (เรียบเนียน เนื้อเดียวกัน)
@@ -48,10 +49,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   bool _isAdmin = false;
   String _notiLevel = 'team'; // 'none', 'team', 'all'
-  String _cacheSize = '0.0 MB';
   String _appVersion = '2.0.7';
-  int? _serverLatencyMs;
-  bool _isCheckingServer = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -60,8 +58,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     super.initState();
     _fetchProfile();
     _loadAppVersion();
-    _calcCacheSize();
-    _checkServerPing();
   }
 
   @override
@@ -155,62 +151,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     } catch (_) {
       if (mounted) setState(() => _appVersion = '2.0.7');
     }
-  }
-
-  Future<void> _calcCacheSize() async {
-    try {
-      final tempDir = await getTemporaryDirectory();
-      int totalBytes = 0;
-      if (tempDir.existsSync()) {
-        final files = tempDir.listSync(recursive: true, followLinks: false);
-        for (var file in files) {
-          if (file is File) {
-            totalBytes += file.lengthSync();
-          }
-        }
-      }
-      if (mounted) {
-        setState(() {
-          if (totalBytes < 1024 * 1024) {
-            _cacheSize = '${(totalBytes / 1024).toStringAsFixed(1)} KB';
-          } else {
-            _cacheSize = '${(totalBytes / (1024 * 1024)).toStringAsFixed(1)} MB';
-          }
-        });
-      }
-    } catch (_) {
-      if (mounted) setState(() => _cacheSize = '0.0 MB');
-    }
-  }
-
-  Future<void> _clearCache() async {
-    try {
-      final tempDir = await getTemporaryDirectory();
-      if (tempDir.existsSync()) {
-        final files = tempDir.listSync(recursive: true, followLinks: false);
-        for (var file in files) {
-          try {
-            if (file is File) file.deleteSync();
-          } catch (_) {}
-        }
-      }
-      PaintingBinding.instance.imageCache.clear();
-      PaintingBinding.instance.imageCache.clearLiveImages();
-      await _calcCacheSize();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-              'ล้างหน่วยความจำแคชเรียบร้อยแล้ว',
-              style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold),
-            ),
-            backgroundColor: kLimeGreen,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    } catch (_) {}
   }
 
   Future<String?> _uploadImage(File imageFile) async {
@@ -458,277 +398,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  // 🔑 เปลี่ยนรหัสผ่าน (ใส่รหัสเดิมก่อน ค่อยเปลี่ยน)
-  void _showChangePasswordModal() {
-    final currentPassCtrl = TextEditingController();
-    final newPassCtrl = TextEditingController();
-    final confirmPassCtrl = TextEditingController();
-
-    bool obscureCurrent = true;
-    bool obscureNew = true;
-    bool obscureConfirm = true;
-    bool isSubmitting = false;
-    String? localError;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: kSurfaceDark,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 16,
-                bottom: 24 + MediaQuery.of(ctx).viewInsets.bottom,
-              ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 36,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: Colors.white24,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                        margin: const EdgeInsets.only(bottom: 16),
-                      ),
-                    ),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          "เปลี่ยนรหัสผ่าน",
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close_rounded, color: Colors.grey, size: 20),
-                          onPressed: () => Navigator.pop(ctx),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      "กรุณากรอกรหัสผ่านปัจจุบันเพื่อความปลอดภัยก่อนตั้งรหัสผ่านใหม่",
-                      style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-                    ),
-                    const SizedBox(height: 16),
-
-                    if (localError != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: Colors.redAccent.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          localError!,
-                          style: const TextStyle(color: Colors.redAccent, fontSize: 13),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                    ],
-
-                    _buildFieldLabel("รหัสผ่านปัจจุบัน"),
-                    _buildPasswordField(
-                      controller: currentPassCtrl,
-                      hint: "รหัสผ่านปัจจุบันของคุณ",
-                      obscureText: obscureCurrent,
-                      onToggleObscure: () =>
-                          setModalState(() => obscureCurrent = !obscureCurrent),
-                    ),
-                    const SizedBox(height: 12),
-
-                    _buildFieldLabel("รหัสผ่านใหม่"),
-                    _buildPasswordField(
-                      controller: newPassCtrl,
-                      hint: "อย่างน้อย 6 ตัวอักษร",
-                      obscureText: obscureNew,
-                      onToggleObscure: () =>
-                          setModalState(() => obscureNew = !obscureNew),
-                    ),
-                    const SizedBox(height: 12),
-
-                    _buildFieldLabel("ยืนยันรหัสผ่านใหม่"),
-                    _buildPasswordField(
-                      controller: confirmPassCtrl,
-                      hint: "กรอกรหัสผ่านใหม่อีกครั้ง",
-                      obscureText: obscureConfirm,
-                      onToggleObscure: () =>
-                          setModalState(() => obscureConfirm = !obscureConfirm),
-                    ),
-                    const SizedBox(height: 22),
-
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                final currentPass = currentPassCtrl.text.trim();
-                                final newPass = newPassCtrl.text.trim();
-                                final confirmPass = confirmPassCtrl.text.trim();
-
-                                if (currentPass.isEmpty || newPass.isEmpty || confirmPass.isEmpty) {
-                                  setModalState(() => localError = "กรุณากรอกข้อมูลให้ครบทุกช่อง");
-                                  return;
-                                }
-                                if (newPass.length < 6) {
-                                  setModalState(() => localError = "รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร");
-                                  return;
-                                }
-                                if (newPass != confirmPass) {
-                                  setModalState(() => localError = "รหัสผ่านใหม่ไม่ตรงกัน");
-                                  return;
-                                }
-                                if (currentPass == newPass) {
-                                  setModalState(() => localError = "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม");
-                                  return;
-                                }
-
-                                setModalState(() {
-                                  isSubmitting = true;
-                                  localError = null;
-                                });
-
-                                try {
-                                  final prefs = await SharedPreferences.getInstance();
-                                  final token = prefs.getString('auth_token');
-
-                                  final response = await ApiService.post(
-                                    Uri.parse('${AppConfig.baseUrl}/auth/change-password'),
-                                    body: jsonEncode({
-                                      'token': token,
-                                      'current_password': currentPass,
-                                      'new_password': newPass,
-                                    }),
-                                  ).timeout(const Duration(seconds: 15));
-
-                                  final data = jsonDecode(response.body);
-
-                                  if (response.statusCode == 200) {
-                                    if (!ctx.mounted) return;
-                                    Navigator.pop(ctx);
-                                    if (!mounted) return;
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว',
-                                          style: TextStyle(
-                                            color: Colors.black,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                        backgroundColor: kLimeGreen,
-                                        behavior: SnackBarBehavior.floating,
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                        ),
-                                      ),
-                                    );
-                                  } else {
-                                    setModalState(() {
-                                      isSubmitting = false;
-                                      localError = data['error'] ?? "ไม่สามารถเปลี่ยนรหัสผ่านได้";
-                                    });
-                                  }
-                                } catch (_) {
-                                  setModalState(() {
-                                    isSubmitting = false;
-                                    localError = "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่";
-                                  });
-                                }
-                              },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: kLimeGreen,
-                          foregroundColor: Colors.black,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: isSubmitting
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.black,
-                                ),
-                              )
-                            : const Text(
-                                'ยืนยันการเปลี่ยนรหัสผ่าน',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                              ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
   Widget _buildFieldLabel(String label) {
     return Padding(
       padding: const EdgeInsets.only(left: 4, bottom: 6),
       child: Text(
         label,
         style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey[400]),
-      ),
-    );
-  }
-
-  Widget _buildPasswordField({
-    required TextEditingController controller,
-    required String hint,
-    required bool obscureText,
-    required VoidCallback onToggleObscure,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-      ),
-      child: TextField(
-        controller: controller,
-        obscureText: obscureText,
-        style: const TextStyle(color: Colors.white, fontSize: 14),
-        decoration: InputDecoration(
-          hintText: hint,
-          hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
-          prefixIcon: const Icon(Icons.key_rounded, color: Colors.grey, size: 18),
-          suffixIcon: IconButton(
-            icon: Icon(
-              obscureText ? Icons.visibility_off_rounded : Icons.visibility_rounded,
-              color: Colors.grey[500],
-              size: 18,
-            ),
-            onPressed: onToggleObscure,
-          ),
-          border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        ),
       ),
     );
   }
@@ -1078,43 +753,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  void _confirmClearCache() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: kSurfaceDark,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          "ล้างหน่วยความจำแคช",
-          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
-          "ต้องการล้างไฟล์ชั่วคราวและรูปภาพขนาด $_cacheSize หรือไม่?\n(ไม่มีผลกระทบต่อข้อมูลของคุณ)",
-          style: const TextStyle(color: Colors.white70, fontSize: 13, height: 1.4),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("ยกเลิก", style: TextStyle(color: Colors.grey)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(ctx);
-              _clearCache();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              elevation: 0,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            child: const Text("ล้างแคชทันที"),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _checkAppUpdate() async {
     try {
       final response = await http
@@ -1160,109 +798,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     }
-  }
-
-  Future<void> _checkServerPing({bool showToast = false}) async {
-    if (_isCheckingServer) return;
-    setState(() => _isCheckingServer = true);
-    final stopwatch = Stopwatch()..start();
-    try {
-      final res = await http
-          .get(Uri.parse('${AppConfig.baseUrl}/check-update'))
-          .timeout(const Duration(seconds: 4));
-      stopwatch.stop();
-      if (!mounted) return;
-      if (res.statusCode == 200 || res.statusCode == 404) {
-        setState(() {
-          _serverLatencyMs = stopwatch.elapsedMilliseconds;
-          _isCheckingServer = false;
-        });
-        if (showToast) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('⚡ เซิร์ฟเวอร์ออนไลน์ปกติ (Latency: ${_serverLatencyMs}ms)'),
-              backgroundColor: kSurfaceDark,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              duration: const Duration(seconds: 2),
-            ),
-          );
-        }
-      } else {
-        setState(() {
-          _serverLatencyMs = -1;
-          _isCheckingServer = false;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _serverLatencyMs = -1;
-          _isCheckingServer = false;
-        });
-        if (showToast) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text('⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้'),
-              backgroundColor: Colors.redAccent,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  Widget _buildServerStatusIndicator() {
-    if (_isCheckingServer && _serverLatencyMs == null) {
-      return const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white54),
-          ),
-          SizedBox(width: 6),
-          Text("กำลังตรวจ...", style: TextStyle(fontSize: 12, color: Colors.white54)),
-        ],
-      );
-    }
-
-    final isOk = _serverLatencyMs != null && _serverLatencyMs! >= 0;
-    final dotColor = isOk ? const Color(0xFF00E676) : Colors.redAccent;
-    final statusText = isOk ? "ออนไลน์ (${_serverLatencyMs}ms)" : "ออฟไลน์";
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 7,
-          height: 7,
-          decoration: BoxDecoration(
-            color: dotColor,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: dotColor.withValues(alpha: 0.5),
-                blurRadius: 4,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          statusText,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: dotColor,
-          ),
-        ),
-      ],
-    );
   }
 
   void _showUpdateDialog(String latestVersion, String downloadUrl) {
@@ -1452,7 +987,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           icon: Icons.key_rounded,
                           title: "เปลี่ยนรหัสผ่าน",
                           subtitle: "ต้องยืนยันรหัสผ่านปัจจุบันก่อนเปลี่ยน",
-                          onTap: _showChangePasswordModal,
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ChangePasswordScreen(),
+                              ),
+                            );
+                          },
                         ),
                         _buildDivider(),
                         _buildSettingsRow(
@@ -1513,13 +1055,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         _buildDivider(),
                         _buildSettingsRow(
-                          icon: Icons.cleaning_services_outlined,
-                          title: "ล้างแคชในเครื่อง",
-                          trailingText: _cacheSize,
-                          onTap: _confirmClearCache,
-                        ),
-                        _buildDivider(),
-                        _buildSettingsRow(
                           icon: Icons.help_outline_rounded,
                           title: "คู่มือ & คำถามที่พบบ่อย (FAQ)",
                           subtitle: "วิธีเช็คอิน แผนงาน สต็อก และวิธีแก้ปัญหา",
@@ -1529,14 +1064,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               MaterialPageRoute(builder: (_) => const FaqScreen()),
                             );
                           },
-                        ),
-                        _buildDivider(),
-                        _buildSettingsRow(
-                          icon: Icons.cloud_done_outlined,
-                          title: "สถานะการเชื่อมต่อเซิร์ฟเวอร์",
-                          subtitle: "แตะเพื่อทดสอบความเร็ว API",
-                          trailingWidget: _buildServerStatusIndicator(),
-                          onTap: () => _checkServerPing(showToast: true),
                         ),
                         _buildDivider(),
                         _buildSettingsRow(
@@ -1551,7 +1078,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           iconColor: Colors.redAccent,
                           title: "ออกจากระบบ",
                           titleColor: Colors.redAccent,
-                          subtitle: emailCtrl.text.isEmpty ? null : emailCtrl.text,
                           showChevron: false,
                           onTap: _confirmLogout,
                         ),
