@@ -14,6 +14,8 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../tracking/tracking_screen.dart';
+import '../tracking/stock_management_page.dart';
+import '../tracking/pi_records_page.dart';
 import '../admin_summary/admin_summary_screen.dart';
 import '../products/price_check_screen.dart';
 import '../../constants.dart';
@@ -783,9 +785,9 @@ class _HomeDashboardState extends State<_HomeDashboard>
         children: [
           const SizedBox(height: 60),
           _buildMinimalHeader(),
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
           _buildPurpleStatsCard(),
-          const SizedBox(height: 30),
+          const SizedBox(height: 24),
           const Text(
             "Management Tools",
             style: TextStyle(
@@ -795,18 +797,23 @@ class _HomeDashboardState extends State<_HomeDashboard>
               letterSpacing: 0.5,
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           LayoutBuilder(
             builder: (context, constraints) {
               final isNarrow = constraints.maxWidth < 320;
-              return GridView.count(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                crossAxisCount: 2,
-                crossAxisSpacing: 14,
-                mainAxisSpacing: 14,
-                childAspectRatio: isNarrow ? 0.96 : 1.02,
-                children: [
+              return MediaQuery.removePadding(
+                context: context,
+                removeTop: true,
+                removeBottom: true,
+                child: GridView.count(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: EdgeInsets.zero,
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 12,
+                  mainAxisSpacing: 12,
+                  childAspectRatio: isNarrow ? 0.96 : 1.02,
+                  children: [
                   _buildGlassMenuCard(
                     0,
                     'Lead&Checkin',
@@ -851,26 +858,28 @@ class _HomeDashboardState extends State<_HomeDashboard>
                   ),
                   _buildGlassMenuCard(
                     2,
-                    'AI Expert',
-                    'AIผู้เชี่ยวชาญ',
-                    Icons.auto_awesome_rounded,
-                    Colors.purpleAccent,
+                    'Stock Management',
+                    'เช็คสต็อกสินค้า',
+                    Icons.inventory_2_rounded,
+                    Colors.cyanAccent,
                     () => Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const AiChatHubScreen(),
+                        builder: (context) => const StockManagementPage(),
                       ),
                     ),
                   ),
                   _buildGlassMenuCard(
                     3,
-                    'AI Search',
-                    'ค้นหารูปด้วยAI',
-                    Icons.image_search_rounded,
-                    Colors.cyanAccent,
+                    'PI Records',
+                    'รายการสั่งซื้อ PI',
+                    Icons.receipt_long_rounded,
+                    const Color(0xFFB388FF),
                     () => Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => AiSearchScreen()),
+                      MaterialPageRoute(
+                        builder: (context) => const PiRecordsPage(),
+                      ),
                     ),
                   ),
                   _buildGlassMenuCard(
@@ -901,10 +910,35 @@ class _HomeDashboardState extends State<_HomeDashboard>
                       ),
                     ),
                   ),
+                  _buildGlassMenuCard(
+                    6,
+                    'AI Expert',
+                    'AIผู้เชี่ยวชาญ',
+                    Icons.auto_awesome_rounded,
+                    Colors.purpleAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AiChatHubScreen(),
+                      ),
+                    ),
+                  ),
+                  _buildGlassMenuCard(
+                    7,
+                    'AI Search',
+                    'ค้นหารูปด้วยAI',
+                    Icons.image_search_rounded,
+                    Colors.tealAccent,
+                    () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const AiSearchScreen()),
+                    ),
+                  ),
                 ],
-              );
-            },
-          ),
+              ),
+            );
+          },
+        ),
           const SizedBox(height: 40),
         ],
       ),

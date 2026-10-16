@@ -12,6 +12,8 @@ import 'services/notification_service.dart'; // ✅ เพิ่มตัวน�
 import 'services/auth_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
+import 'package:device_preview/device_preview.dart';
+
 
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kLimeGreen = Color(0xFFD2E862);
@@ -39,7 +41,13 @@ void main() async {
     print("❌ Error initializing: $e");
   }
 
-  runApp(const MyApp());
+  runApp(
+    DevicePreview(
+      enabled: !kReleaseMode,
+      defaultDevice: Devices.ios.iPhone13ProMax,
+      builder: (context) => const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -74,7 +82,8 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return MaterialApp(
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
-      title: 'Wallcraft', //
+      title: 'Wallcraft',
+      locale: DevicePreview.locale(context),
       theme: ThemeData(
         scaffoldBackgroundColor: kDarkBg,
         canvasColor: kDarkBg,
@@ -90,17 +99,20 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ),
         useMaterial3: true,
       ),
-      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light,
-          systemNavigationBarColor: kDarkBg,
-          systemNavigationBarDividerColor: kDarkBg,
-          systemNavigationBarIconBrightness: Brightness.light,
-          systemNavigationBarContrastEnforced: false,
-        ),
-        child: child ?? const SizedBox.shrink(),
-      ),
+      builder: (context, child) {
+        final previewChild = DevicePreview.appBuilder(context, child);
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: const SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.light,
+            systemNavigationBarColor: kDarkBg,
+            systemNavigationBarDividerColor: kDarkBg,
+            systemNavigationBarIconBrightness: Brightness.light,
+            systemNavigationBarContrastEnforced: false,
+          ),
+          child: previewChild,
+        );
+      },
       home: const CheckAuth(),
     );
   }

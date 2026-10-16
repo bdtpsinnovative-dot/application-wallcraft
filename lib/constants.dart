@@ -75,5 +75,6 @@ class AppConfig {
   static Uri productsUrl(String keyword) => Uri.parse('$baseUrl/products?keyword=$keyword');
 
   static Uri get aiSearchUrl => Uri.parse('$baseUrl/ai-assistant');
+  static Uri get piRecordsUrl => Uri.parse('$baseUrl/pi-records');
 
 }

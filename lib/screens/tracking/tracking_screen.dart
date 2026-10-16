@@ -3,9 +3,8 @@ import 'package:flutter/material.dart';
 
 // 🌟 เรียกไฟล์ในโฟลเดอร์เดียวกันตรงๆ เลยครับนาย
 import 'package_tracking_page.dart'; 
-import 'stock_management_page.dart';
-import 'sample_production_page.dart'; // 🚀 ไฟล์ใหม่ 1
-import 'sample_check_page.dart';      // 🚀 ไฟล์ใหม่ 2
+import 'sample_production_page.dart'; 
+import 'sample_check_page.dart';      
 
 class TrackingScreen extends StatelessWidget {
   const TrackingScreen({super.key});
@@ -42,22 +41,11 @@ class TrackingScreen extends StatelessWidget {
                 subtitle: "เช็คสถานะการส่งสินค้าของลูกค้า",
                 icon: Icons.local_shipping_rounded,
                 iconColor: Colors.pinkAccent,
-                destination: PackageTrackingPage(),
+                destination: const PackageTrackingPage(),
               ),
               const SizedBox(height: 16),
 
-              // 📦 ปุ่มที่ 2: Stock Management
-              _buildMenuButton(
-                context,
-                title: "Stock Management",
-                subtitle: "ตรวจสอบจำนวนสินค้าในคลัง",
-                icon: Icons.inventory_2_rounded,
-                iconColor: Colors.cyanAccent,
-                destination: StockManagementPage(),
-              ),
-              const SizedBox(height: 16),
-
-              // 🛠️ ปุ่มที่ 3: สั่งผลิตตัวอย่าง (เพิ่มใหม่)
+              // 🛠️ ปุ่มที่ 2: สั่งผลิตตัวอย่าง
               _buildMenuButton(
                 context,
                 title: "สั่งผลิตตัวอย่าง",
@@ -68,7 +56,7 @@ class TrackingScreen extends StatelessWidget {
               ),
               const SizedBox(height: 16),
 
-              // 🔍 ปุ่มที่ 4: เช็คสินค้าตัวอย่าง (เพิ่มใหม่)
+              // 🔍 ปุ่มที่ 3: เช็คสินค้าตัวอย่าง
               _buildMenuButton(
                 context,
                 title: "เช็คสินค้าตัวอย่าง",
