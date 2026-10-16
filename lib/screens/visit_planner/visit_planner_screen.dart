@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/api_service.dart';
 import '../../constants.dart';
 import 'components/add_visit_modal.dart';
+import '../../utils/filter_packer.dart';
 
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kCardDark = Color(0xFF1C1C1E);
@@ -1524,6 +1525,12 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                       Colors.deepOrangeAccent,
                     ),
                   ];
+                  final availableWidth = (MediaQuery.of(context).size.width - 40).clamp(260.0, 650.0);
+                  final packedStatusFilters = packFilterItems<(String, String, IconData, Color)>(
+                    items: statusFilters,
+                    labelExtractor: (f) => f.$2,
+                    maxRowWidth: availableWidth,
+                  );
 
                   return Padding(
                     padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
@@ -1540,15 +1547,26 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                         ),
                         const SizedBox(height: 10),
                         Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: statusFilters.map((filter) {
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: packedStatusFilters.map((filter) {
                             final isSelected =
                                 _selectedStatusFilter == filter.$1;
                             return ChoiceChip(
-                              label: Text(filter.$2),
-                              avatar: Icon(filter.$3, size: 16),
+                              label: Text(
+                                filter.$2,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              avatar: Icon(
+                                filter.$3,
+                                size: 15,
+                                color: isSelected ? Colors.black : filter.$4,
+                              ),
                               selected: isSelected,
+                              visualDensity: VisualDensity.compact,
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                               onSelected: (_) {
                                 setState(() {
                                   _selectedStatusFilter = filter.$1;
@@ -1564,6 +1582,9 @@ class VisitPlannerScreenState extends State<VisitPlannerScreen> {
                               selectedColor: filter.$4,
                               side: BorderSide(
                                 color: isSelected ? filter.$4 : Colors.white24,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
                               ),
                             );
                           }).toList(),

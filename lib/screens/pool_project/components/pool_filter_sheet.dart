@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/filter_packer.dart';
 
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kCardDark = Color(0xFF1C1C1E);
@@ -382,6 +383,14 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
     IconData? Function(String)? iconBuilder,
   }) {
     if (options.isEmpty) return const SizedBox();
+    final screenWidth = MediaQuery.of(context).size.width;
+    final availableWidth = (screenWidth - 72).clamp(260.0, 650.0);
+    final packedOptions = packFilterItems<String>(
+      items: options,
+      labelExtractor: (s) => s,
+      maxRowWidth: availableWidth,
+    );
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -393,30 +402,30 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         Wrap(
-          spacing: 10,
-          runSpacing: 10,
-          children: options.map((option) {
+          spacing: 6,
+          runSpacing: 6,
+          children: packedOptions.map((option) {
             final isSelected = selectedOptions.contains(option);
             final customIcon = iconBuilder != null ? iconBuilder(option) : null;
 
             return InkWell(
               onTap: () => onSelect(option),
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               child: Container(
                 padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 8,
+                  horizontal: 10,
+                  vertical: 6,
                 ),
                 decoration: BoxDecoration(
                   color: isSelected
                       ? kNeonPurple.withOpacity(0.2)
-                      : Colors.transparent,
+                      : Colors.white.withOpacity(0.04),
                   border: Border.all(
-                    color: isSelected ? kNeonPurple : Colors.white24,
+                    color: isSelected ? kNeonPurple : Colors.white.withOpacity(0.12),
                   ),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(16),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -424,22 +433,26 @@ class _PoolFilterSheetState extends State<PoolFilterSheet> {
                     if (isSelected) ...[
                       const Icon(
                         Icons.check_circle_rounded,
-                        size: 14,
+                        size: 13,
                         color: kNeonPurple,
                       ),
-                      const SizedBox(width: 6),
+                      const SizedBox(width: 5),
                     ] else if (customIcon != null) ...[
-                      Icon(customIcon, size: 14, color: Colors.white54),
-                      const SizedBox(width: 6),
+                      Icon(customIcon, size: 13, color: Colors.white54),
+                      const SizedBox(width: 5),
                     ],
-                    Text(
-                      option,
-                      style: TextStyle(
-                        color: isSelected ? kNeonPurple : Colors.white70,
-                        fontWeight: isSelected
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                        fontSize: 13,
+                    Flexible(
+                      child: Text(
+                        option,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.white70,
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w500,
+                          fontSize: 12,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],

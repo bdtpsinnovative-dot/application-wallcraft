@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/filter_packer.dart';
 
 const Color kCardDark = Color(0xFF1C1C1E);
 const Color kAccentColor = Color(0xFFC6A87C);
@@ -189,53 +190,81 @@ void showCategoryFilterModal({
                         ),
                         const SizedBox(height: 16),
 
-                        // ป้ายกำกับ (Chip) หมวดย่อย
-                        Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
-                          children: group.value.map((colName) {
-                            final isSelected = selectedCategory == colName;
-                            return Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () {
-                                  Navigator.pop(context);
-                                  onCategorySelected(colName);
-                                },
-                                borderRadius: BorderRadius.circular(12),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 200),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 16,
-                                    vertical: 10,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isSelected
-                                        ? kAccentColor
-                                        : Colors.white.withOpacity(0.05),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? kAccentColor
-                                          : Colors.transparent,
-                                    ),
-                                  ),
-                                  child: Text(
-                                    colName,
-                                    style: TextStyle(
-                                      color: isSelected
-                                          ? Colors.black
-                                          : Colors.white70,
-                                      fontWeight: isSelected
-                                          ? FontWeight.bold
-                                          : FontWeight.normal,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                                ),
-                              ),
+                        // ป้ายกำกับ (Chip) หมวดย่อย - จัดเรียงแบบ Bin-Packing แน่นสวยเป็นระเบียบ
+                        Builder(
+                          builder: (context) {
+                            final screenWidth = MediaQuery.of(context).size.width;
+                            final availableWidth = (screenWidth - 48).clamp(260.0, 650.0);
+                            final packedCategories = packFilterItems<String>(
+                              items: group.value,
+                              labelExtractor: (s) => s,
+                              maxRowWidth: availableWidth,
                             );
-                          }).toList(),
+
+                            return Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: packedCategories.map((colName) {
+                                final isSelected = selectedCategory == colName;
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () {
+                                      Navigator.pop(context);
+                                      onCategorySelected(colName);
+                                    },
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: AnimatedContainer(
+                                      duration: const Duration(milliseconds: 200),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? kAccentColor
+                                            : Colors.white.withOpacity(0.05),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(
+                                          color: isSelected
+                                              ? kAccentColor
+                                              : Colors.white.withOpacity(0.12),
+                                          width: 0.8,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (isSelected) ...[
+                                            const Icon(
+                                              Icons.check_rounded,
+                                              size: 13,
+                                              color: Colors.black,
+                                            ),
+                                            const SizedBox(width: 4),
+                                          ],
+                                          Text(
+                                            colName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? Colors.black
+                                                  : Colors.white70,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.bold
+                                                  : FontWeight.normal,
+                                              fontSize: 12.5,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            );
+                          },
                         ),
                         const SizedBox(height: 36),
                       ],
