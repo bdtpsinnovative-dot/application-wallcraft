@@ -16,14 +16,10 @@ import 'package:ota_update/ota_update.dart';
 import '../../constants.dart';
 import '../auth/login_screen.dart';
 import '../orders/purchase_order_screen.dart';
-import '../tracking/stock_management_page.dart';
-import '../tracking/pi_records_page.dart';
-import '../products/price_check_screen.dart';
-import '../visit_planner/visit_planner_screen.dart';
-import '../admin_summary/admin_summary_screen.dart';
 import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import 'custom_crop_screen.dart';
+import 'faq_screen.dart';
 
 // 🎨 Palette สี Dark Luxury
 const Color kDarkBg = Color(0xFF0F0F11);
@@ -52,7 +48,6 @@ class _ProfileScreenState extends State<ProfileScreen>
   String? _errorMessage;
 
   bool _isAdmin = false;
-  bool _isCheckedInToday = false;
   String _notiLevel = 'team'; // 'none', 'team', 'all'
   String _cacheSize = '...';
   String _appVersion = '1.0.0';
@@ -84,7 +79,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     _fetchProfile();
     _loadAppVersion();
     _calcCacheSize();
-    _checkCheckinStatus();
   }
 
   @override
@@ -263,36 +257,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Clear cache error: $e');
     }
-  }
-
-  Future<void> _checkCheckinStatus() async {
-    try {
-      final ordersRes = await ApiService.get(
-        Uri.parse('${AppConfig.baseUrl}/orders?limit=10'),
-      );
-      if (ordersRes.statusCode == 200) {
-        final ordersData = jsonDecode(ordersRes.body);
-        final ordersList = (ordersData is List)
-            ? ordersData
-            : (ordersData['orders'] ?? ordersData['data'] ?? []);
-
-        final now = DateTime.now();
-        final todayPrefix =
-            '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
-
-        bool checkedIn = false;
-        for (var ord in ordersList) {
-          final cAt = (ord['created_at'] ?? '').toString();
-          if (cAt.startsWith(todayPrefix)) {
-            checkedIn = true;
-            break;
-          }
-        }
-        if (mounted) {
-          setState(() => _isCheckedInToday = checkedIn);
-        }
-      }
-    } catch (_) {}
   }
 
   Future<String?> _uploadImage(File imageFile) async {
@@ -614,6 +578,510 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
+  // 🔑 เปลี่ยนรหัสผ่าน (ใส่รหัสเดิมก่อน แล้วใส่รหัสใหม่ + ยืนยัน)
+  void _showChangePasswordModal() {
+    final currentPassCtrl = TextEditingController();
+    final newPassCtrl = TextEditingController();
+    final confirmPassCtrl = TextEditingController();
+
+    bool obscureCurrent = true;
+    bool obscureNew = true;
+    bool obscureConfirm = true;
+    bool isSubmitting = false;
+    String? localError;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF161618),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom: 24 + MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[700],
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                        margin: const EdgeInsets.only(bottom: 16),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.lock_reset_rounded,
+                                color: kLimeGreen, size: 22),
+                            SizedBox(width: 8),
+                            Text(
+                              "เปลี่ยนรหัสผ่าน",
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close_rounded,
+                              color: Colors.grey),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "เพื่อความปลอดภัย กรุณากรอกรหัสผ่านปัจจุบันก่อนตั้งรหัสผ่านใหม่",
+                      style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                    ),
+                    const SizedBox(height: 18),
+
+                    if (localError != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(
+                            color: Colors.redAccent.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.error_outline_rounded,
+                                color: Colors.redAccent, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                localError!,
+                                style: const TextStyle(
+                                    color: Colors.redAccent, fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+
+                    _buildModalFieldLabel("รหัสผ่านปัจจุบัน (Current Password)"),
+                    _buildPasswordField(
+                      controller: currentPassCtrl,
+                      hint: "กรอกรหัสผ่านปัจจุบันของคุณ",
+                      obscureText: obscureCurrent,
+                      onToggleObscure: () {
+                        setModalState(
+                            () => obscureCurrent = !obscureCurrent);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    _buildModalFieldLabel("รหัสผ่านใหม่ (New Password)"),
+                    _buildPasswordField(
+                      controller: newPassCtrl,
+                      hint: "ความยาวอย่างน้อย 6 ตัวอักษร",
+                      obscureText: obscureNew,
+                      onToggleObscure: () {
+                        setModalState(() => obscureNew = !obscureNew);
+                      },
+                    ),
+                    const SizedBox(height: 14),
+
+                    _buildModalFieldLabel("ยืนยันรหัสผ่านใหม่ (Confirm Password)"),
+                    _buildPasswordField(
+                      controller: confirmPassCtrl,
+                      hint: "กรอกรหัสผ่านใหม่อีกครั้งให้ตรงกัน",
+                      obscureText: obscureConfirm,
+                      onToggleObscure: () {
+                        setModalState(
+                            () => obscureConfirm = !obscureConfirm);
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Submit Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 50,
+                      child: ElevatedButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final currentPass =
+                                    currentPassCtrl.text.trim();
+                                final newPass = newPassCtrl.text.trim();
+                                final confirmPass =
+                                    confirmPassCtrl.text.trim();
+
+                                if (currentPass.isEmpty ||
+                                    newPass.isEmpty ||
+                                    confirmPass.isEmpty) {
+                                  setModalState(() => localError =
+                                      "กรุณากรอกข้อมูลให้ครบทุกช่อง");
+                                  return;
+                                }
+
+                                if (newPass.length < 6) {
+                                  setModalState(() => localError =
+                                      "รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร");
+                                  return;
+                                }
+
+                                if (newPass != confirmPass) {
+                                  setModalState(() => localError =
+                                      "รหัสผ่านใหม่และการยืนยันไม่ตรงกัน");
+                                  return;
+                                }
+
+                                if (currentPass == newPass) {
+                                  setModalState(() => localError =
+                                      "รหัสผ่านใหม่ต้องไม่ซ้ำกับรหัสผ่านเดิม");
+                                  return;
+                                }
+
+                                setModalState(() {
+                                  isSubmitting = true;
+                                  localError = null;
+                                });
+
+                                try {
+                                  final prefs =
+                                      await SharedPreferences.getInstance();
+                                  final token =
+                                      prefs.getString('auth_token');
+
+                                  final response = await ApiService.post(
+                                    Uri.parse(
+                                        '${AppConfig.baseUrl}/auth/change-password'),
+                                    body: jsonEncode({
+                                      'token': token,
+                                      'current_password': currentPass,
+                                      'new_password': newPass,
+                                    }),
+                                  ).timeout(const Duration(seconds: 15));
+
+                                  final data = jsonDecode(response.body);
+
+                                  if (response.statusCode == 200) {
+                                    if (!ctx.mounted) return;
+                                    Navigator.pop(ctx);
+                                    if (!mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: const Row(
+                                            children: [
+                                              Icon(Icons.check_circle_rounded,
+                                                  color: Colors.black),
+                                              SizedBox(width: 8),
+                                              Text(
+                                                'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว',
+                                                style: TextStyle(
+                                                  color: Colors.black,
+                                                  fontWeight:
+                                                      FontWeight.bold,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          backgroundColor: kLimeGreen,
+                                          behavior:
+                                              SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius:
+                                                BorderRadius.circular(10),
+                                          ),
+                                        ),
+                                      );
+                                  } else {
+                                    setModalState(() {
+                                      isSubmitting = false;
+                                      localError = data['error'] ??
+                                          "ไม่สามารถเปลี่ยนรหัสผ่านได้";
+                                    });
+                                  }
+                                } catch (e) {
+                                  setModalState(() {
+                                    isSubmitting = false;
+                                    localError =
+                                        "เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่";
+                                  });
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: kLimeGreen,
+                          foregroundColor: Colors.black,
+                          disabledBackgroundColor: Colors.grey[800],
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: isSubmitting
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: Colors.black,
+                                ),
+                              )
+                            : const Text(
+                                'ยืนยันการเปลี่ยนรหัสผ่าน',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildPasswordField({
+    required TextEditingController controller,
+    required String hint,
+    required bool obscureText,
+    required VoidCallback onToggleObscure,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: TextField(
+        controller: controller,
+        obscureText: obscureText,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.grey[600], fontSize: 13),
+          prefixIcon:
+              const Icon(Icons.key_rounded, color: Colors.grey, size: 20),
+          suffixIcon: IconButton(
+            icon: Icon(
+              obscureText
+                  ? Icons.visibility_off_rounded
+                  : Icons.visibility_rounded,
+              color: Colors.grey[500],
+              size: 20,
+            ),
+            onPressed: onToggleObscure,
+          ),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: 14,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // 🛡️ ข้อมูลความเป็นส่วนตัวและความปลอดภัย (PDPA & Permissions)
+  void _showPrivacySecurityModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF161618),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 16,
+            bottom: 24 + MediaQuery.of(ctx).padding.bottom,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[700],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    margin: const EdgeInsets.only(bottom: 16),
+                  ),
+                ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.shield_outlined,
+                            color: Colors.blueAccent, size: 22),
+                        SizedBox(width: 8),
+                        Text(
+                          "ความเป็นส่วนตัว & ความปลอดภัย",
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon:
+                          const Icon(Icons.close_rounded, color: Colors.grey),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                _buildPrivacyCard(
+                  icon: Icons.lock_outline_rounded,
+                  iconColor: kLimeGreen,
+                  title: "การเข้ารหัสและความปลอดภัยของบัญชี",
+                  description:
+                      "ข้อมูลทุกการทำรายการถูกเข้ารหัสผ่านเครือข่ายความปลอดภัย SSL/TLS ข้อมูลการเข้าสู่ระบบถูกจัดเก็บใน Secure Vault ที่เข้ารหัสระดับฮาร์ดแวร์บนอุปกรณ์ของคุณ",
+                ),
+                const SizedBox(height: 10),
+
+                _buildPrivacyCard(
+                  icon: Icons.location_on_outlined,
+                  iconColor: Colors.amberAccent,
+                  title: "นโยบายการเข้าถึงตำแหน่งที่ตั้ง (GPS)",
+                  description:
+                      "แอปพลิเคชันจะดึงพิกัดตำแหน่งเฉพาะในจังหวะที่คุณกดปุ่ม 'เช็คอินสถานที่' เพื่อยืนยันการเข้าพบลูกค้าหน้างานจริงเท่านั้น ไม่มีการแอบติดตามตำแหน่งเบื้องหลังตลอดเวลา",
+                ),
+                const SizedBox(height: 10),
+
+                _buildPrivacyCard(
+                  icon: Icons.camera_alt_outlined,
+                  iconColor: Colors.purpleAccent,
+                  title: "สิทธิ์กล้องและการเข้าถึงคลังรูปภาพ",
+                  description:
+                      "ใช้สำหรับการถ่ายรูปหน้างานเพื่อแนบเป็นหลักฐานการเข้าพบลูกค้า และการเลือกรูปเพื่อตั้งเป็นโปรไฟล์ส่วนบุคคลเท่านั้น ไม่มีการเข้าถึงรูปภาพส่วนตัวอื่นๆ",
+                ),
+                const SizedBox(height: 10),
+
+                _buildPrivacyCard(
+                  icon: Icons.verified_user_outlined,
+                  iconColor: Colors.tealAccent,
+                  title: "การคุ้มครองข้อมูลส่วนบุคคล (PDPA)",
+                  description:
+                      "ข้อมูลคำสั่งซื้อ ลูกค้า และบันทึกการทำงานทั้งหมดเป็นข้อมูลลับเฉพาะภายในองค์กร Wallcraft Operations จะไม่ถูกเปิดเผยหรือส่งต่อไปยังบุคคลภายนอกโดยเด็ดขาด",
+                ),
+                const SizedBox(height: 20),
+
+                SizedBox(
+                  width: double.infinity,
+                  height: 46,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.1),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text("เข้าใจแล้ว"),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPrivacyCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String description,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  description,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.white70,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _checkAppUpdate() async {
     try {
       final response = await http
@@ -740,7 +1208,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                                   setStateDialog(() {
                                     progress = event.value ?? '';
                                   });
-                                  if (event.status == OtaStatus.INSTALLING && context.mounted) {
+                                  if (event.status == OtaStatus.INSTALLING &&
+                                      context.mounted) {
                                     Navigator.of(context).pop();
                                   }
                                 });
@@ -1080,155 +1549,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     );
   }
 
-  void _showSupportDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF18181B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.support_agent_rounded, color: kLimeGreen),
-            SizedBox(width: 8),
-            Text(
-              "ศูนย์ช่วยเหลือ & ติดต่อแอดมิน",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              "หากพบปัญหาในการใช้งานระบบ หรือต้องการสอบถามข้อมูลเพิ่มเติม สามารถติดต่อทีมงานผู้ดูแลระบบได้เลยครับ",
-              style: TextStyle(color: Colors.white70, fontSize: 13, height: 1.5),
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.05),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: const Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.chat_bubble_outline_rounded,
-                          size: 16, color: kLimeGreen),
-                      SizedBox(width: 8),
-                      Text("LINE Admin: ",
-                          style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text("@wallcraft",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12)),
-                    ],
-                  ),
-                  SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.email_outlined,
-                          size: 16, color: Colors.blueAccent),
-                      SizedBox(width: 8),
-                      Text("Email: ",
-                          style: TextStyle(color: Colors.grey, fontSize: 12)),
-                      Text("support@wallcraft.co.th",
-                          style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("ตกลง",
-                style: TextStyle(
-                    color: kLimeGreen, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showTermsDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF18181B),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.verified_user_rounded, color: Colors.blueAccent),
-            SizedBox(width: 8),
-            Text(
-              "ข้อกำหนด & ความเป็นส่วนตัว",
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: const SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "นโยบายความปลอดภัยข้อมูล",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                "ระบบ Wallcraft Operations ให้ความสำคัญสูงสุดกับการปกป้องข้อมูลส่วนบุคคล ข้อมูลคำสั่งซื้อ และพิกัดสถานที่ปฏิบัติงาน ข้อมูลทั้งหมดจะถูกเข้ารหัสผ่านเครือข่ายความปลอดภัย SSL/TLS และใช้งานเฉพาะภายในองค์กรเท่านั้น",
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-              ),
-              SizedBox(height: 12),
-              Text(
-                "การเข้าถึงสิทธิ์ตำแหน่ง (GPS)",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-              SizedBox(height: 6),
-              Text(
-                "ระบบใช้ตำแหน่งที่ตั้งเพื่อการเช็คอินสถานที่ปฏิบัติงานจริงของเซลล์และทีมงานภาคสนามเท่านั้น โดยไม่มีการติดตามตำแหน่งเบื้องหลังตลอดเวลา",
-                style: TextStyle(color: Colors.white70, fontSize: 12, height: 1.5),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("ปิด", style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _confirmLogout() {
     showDialog(
       context: context,
@@ -1406,7 +1726,6 @@ class _ProfileScreenState extends State<ProfileScreen>
                                 onPressed: () {
                                   _fetchProfile();
                                   _calcCacheSize();
-                                  _checkCheckinStatus();
                                 },
                               ),
                             ],
@@ -1431,134 +1750,36 @@ class _ProfileScreenState extends State<ProfileScreen>
                                     // 1. Profile Header Card
                                     _buildProfileHeaderCard(),
 
-                                    // 2. Quick Status Bar
-                                    _buildQuickStatusBar(),
-
-                                    // 3. Work & Tools Shortcuts Group
+                                    // 2. หมวด: ความปลอดภัย & บัญชี (Security & Account)
                                     _buildGroupCard(
-                                      title: "เครื่องมือการทำงาน (WORK & TOOLS)",
+                                      title: "ความปลอดภัย & บัญชี (ACCOUNT & SECURITY)",
                                       children: [
                                         _buildMenuTile(
-                                          icon: Icons.add_location_alt_rounded,
-                                          iconColor: Colors.blueAccent,
-                                          iconBgColor: Colors.blueAccent
-                                              .withValues(alpha: 0.15),
-                                          title: "ลีด & เช็คอินสถานที่",
-                                          subtitle:
-                                              "บันทึกข้อมูลลูกค้าและพิกัดเช็คอิน",
-                                          onTap: () async {
-                                            await Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const PurchaseOrderScreen(),
-                                              ),
-                                            );
-                                            _checkCheckinStatus();
-                                          },
-                                        ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.inventory_2_rounded,
-                                          iconColor: Colors.cyanAccent,
-                                          iconBgColor: Colors.cyanAccent
-                                              .withValues(alpha: 0.15),
-                                          title: "เช็คสต็อกสินค้าคงคลัง",
-                                          subtitle:
-                                              "ค้นหารายการและตรวจสอบยอดคงเหลือ",
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const StockManagementPage(),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.receipt_long_rounded,
-                                          iconColor: const Color(0xFFB388FF),
-                                          iconBgColor: const Color(0xFFB388FF)
-                                              .withValues(alpha: 0.15),
-                                          title: "รายการสั่งซื้อ PI Records",
-                                          subtitle:
-                                              "ติดตามสถานะเอกสารสั่งซื้อและยอดขาย",
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const PiRecordsPage(),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.price_check_rounded,
-                                          iconColor: Colors.amberAccent,
-                                          iconBgColor: Colors.amberAccent
-                                              .withValues(alpha: 0.15),
-                                          title: "เช็คราคาสินค้า (Price Check)",
-                                          subtitle:
-                                              "คำนวณและตรวจสอบราคาสินค้า",
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const PriceCheckScreen(),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.calendar_month_rounded,
+                                          icon: Icons.lock_reset_rounded,
                                           iconColor: kLimeGreen,
                                           iconBgColor: kLimeGreen
                                               .withValues(alpha: 0.15),
-                                          title: "แผนงานเข้าพบลูกค้า (Visit Planner)",
+                                          title: "เปลี่ยนรหัสผ่าน (Change Password)",
                                           subtitle:
-                                              "ตารางนัดหมายและการเข้าพบลูกค้า",
-                                          onTap: () {
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    const VisitPlannerScreen(),
-                                              ),
-                                            );
-                                          },
+                                              "กรอกรหัสผ่านปัจจุบันเพื่อตั้งรหัสใหม่",
+                                          onTap: _showChangePasswordModal,
                                         ),
-                                        if (_isAdmin) ...[
-                                          _buildDivider(),
-                                          _buildMenuTile(
-                                            icon: Icons.analytics_rounded,
-                                            iconColor: const Color(0xFFFFD54F),
-                                            iconBgColor: const Color(0xFFFFD54F)
-                                                .withValues(alpha: 0.15),
-                                            title:
-                                                "สรุปภาพรวมสำหรับผู้บริหาร (Admin)",
-                                            subtitle:
-                                                "สถิติยอดขายและภาพรวมทั้งระบบ",
-                                            onTap: () {
-                                              Navigator.push(
-                                                context,
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      const AdminSummaryScreen(),
-                                                ),
-                                              );
-                                            },
-                                          ),
-                                        ],
+                                        _buildDivider(),
+                                        _buildMenuTile(
+                                          icon: Icons.shield_outlined,
+                                          iconColor: Colors.blueAccent,
+                                          iconBgColor: Colors.blueAccent
+                                              .withValues(alpha: 0.15),
+                                          title:
+                                              "ความเป็นส่วนตัว & ความปลอดภัย",
+                                          subtitle:
+                                              "นโยบาย GPS, สิทธิ์การใช้งาน และ PDPA",
+                                          onTap: _showPrivacySecurityModal,
+                                        ),
                                       ],
                                     ),
 
-                                    // 4. App Preferences Group
+                                    // 3. หมวด: การตั้งค่าระบบ (Preferences)
                                     _buildGroupCard(
                                       title: "การตั้งค่าระบบ (APP PREFERENCES)",
                                       children: [
@@ -1611,39 +1832,37 @@ class _ProfileScreenState extends State<ProfileScreen>
                                           ),
                                           onTap: _confirmClearCache,
                                         ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.language_rounded,
-                                          iconColor: Colors.lightBlueAccent,
-                                          iconBgColor: Colors.lightBlueAccent
-                                              .withValues(alpha: 0.15),
-                                          title: "ภาษาของระบบ (Language)",
-                                          subtitle:
-                                              "ภาษาที่แสดงผลในแอปพลิเคชัน",
-                                          trailing: const Text(
-                                            "ไทย (TH)",
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              fontWeight: FontWeight.bold,
-                                              color: Colors.white70,
-                                            ),
-                                          ),
-                                          showChevron: false,
-                                          onTap: null,
-                                        ),
                                       ],
                                     ),
 
-                                    // 5. About & Support Group
+                                    // 4. หมวด: คู่มือ & เกี่ยวกับระบบ (Help & About)
                                     _buildGroupCard(
-                                      title: "เกี่ยวกับระบบ (ABOUT & SUPPORT)",
+                                      title: "คู่มือ & เกี่ยวกับระบบ (HELP & ABOUT)",
                                       children: [
+                                        _buildMenuTile(
+                                          icon: Icons.menu_book_rounded,
+                                          iconColor: Colors.purpleAccent,
+                                          iconBgColor: Colors.purpleAccent
+                                              .withValues(alpha: 0.15),
+                                          title: "คู่มือ & คำถามที่พบบ่อย (FAQ)",
+                                          subtitle:
+                                              "ขั้นตอนเช็คอิน แผนงาน สต็อก และวิธีแก้ปัญหา",
+                                          onTap: () {
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => const FaqScreen(),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                        _buildDivider(),
                                         _buildMenuTile(
                                           icon: Icons.system_update_rounded,
                                           iconColor: Colors.greenAccent,
                                           iconBgColor: Colors.greenAccent
                                               .withValues(alpha: 0.15),
-                                          title: "ตรวจสอบเวอร์ชันแอป",
+                                          title: "เวอร์ชันแอปพลิเคชัน",
                                           subtitle:
                                               "เวอร์ชันปัจจุบัน v$_appVersion",
                                           trailing: Container(
@@ -1668,34 +1887,12 @@ class _ProfileScreenState extends State<ProfileScreen>
                                           ),
                                           onTap: _checkAppUpdate,
                                         ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.support_agent_rounded,
-                                          iconColor: Colors.purpleAccent,
-                                          iconBgColor: Colors.purpleAccent
-                                              .withValues(alpha: 0.15),
-                                          title: "ศูนย์ช่วยเหลือ & ติดต่อแอดมิน",
-                                          subtitle:
-                                              "แจ้งปัญหาการใช้งานหรือขอความช่วยเหลือ",
-                                          onTap: _showSupportDialog,
-                                        ),
-                                        _buildDivider(),
-                                        _buildMenuTile(
-                                          icon: Icons.verified_user_rounded,
-                                          iconColor: Colors.blueGrey,
-                                          iconBgColor: Colors.blueGrey
-                                              .withValues(alpha: 0.15),
-                                          title: "ข้อกำหนด & ความเป็นส่วนตัว",
-                                          subtitle:
-                                              "นโยบายความปลอดภัยและข้อกำหนดระบบ",
-                                          onTap: _showTermsDialog,
-                                        ),
                                       ],
                                     ),
 
-                                    // 6. Danger Zone Group (Sign Out)
+                                    // 5. หมวด: ออกจากระบบ (Session)
                                     _buildGroupCard(
-                                      title: "บัญชีผู้ใช้งาน (SESSION)",
+                                      title: "ออกจากระบบ (SESSION)",
                                       children: [
                                         _buildMenuTile(
                                           icon: Icons.logout_rounded,
@@ -1992,132 +2189,6 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildQuickStatusBar() {
-    return Container(
-      margin: const EdgeInsets.only(top: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: const Color(0xFF161618),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.06),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: InkWell(
-              onTap: () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const PurchaseOrderScreen()),
-                );
-                _checkCheckinStatus();
-              },
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: _isCheckedInToday
-                          ? kLimeGreen.withValues(alpha: 0.15)
-                          : Colors.amberAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      _isCheckedInToday
-                          ? Icons.check_circle_rounded
-                          : Icons.pending_rounded,
-                      size: 17,
-                      color: _isCheckedInToday
-                          ? kLimeGreen
-                          : Colors.amberAccent,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'เช็คอินวันนี้',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                        Text(
-                          _isCheckedInToday ? 'เรียบร้อยแล้ว' : 'ยังไม่เช็คอิน',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: _isCheckedInToday
-                                ? kLimeGreen
-                                : Colors.amberAccent,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 26,
-            color: Colors.white.withValues(alpha: 0.08),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: InkWell(
-              onTap: _showNotificationSettingsModal,
-              child: Row(
-                children: [
-                  Container(
-                    width: 32,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: Colors.purpleAccent.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.notifications_active_rounded,
-                      size: 17,
-                      color: Colors.purpleAccent,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'การแจ้งเตือน',
-                          style: TextStyle(fontSize: 10, color: Colors.grey),
-                        ),
-                        Text(
-                          _getNotiLabel(_notiLevel),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
