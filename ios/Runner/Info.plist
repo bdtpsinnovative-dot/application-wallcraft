@@ -26,6 +26,15 @@
     <string>$(FLUTTER_BUILD_NUMBER)</string>
     <key>LSRequiresIPhoneOS</key>
     <true/>
+
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>https</string>
+        <string>http</string>
+        <string>googlesheets</string>
+        <string>googledrive</string>
+        <string>googlechrome</string>
+    </array>
     
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>แอปนี้จำเป็นต้องใช้ตำแหน่งของคุณเพื่อแสดงข้อมูลที่เหมาะสมตามภูมิภาค</string>
