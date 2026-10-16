@@ -1337,10 +1337,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       // 1. Profile Header Card (Apple ID Style - สะอาด เรียบเนียน)
                       _buildProfileCard(),
 
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 14),
 
-                      // 2. หมวด: ความปลอดภัย & บัญชี
-                      _buildSectionHeader("บัญชีและความปลอดภัย"),
+                      // เมนูทั้งหมดรวมเป็นกล่องเดียวติดกัน (Single Seamless Block)
                       _buildGroupContainer([
                         _buildSettingsRow(
                           icon: Icons.key_rounded,
@@ -1355,13 +1354,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           subtitle: "นโยบาย GPS, สิทธิ์การใช้งาน และ PDPA",
                           onTap: _showPrivacySecurityModal,
                         ),
-                      ]),
-
-                      const SizedBox(height: 24),
-
-                      // 3. หมวด: การตั้งค่าระบบ
-                      _buildSectionHeader("การตั้งค่าแอป"),
-                      _buildGroupContainer([
+                        _buildDivider(),
                         _buildSettingsRow(
                           icon: Icons.notifications_none_rounded,
                           title: "การแจ้งเตือน",
@@ -1375,13 +1368,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           trailingText: _cacheSize,
                           onTap: _confirmClearCache,
                         ),
-                      ]),
-
-                      const SizedBox(height: 24),
-
-                      // 4. หมวด: คู่มือ & ระบบ
-                      _buildSectionHeader("ช่วยเหลือและข้อมูล"),
-                      _buildGroupContainer([
+                        _buildDivider(),
                         _buildSettingsRow(
                           icon: Icons.help_outline_rounded,
                           title: "คู่มือ & คำถามที่พบบ่อย (FAQ)",
@@ -1400,12 +1387,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           trailingText: "v$_appVersion",
                           onTap: _checkAppUpdate,
                         ),
-                      ]),
-
-                      const SizedBox(height: 24),
-
-                      // 5. ออกจากระบบ (เรียบเนียน เข้าเนื้อเดียวกัน)
-                      _buildGroupContainer([
+                        _buildDivider(),
                         _buildSettingsRow(
                           icon: Icons.logout_rounded,
                           iconColor: Colors.redAccent,
@@ -1417,7 +1399,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ]),
 
-                      const SizedBox(height: 40),
+                      const SizedBox(height: 36),
                     ],
                   ),
                 ),
@@ -1543,20 +1525,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, bottom: 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-          color: Colors.grey[400],
-          letterSpacing: 0.2,
-        ),
-      ),
-    );
-  }
 
   Widget _buildGroupContainer(List<Widget> children) {
     return Container(
