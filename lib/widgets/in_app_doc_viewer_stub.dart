@@ -20,7 +20,7 @@ class _MobileDocViewerState extends State<_MobileDocViewer> {
   bool _imageError = false;
 
   String? _getGoogleDriveId(String url) {
-    final match = RegExp(r'(?:file\/d\/|open\?id=|thumbnail\?id=)([a-zA-Z0-9_-]+)').firstMatch(url);
+    final match = RegExp(r'(?:file\/d\/|open\?id=|thumbnail\?id=|spreadsheets\/d\/|document\/d\/)([a-zA-Z0-9_-]+)').firstMatch(url);
     return match?.group(1);
   }
 
@@ -29,7 +29,7 @@ class _MobileDocViewerState extends State<_MobileDocViewer> {
   }
 
   bool _isSheet(String url) {
-    return url.contains('spreadsheets') || url.contains('sheets.google.com');
+    return url.contains('spreadsheets') || url.contains('sheets.google.com') || url.contains('.xlsx') || url.contains('.csv');
   }
 
   bool _isDoc(String url) {
@@ -41,28 +41,41 @@ class _MobileDocViewerState extends State<_MobileDocViewer> {
   }
 
   Future<void> _openFullInAppBrowser(BuildContext context) async {
-    final cleanUrl = widget.url.startsWith('http') ? widget.url : 'https://${widget.url}';
+    String cleanUrl = widget.url.startsWith('http') ? widget.url : 'https://${widget.url}';
+    final sheetId = _getGoogleDriveId(cleanUrl);
+    // หากเป็น Google Sheet ที่ต่อท้ายด้วย /preview ให้แปลงเป็น /edit สำหรับเปิดในแอป Sheet หรือเบราว์เซอร์
+    if (_isSheet(cleanUrl) && sheetId != null && cleanUrl.endsWith('/preview')) {
+      cleanUrl = 'https://docs.google.com/spreadsheets/d/$sheetId/edit';
+    }
+
     final uri = Uri.parse(cleanUrl);
     try {
       bool launched = false;
+
+      // 1. ลองเปิดด้วย externalApplication ก่อนเสมอ เพื่อให้เปิดในแอป Google Sheets / Drive / Chrome โดยตรง
       try {
         launched = await launchUrl(
           uri,
-          mode: LaunchMode.inAppBrowserView,
-          browserConfiguration: const BrowserConfiguration(showTitle: true),
+          mode: LaunchMode.externalApplication,
         );
       } catch (_) {}
 
+      // 2. ถ้าไม่ได้ ให้ลองเปิดเป็น In-App Browser View
+      if (!launched) {
+        try {
+          launched = await launchUrl(
+            uri,
+            mode: LaunchMode.inAppBrowserView,
+            browserConfiguration: const BrowserConfiguration(showTitle: true),
+          );
+        } catch (_) {}
+      }
+
+      // 3. Fallback สุดท้ายเป็น In-App WebView
       if (!launched) {
         try {
           launched = await launchUrl(uri, mode: LaunchMode.inAppWebView);
         } catch (_) {}
-      }
-
-      if (!launched) {
-        if (await canLaunchUrl(uri)) {
-          launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
       }
 
       if (!launched && context.mounted) {
@@ -109,10 +122,9 @@ class _MobileDocViewerState extends State<_MobileDocViewer> {
   Widget build(BuildContext context) {
     final driveId = _getGoogleDriveId(widget.url);
     final isImage = _isDirectImage(widget.url);
-    final isSheet = _isSheet(widget.url);
 
-    // ถ้าไม่ใช่ Google Sheet และมี Drive ID หรือเป็น Direct Image ให้ลองแสดงรูปพรีวิว
-    final canPreviewImage = !_imageError && !isSheet && (isImage || driveId != null);
+    // 🌟 รองรับพรีวิวรูปภาพทั้ง PDF, Google Drive และ Google Sheets (ผ่าน Google Drive Thumbnail API)
+    final canPreviewImage = !_imageError && (isImage || driveId != null);
     final previewUrl = isImage
         ? widget.url
         : (driveId != null ? 'https://lh3.googleusercontent.com/d/$driveId=w1000' : null);
@@ -234,7 +246,7 @@ class _MobileDocViewerState extends State<_MobileDocViewer> {
               ),
               const SizedBox(height: 24),
 
-              // Button: เปิดดูเอกสารแบบเต็ม (In-App Browser)
+              // Button: เปิดดูเอกสารแบบเต็ม (In-App Browser / App)
               ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 320),
                 child: SizedBox(
@@ -249,9 +261,9 @@ class _MobileDocViewerState extends State<_MobileDocViewer> {
                     ),
                     onPressed: () => _openFullInAppBrowser(context),
                     icon: const Icon(Icons.open_in_browser_rounded, size: 18),
-                    label: const Text(
-                      'เปิดดูเอกสารแบบเต็ม',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+                    label: Text(
+                      isSheet ? 'เปิดใน Google Sheets / เบราว์เซอร์' : 'เปิดดูเอกสารแบบเต็ม',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),

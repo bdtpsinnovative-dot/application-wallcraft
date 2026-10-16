@@ -396,10 +396,10 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
 
   String _getDocumentTypeLabel(String title, String rawUrl) {
     final lower = '$title $rawUrl'.toLowerCase();
-    if (lower.contains('.pdf') || lower.contains('drive.google.com') || lower.contains('po') || lower.contains('doc')) {
-      return 'ดาวน์โหลด PDF';
-    } else if (lower.contains('spreadsheets') || lower.contains('excel') || lower.contains('.xlsx') || lower.contains('.csv')) {
+    if (lower.contains('spreadsheets') || lower.contains('excel') || lower.contains('.xlsx') || lower.contains('.csv') || lower.contains('sheet')) {
       return 'ดาวน์โหลดตาราง';
+    } else if (lower.contains('.pdf') || lower.contains('drive.google.com') || lower.contains('po')) {
+      return 'ดาวน์โหลด PDF';
     } else if (lower.contains('.jpg') || lower.contains('.jpeg') || lower.contains('.png') || lower.contains('.webp')) {
       return 'บันทึกรูป';
     }
@@ -748,6 +748,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
     final targetUrl = clean.startsWith('http') ? clean : 'https://$clean';
     final downloadLabel = _getDocumentTypeLabel(title, rawUrl);
     final isPdf = downloadLabel.contains('PDF');
+    final isSheet = downloadLabel.contains('ตาราง') || rawUrl.contains('spreadsheets') || rawUrl.contains('.xlsx');
 
     showDialog(
       context: context,
@@ -783,8 +784,10 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                   child: Row(
                     children: [
                       Icon(
-                        isPdf ? Icons.picture_as_pdf_rounded : Icons.description_rounded,
-                        color: Colors.white70,
+                        isSheet
+                            ? Icons.table_chart_rounded
+                            : (isPdf ? Icons.picture_as_pdf_rounded : Icons.description_rounded),
+                        color: isSheet ? const Color(0xFF10B981) : Colors.white70,
                         size: 20,
                       ),
                       const SizedBox(width: 8),
