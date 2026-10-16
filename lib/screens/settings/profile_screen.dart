@@ -19,6 +19,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import 'custom_crop_screen.dart';
 import 'faq_screen.dart';
+import '../teams/teams_screen.dart';
 
 // 🎨 Palette สีสไตล์ Monochrome Dark Luxury (เรียบเนียน เนื้อเดียวกัน)
 const Color kBgPureDark = Color(0xFF0C0C0E);
@@ -49,6 +50,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _notiLevel = 'team'; // 'none', 'team', 'all'
   String _cacheSize = '0.0 MB';
   String _appVersion = '2.0.7';
+  int? _serverLatencyMs;
+  bool _isCheckingServer = false;
 
   final ImagePicker _picker = ImagePicker();
 
@@ -58,6 +61,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _fetchProfile();
     _loadAppVersion();
     _calcCacheSize();
+    _checkServerPing();
   }
 
   @override
@@ -1158,6 +1162,109 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _checkServerPing({bool showToast = false}) async {
+    if (_isCheckingServer) return;
+    setState(() => _isCheckingServer = true);
+    final stopwatch = Stopwatch()..start();
+    try {
+      final res = await http
+          .get(Uri.parse('${AppConfig.baseUrl}/check-update'))
+          .timeout(const Duration(seconds: 4));
+      stopwatch.stop();
+      if (!mounted) return;
+      if (res.statusCode == 200 || res.statusCode == 404) {
+        setState(() {
+          _serverLatencyMs = stopwatch.elapsedMilliseconds;
+          _isCheckingServer = false;
+        });
+        if (showToast) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('⚡ เซิร์ฟเวอร์ออนไลน์ปกติ (Latency: ${_serverLatencyMs}ms)'),
+              backgroundColor: kSurfaceDark,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      } else {
+        setState(() {
+          _serverLatencyMs = -1;
+          _isCheckingServer = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _serverLatencyMs = -1;
+          _isCheckingServer = false;
+        });
+        if (showToast) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('⚠️ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Widget _buildServerStatusIndicator() {
+    if (_isCheckingServer && _serverLatencyMs == null) {
+      return const Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 10,
+            height: 10,
+            child: CircularProgressIndicator(strokeWidth: 1.5, color: Colors.white54),
+          ),
+          SizedBox(width: 6),
+          Text("กำลังตรวจ...", style: TextStyle(fontSize: 12, color: Colors.white54)),
+        ],
+      );
+    }
+
+    final isOk = _serverLatencyMs != null && _serverLatencyMs! >= 0;
+    final dotColor = isOk ? const Color(0xFF00E676) : Colors.redAccent;
+    final statusText = isOk ? "ออนไลน์ (${_serverLatencyMs}ms)" : "ออฟไลน์";
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 7,
+          height: 7,
+          decoration: BoxDecoration(
+            color: dotColor,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: dotColor.withValues(alpha: 0.5),
+                blurRadius: 4,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          statusText,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: dotColor,
+          ),
+        ),
+      ],
+    );
+  }
+
   void _showUpdateDialog(String latestVersion, String downloadUrl) {
     showDialog(
       context: context,
@@ -1356,10 +1463,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         _buildDivider(),
                         _buildSettingsRow(
+                          icon: Icons.groups_outlined,
+                          title: "ข้อมูลสังกัด & เพื่อนร่วมทีม",
+                          subtitle: teamNameCtrl.text.isEmpty
+                              ? "ดูรายชื่อทีมและสมาชิกทั้งหมด"
+                              : "สังกัดทีม: ${teamNameCtrl.text}",
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const TeamsScreen()),
+                            );
+                          },
+                        ),
+                        _buildDivider(),
+                        _buildSettingsRow(
                           icon: Icons.notifications_none_rounded,
                           title: "การแจ้งเตือน",
                           trailingText: _getNotiLabel(_notiLevel),
                           onTap: _showNotificationSettingsModal,
+                        ),
+                        _buildDivider(),
+                        _buildSettingsRow(
+                          icon: Icons.language_rounded,
+                          title: "ภาษาของระบบ",
+                          subtitle: "ภาษาเริ่มต้นของระบบ (ระบบล็อกไว้)",
+                          trailingWidget: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                "ไทย (TH)",
+                                style: TextStyle(fontSize: 12, color: Colors.grey[400]),
+                              ),
+                              const SizedBox(width: 4),
+                              const Icon(Icons.lock_rounded, size: 13, color: Colors.white38),
+                            ],
+                          ),
+                          showChevron: false,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text("ระบบถูกล็อกให้แสดงผลเป็นภาษาไทย (TH) เป็นค่าเริ่มต้น"),
+                                backgroundColor: kSurfaceDark,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          },
                         ),
                         _buildDivider(),
                         _buildSettingsRow(
@@ -1379,6 +1529,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               MaterialPageRoute(builder: (_) => const FaqScreen()),
                             );
                           },
+                        ),
+                        _buildDivider(),
+                        _buildSettingsRow(
+                          icon: Icons.cloud_done_outlined,
+                          title: "สถานะการเชื่อมต่อเซิร์ฟเวอร์",
+                          subtitle: "แตะเพื่อทดสอบความเร็ว API",
+                          trailingWidget: _buildServerStatusIndicator(),
+                          onTap: () => _checkServerPing(showToast: true),
                         ),
                         _buildDivider(),
                         _buildSettingsRow(
@@ -1547,6 +1705,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Color? titleColor,
     String? subtitle,
     String? trailingText,
+    Widget? trailingWidget,
     bool showChevron = true,
     required VoidCallback onTap,
   }) {
@@ -1592,12 +1751,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
-              if (trailingText != null) ...[
+              if (trailingWidget != null) ...[
+                trailingWidget,
+                if (showChevron) const SizedBox(width: 4),
+              ] else if (trailingText != null) ...[
                 Text(
                   trailingText,
                   style: TextStyle(fontSize: 12, color: Colors.grey[400]),
                 ),
-                const SizedBox(width: 4),
+                if (showChevron) const SizedBox(width: 4),
               ],
               if (showChevron)
                 const Icon(Icons.chevron_right_rounded, color: Colors.white24, size: 20),
