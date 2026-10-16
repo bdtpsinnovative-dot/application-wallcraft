@@ -43,7 +43,7 @@ void main() async {
 
   runApp(
     DevicePreview(
-      enabled: !kReleaseMode,
+      enabled: kIsWeb && !kReleaseMode, // ปิดบนเครื่องจริง (Android/iOS) ไม่ให้มีกรอบมือถือซ้อน
       defaultDevice: Devices.ios.iPhone13ProMax,
       builder: (context) => const MyApp(),
     ),
