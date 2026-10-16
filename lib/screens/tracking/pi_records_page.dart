@@ -753,9 +753,12 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
       context: context,
       barrierColor: Colors.black.withOpacity(0.85),
       builder: (ctx) {
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isNarrow = screenWidth < 520;
+
         return Dialog(
           backgroundColor: const Color(0xFF161618),
-          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
             side: BorderSide(color: Colors.white.withOpacity(0.12)),
@@ -771,7 +774,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
               children: [
                 // Header
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E22),
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
@@ -784,7 +787,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                         color: Colors.white70,
                         size: 20,
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           title,
@@ -797,32 +800,49 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
 
                       // 1. ปุ่มดาวน์โหลด PDF / บันทึกรูป (Dynamic Label & Icon)
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black,
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          visualDensity: VisualDensity.compact,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          elevation: 0,
+                      if (isNarrow)
+                        IconButton(
+                          tooltip: downloadLabel,
+                          icon: Icon(
+                            isPdf ? Icons.picture_as_pdf_rounded : Icons.download_rounded,
+                            size: 18,
+                            color: Colors.white,
+                          ),
+                          padding: const EdgeInsets.all(6),
+                          constraints: const BoxConstraints(),
+                          onPressed: () => _showSaveImagesDialog(
+                            parentContext: context,
+                            title: title,
+                            rawUrl: rawUrl,
+                          ),
+                        )
+                      else
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                            visualDensity: VisualDensity.compact,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            elevation: 0,
+                          ),
+                          onPressed: () => _showSaveImagesDialog(
+                            parentContext: context,
+                            title: title,
+                            rawUrl: rawUrl,
+                          ),
+                          icon: Icon(
+                            isPdf ? Icons.picture_as_pdf_rounded : Icons.download_rounded,
+                            size: 14,
+                          ),
+                          label: Text(
+                            downloadLabel,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+                          ),
                         ),
-                        onPressed: () => _showSaveImagesDialog(
-                          parentContext: context,
-                          title: title,
-                          rawUrl: rawUrl,
-                        ),
-                        icon: Icon(
-                          isPdf ? Icons.picture_as_pdf_rounded : Icons.download_rounded,
-                          size: 14,
-                        ),
-                        label: Text(
-                          downloadLabel,
-                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
-                        ),
-                      ),
                       const SizedBox(width: 4),
 
                       // 2. ปุ่มแชร์ (ส่งเข้า LINE / Social / คัดลอกลิงก์)
@@ -835,9 +855,9 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                       ),
                       const SizedBox(width: 4),
 
-                      // 3. ปุ่มเปิดแท็บใหม่
+                      // 3. ปุ่มเปิดในเบราว์เซอร์ภายนอก
                       IconButton(
-                        tooltip: 'เปิดในแท็บใหม่',
+                        tooltip: 'เปิดในเบราว์เซอร์ภายนอก',
                         icon: const Icon(Icons.open_in_new_rounded, color: Colors.white54, size: 18),
                         padding: const EdgeInsets.all(6),
                         constraints: const BoxConstraints(),
@@ -895,60 +915,9 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
       return;
     }
 
-    // ถ้ากำลังรันบน Web ให้เปิดเป็น In-App Document Modal ทันที
-    if (kIsWeb) {
-      _showDocumentModal(title, clean);
-      return;
-    }
-
-    try {
-      final uri = Uri.parse(clean.startsWith('http') ? clean : 'https://$clean');
-
-      // 1. ลองเปิดเป็น In-App Browser Modal (Chrome Custom Tabs บน Android / SFSafariViewController บน iOS)
-      // โหมดนี้จะเลื่อนเปิดขึ้นมาเป็นหน้าต่างซ้อนในแอป (Modal Sheet) มีปุ่มปิด (X) บนหัวแถบ
-      // และยังแชร์คุกกี้กับบัญชี Google ทำให้เปิด Google Drive / Sheets ได้สะดวก ไม่หลุดออกจากแอป
-      bool launched = false;
-      try {
-        launched = await launchUrl(
-          uri,
-          mode: LaunchMode.inAppBrowserView,
-          browserConfiguration: const BrowserConfiguration(showTitle: true),
-        );
-      } catch (_) {}
-
-      // 2. ถ้าเครื่องไม่รองรับ inAppBrowserView ให้ลอง inAppWebView
-      if (!launched) {
-        try {
-          launched = await launchUrl(
-            uri,
-            mode: LaunchMode.inAppWebView,
-          );
-        } catch (_) {}
-      }
-
-      // 3. Fallback หากระบบไม่รองรับ In-App ใดๆ ให้เปิดผ่านแอปภายนอก
-      if (!launched) {
-        if (await canLaunchUrl(uri)) {
-          launched = await launchUrl(
-            uri,
-            mode: LaunchMode.externalApplication,
-          );
-        }
-      }
-
-      if (!launched) {
-        throw 'Cannot launch $clean';
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('ไม่สามารถเปิดลิงก์ได้: $clean', style: const TextStyle(color: Colors.white)),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-      }
-    }
+    // 🌟 เปิด In-App Document Modal เสมอ ทั้งบน Web และ Mobile
+    // จะไม่เด้งออกจากแอปทันที เพื่อให้ผู้ใช้สามารถดูเอกสารในโมดอลได้เลย
+    _showDocumentModal(title, clean);
   }
 
   Widget _buildFilterButton() {
