@@ -1180,7 +1180,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                                 Icon(Icons.apartment_rounded, color: Colors.white70, size: 16),
                                 SizedBox(width: 6),
                                 Text(
-                                  'แบรนด์สินค้า (Brand)',
+                                  'แบรนด์สินค้า',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -1214,7 +1214,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                                 Icon(Icons.local_shipping_outlined, color: Colors.white70, size: 16),
                                 SizedBox(width: 6),
                                 Text(
-                                  'สถานะการจัดส่ง (Status / ETD)',
+                                  'สถานะการจัดส่ง',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 14,
@@ -1249,7 +1249,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                                   Icon(Icons.person_outline_rounded, color: Colors.white70, size: 16),
                                   SizedBox(width: 6),
                                   Text(
-                                    'เซลล์ผู้ดูแล (Sale)',
+                                    'เซลล์ผู้ดูแล',
                                     style: TextStyle(
                                       color: Colors.white,
                                       fontSize: 14,
@@ -1552,13 +1552,13 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
   Widget _buildRecordCard(Map<String, dynamic> item) {
     final piSupplier = (item['piSupplier'] ?? '-').toString().trim();
     final supplier = (item['supplier'] ?? '-').toString().trim();
-    final orderNo = (item['orderNo'] ?? '').toString().trim();
-    final projectName = (item['projectName'] ?? '').toString().trim();
-    final saleName = (item['saleName'] ?? '').toString().trim();
+    final orderNo = (item['orderNo'] ?? item['order_no'] ?? '').toString().trim();
+    final projectName = (item['projectName'] ?? item['project_name'] ?? '').toString().trim();
+    final saleName = (item['saleName'] ?? item['sale_name'] ?? '').toString().trim();
     final etd = (item['etd'] ?? '-').toString().trim();
     final brand = (item['brand'] ?? '').toString().trim();
-    final amountYuan = (item['amountYuan'] ?? '').toString().trim();
-    final amountDollar = (item['amountDollar'] ?? '').toString().trim();
+    final amountYuan = (item['amountYuan'] ?? item['amount_yuan'] ?? '').toString().trim();
+    final amountDollar = (item['amountDollar'] ?? item['amount_dollar'] ?? '').toString().trim();
     final shippingMethod = (item['shippingMethod'] ?? '').toString().trim();
 
     final recordDate = (item['recordDate'] ?? item['record_date'] ?? '').toString().trim();
@@ -1569,6 +1569,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
     final hasSupplier = supplier.isNotEmpty && supplier != '-';
     final hasOrder = orderNo.isNotEmpty && orderNo != '-';
     final hasProject = projectName.isNotEmpty && projectName != '-';
+    final hasSale = saleName.isNotEmpty && saleName != '-';
 
     return Material(
       color: _cardDark,
@@ -1720,65 +1721,71 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                           child: Text('•', style: TextStyle(color: Colors.white24, fontSize: 12)),
                         ),
                     ],
-                    if (hasProject)
+                    if (hasProject) ...[
+                      const Icon(Icons.folder_outlined, color: Colors.white38, size: 13),
+                      const SizedBox(width: 4),
                       Expanded(
                         child: Text(
                           projectName,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: Colors.white54, fontSize: 12),
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
+                    ],
                   ],
                 ),
               ],
 
-              // 5. ขีดคั่น & ยอดเงิน & วิธีจัดส่ง & ปุ่มดูลูกศร
+              // 5. ขีดคั่น & ชื่อเซลล์/โปรเจกต์ & วิธีจัดส่ง & ปุ่มดูลูกศร (เอาราคาออกไปแสดงในโมดอลตามแชท)
               const SizedBox(height: 12),
               const Divider(color: Colors.white10, height: 1),
               const SizedBox(height: 12),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // ยอดเงิน (ทางซ้าย)
+                  // เซลล์ผู้ดูแล ทางซ้าย แทนที่จุดแสดงราคาเดิม (หากไม่มีให้แสดง 'เซลล์: -')
                   Expanded(
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: [
-                        if (amountDollar.isNotEmpty && amountDollar != '-')
-                          Text(
-                            amountDollar,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                            ),
+                    child: hasSale
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.person_outline_rounded, color: Colors.white38, size: 14),
+                              const SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  saleName.startsWith('เซลล์') ? saleName : 'เซลล์: $saleName',
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          )
+                        : const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.person_outline_rounded, color: Colors.white24, size: 14),
+                              SizedBox(width: 5),
+                              Flexible(
+                                child: Text(
+                                  'เซลล์: -',
+                                  style: TextStyle(
+                                    color: Colors.white38,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w400,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
-                        if (amountDollar.isNotEmpty &&
-                            amountDollar != '-' &&
-                            amountYuan.isNotEmpty &&
-                            amountYuan != '-')
-                          const Text('/', style: TextStyle(color: Colors.white24, fontSize: 12)),
-                        if (amountYuan.isNotEmpty && amountYuan != '-')
-                          Text(
-                            amountYuan,
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        if ((amountDollar.isEmpty || amountDollar == '-') &&
-                            (amountYuan.isEmpty || amountYuan == '-'))
-                          if (saleName.isNotEmpty && saleName != '-')
-                            Text(
-                              'เซลล์: $saleName',
-                              style: const TextStyle(color: Colors.white54, fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                      ],
-                    ),
                   ),
                   const SizedBox(width: 8),
 
@@ -1799,21 +1806,24 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
   }
 
   void _showRecordDetails(Map<String, dynamic> item) {
-    final piSupplier = (item['piSupplier'] ?? '-').toString();
-    final supplier = (item['supplier'] ?? '-').toString();
-    final orderNo = (item['orderNo'] ?? '-').toString();
-    final projectName = (item['projectName'] ?? '-').toString();
-    final saleName = (item['saleName'] ?? '-').toString();
-    final etd = (item['etd'] ?? '-').toString();
-    final brand = (item['brand'] ?? '-').toString();
-    final amountYuan = (item['amountYuan'] ?? '-').toString();
-    final amountDollar = (item['amountDollar'] ?? '-').toString();
-    final shippingMethod = (item['shippingMethod'] ?? '-').toString();
-    final recordDate = (item['recordDate'] ?? '-').toString();
-    final dateOrder = (item['dateOrder'] ?? '-').toString();
-    final paymentDate = (item['paymentDate'] ?? '-').toString();
-    final requestedDate = (item['requestedDate'] ?? '-').toString();
-    final deliveredDate = (item['deliveredDate'] ?? '-').toString();
+    final piSupplier = (item['piSupplier'] ?? '-').toString().trim();
+    final supplier = (item['supplier'] ?? '-').toString().trim();
+    final orderNo = (item['orderNo'] ?? item['order_no'] ?? '-').toString().trim();
+    final projectName = (item['projectName'] ?? item['project_name'] ?? '-').toString().trim();
+    final saleName = (item['saleName'] ?? item['sale_name'] ?? '-').toString().trim();
+    final etd = (item['etd'] ?? '-').toString().trim();
+    final brand = (item['brand'] ?? '-').toString().trim();
+    final amountYuan = (item['amountYuan'] ?? item['amount_yuan'] ?? '').toString().trim();
+    final amountDollar = (item['amountDollar'] ?? item['amount_dollar'] ?? '').toString().trim();
+    final shippingMethod = (item['shippingMethod'] ?? '-').toString().trim();
+    final recordDate = (item['recordDate'] ?? '-').toString().trim();
+    final dateOrder = (item['dateOrder'] ?? '-').toString().trim();
+    final paymentDate = (item['paymentDate'] ?? '-').toString().trim();
+    final requestedDate = (item['requestedDate'] ?? '-').toString().trim();
+    final deliveredDate = (item['deliveredDate'] ?? '-').toString().trim();
+
+    final hasDollar = amountDollar.isNotEmpty && amountDollar != '-';
+    final hasYuan = amountYuan.isNotEmpty && amountYuan != '-';
 
     showModalBottomSheet(
       context: context,
@@ -1868,24 +1878,93 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                 ),
                 const SizedBox(height: 16),
 
-                _buildDetailRow('ซัพพลายเออร์ (Supplier)', supplier),
-                _buildDetailRow('แบรนด์ (Brand)', brand),
-                _buildDetailRow('เลขคำสั่งซื้อ (Order No.)', orderNo),
-                _buildDetailRow('โปรเจกต์ (Project Name)', projectName),
-                _buildDetailRow('ผู้ดูแล (Sale Name)', saleName),
-                _buildDetailRow('สถานะ / กำหนดส่ง (ETD)', etd, valueColor: Colors.white),
-                _buildDetailRow('วิธีการจัดส่ง (Shipping)', _formatShippingMethod(shippingMethod), valueColor: const Color(0xFF7DD3FC)),
+                // 💰 กล่องแสดงราคา / ยอดสั่งซื้อเด่นชัดในโมดอล (ย้ายมาจากหน้าการ์ด)
+                if (hasDollar || hasYuan) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.payments_rounded, color: Color(0xFF34D399), size: 22),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'ราคา / ยอดสั่งซื้อ',
+                                style: TextStyle(
+                                  color: Colors.white54,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Wrap(
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                children: [
+                                  if (hasDollar)
+                                    Text(
+                                      amountDollar,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.3,
+                                      ),
+                                    ),
+                                  if (hasDollar && hasYuan)
+                                    const Text('/', style: TextStyle(color: Colors.white24, fontSize: 13)),
+                                  if (hasYuan)
+                                    Text(
+                                      amountYuan,
+                                      style: TextStyle(
+                                        color: hasDollar ? Colors.white70 : Colors.white,
+                                        fontSize: hasDollar ? 14 : 18,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
+                _buildDetailRow('ซัพพลายเออร์', supplier),
+                _buildDetailRow('แบรนด์', brand),
+                _buildDetailRow('เลขคำสั่งซื้อ', orderNo),
+                _buildDetailRow('โปรเจกต์', projectName),
+                _buildDetailRow('เซลล์ผู้ดูแล', saleName),
+                _buildDetailRow('สถานะ / กำหนดส่ง', etd, valueColor: Colors.white),
+                _buildDetailRow('วิธีการจัดส่ง', _formatShippingMethod(shippingMethod), valueColor: const Color(0xFF7DD3FC)),
                 const Divider(color: Colors.white10, height: 24),
 
                 _buildDetailRow('จำนวนเงิน (\$)', amountDollar, valueColor: Colors.white),
-                _buildDetailRow('จำนวนเงิน (Yuan)', amountYuan, valueColor: Colors.white70),
+                _buildDetailRow('จำนวนเงิน (หยวน)', amountYuan, valueColor: Colors.white70),
                 const Divider(color: Colors.white10, height: 24),
 
-                _buildDetailRow('วันที่บันทึก (Date)', recordDate),
-                _buildDetailRow('วันที่ลูกค้าชำระเงิน (Date Order)', dateOrder),
+                _buildDetailRow('วันที่บันทึก', recordDate),
+                _buildDetailRow('วันที่ลูกค้าชำระเงิน', dateOrder),
                 _buildDetailRow('วันที่ชำระเงินซัพพลายเออร์', paymentDate),
-                _buildDetailRow('วันที่ต้องการสินค้า (Requested)', requestedDate),
-                _buildDetailRow('วันที่จัดส่งถึง (Delivered)', deliveredDate),
+                _buildDetailRow('วันที่ต้องการสินค้า', requestedDate),
+                _buildDetailRow('วันที่จัดส่งถึง', deliveredDate),
 
                 // 📂 รายการเอกสารและไฟล์แนบ (รองรับทั้ง 1 ไฟล์ และ หลายๆ ไฟล์)
                 Builder(
@@ -1923,8 +2002,8 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                       }
                     }
 
-                    addAttachment(item['fileUrl'] ?? item['file_url'] ?? item['fileName'] ?? item['file_name'], 'ไฟล์เอกสารหลัก (File)', Icons.description_rounded);
-                    addAttachment(item['linkFileUrl'] ?? item['link_file_url'] ?? item['linkFile'] ?? item['link_file'], 'ลิงก์ที่เกี่ยวข้อง (Link/File)', Icons.link_rounded);
+                    addAttachment(item['fileUrl'] ?? item['file_url'] ?? item['fileName'] ?? item['file_name'], 'ไฟล์เอกสารหลัก', Icons.description_rounded);
+                    addAttachment(item['linkFileUrl'] ?? item['link_file_url'] ?? item['linkFile'] ?? item['link_file'], 'ลิงก์ที่เกี่ยวข้อง', Icons.link_rounded);
 
                     if (attachments.isEmpty) return const SizedBox.shrink();
 
@@ -2056,7 +2135,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           SizedBox(
-            width: 130,
+            width: 145,
             child: Text(
               label,
               style: const TextStyle(color: Colors.white38, fontSize: 12),

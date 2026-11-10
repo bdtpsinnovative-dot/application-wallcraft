@@ -59,6 +59,11 @@ class AppConfig {
 
     final envUrl = dotenv.env['BASE_URL']?.trim();
     if (envUrl != null && envUrl.isNotEmpty) {
+      // 🛡️ ระบบป้องกันความผิดพลาดระดับ Release:
+      // ถ้าบิลด์เป็น Release ติดตั้งบนมือถือจริง และใน .env เผลอตั้งเป็น Local IP ให้สลับไป Production ทันที
+      if (kReleaseMode && isLocalAddress(envUrl)) {
+        return productionBaseUrl;
+      }
       return envUrl;
     }
 
