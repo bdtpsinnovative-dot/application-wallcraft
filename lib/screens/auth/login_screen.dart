@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -6,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 
 import '../../constants.dart';
+import '../../services/app_update_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/notification_service.dart';
 import '../home/home_screen.dart';
@@ -18,6 +20,51 @@ const Color kLimeGreen = Color(0xFFD2E862);
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  static String mapFriendlyErrorMessage(String serverError) {
+    final message = serverError.toLowerCase();
+    if (message.contains('invalid login credentials') ||
+        message.contains('invalid_grant')) {
+      return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
+    }
+    if (message.contains('email not confirmed')) {
+      return 'กรุณายืนยันอีเมลก่อนเข้าใช้งาน';
+    }
+    if (message.contains('user already registered') ||
+        message.contains('already exists')) {
+      return 'อีเมลนี้ถูกลงทะเบียนแล้ว กรุณาเข้าสู่ระบบ';
+    }
+    if (message.contains('password') && message.contains('6 characters')) {
+      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
+    }
+    if (message.contains('rate limit')) {
+      return 'ทำรายการบ่อยเกินไป กรุณารอสักครู่';
+    }
+    if (message.contains('banned')) {
+      return 'บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ';
+    }
+    if (message.contains('timeout') || message.contains('timed out')) {
+      return 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง';
+    }
+    if (message.contains('502') ||
+        message.contains('503') ||
+        message.contains('504') ||
+        message.contains('bad gateway') ||
+        message.contains('service unavailable') ||
+        message.contains('server error') ||
+        message.contains('formatexception') ||
+        message.contains('unexpected character')) {
+      return 'เซิร์ฟเวอร์ขัดข้องชั่วคราว กรุณาลองใหม่ภายหลัง';
+    }
+    if (message.contains('failed to fetch') ||
+        message.contains('clientexception') ||
+        message.contains('xmlhttprequest') ||
+        message.contains('socketexception') ||
+        message.contains('connection refused')) {
+      return 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่อ';
+    }
+    return 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
+  }
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -42,6 +89,11 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     _loadRememberedAccounts();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(AppUpdateService.checkForUpdate(context: context));
+      }
+    });
   }
 
   Future<void> _loadRememberedAccounts() async {
@@ -69,27 +121,8 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  String _getFriendlyErrorMessage(String serverError) {
-    final message = serverError.toLowerCase();
-    if (message.contains('invalid login credentials') ||
-        message.contains('invalid_grant')) {
-      return 'อีเมลหรือรหัสผ่านไม่ถูกต้อง';
-    }
-    if (message.contains('email not confirmed')) {
-      return 'กรุณายืนยันอีเมลก่อนเข้าใช้งาน';
-    }
-    if (message.contains('user already registered') ||
-        message.contains('already exists')) {
-      return 'อีเมลนี้ถูกลงทะเบียนแล้ว กรุณาเข้าสู่ระบบ';
-    }
-    if (message.contains('password') && message.contains('6 characters')) {
-      return 'รหัสผ่านต้องมีอย่างน้อย 6 ตัวอักษร';
-    }
-    if (message.contains('rate limit')) {
-      return 'ทำรายการบ่อยเกินไป กรุณารอสักครู่';
-    }
-    return 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง';
-  }
+  String _getFriendlyErrorMessage(String serverError) =>
+      LoginScreen.mapFriendlyErrorMessage(serverError);
 
   Future<void> _finishAuthentication() async {
     PurchaseOrderScreen.clearCache();
@@ -101,6 +134,8 @@ class _LoginScreenState extends State<LoginScreen> {
     } catch (fcmError) {
       debugPrint('FCM Token Upload Failed: $fcmError');
     }
+
+    unawaited(AppUpdateService.syncDeviceAndVersion(force: true));
 
     if (!mounted) return;
     Navigator.pushReplacement(
@@ -309,18 +344,31 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final url = isRegister ? AppConfig.registerUrl : AppConfig.loginUrl;
-      final response = await http.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': emailCtrl.text.trim(),
-          'password': passCtrl.text,
-        }),
-      );
-      final decoded = jsonDecode(response.body);
-      final data = decoded is Map
-          ? Map<String, dynamic>.from(decoded)
-          : <String, dynamic>{};
+      final response = await http
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': emailCtrl.text.trim(),
+              'password': passCtrl.text,
+            }),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      Map<String, dynamic> data = <String, dynamic>{};
+      if (response.body.trim().isNotEmpty) {
+        try {
+          final decoded = jsonDecode(response.body);
+          if (decoded is Map) {
+            data = Map<String, dynamic>.from(decoded);
+          }
+        } on FormatException {
+          if (response.statusCode >= 500) {
+            throw Exception('Server error ${response.statusCode}');
+          }
+          rethrow;
+        }
+      }
 
       if (response.statusCode == 200) {
         if (data['session'] != null) {
@@ -353,11 +401,29 @@ class _LoginScreenState extends State<LoginScreen> {
           );
         }
       } else {
-        throw data['error'] ?? 'Authentication failed';
+        throw Exception(
+          data['error']?.toString() ?? 'Server error ${response.statusCode}',
+        );
       }
-    } on SocketException {
+    } on SocketException catch (networkError) {
+      debugPrint('❌ [LoginScreen] SocketException: $networkError');
       if (mounted) setState(() => error = 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้');
+    } on TimeoutException catch (timeoutError) {
+      debugPrint('❌ [LoginScreen] TimeoutException: $timeoutError');
+      if (mounted) {
+        setState(
+          () => error = 'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
+        );
+      }
+    } on http.ClientException catch (clientError) {
+      debugPrint('❌ [LoginScreen] ClientException: $clientError');
+      if (mounted) {
+        setState(
+          () => error = _getFriendlyErrorMessage(clientError.toString()),
+        );
+      }
     } catch (submitError) {
+      debugPrint('❌ [LoginScreen] Submit error: $submitError');
       if (mounted) {
         setState(
           () => error = _getFriendlyErrorMessage(

@@ -103,4 +103,25 @@ void main() {
     expect(accounts.single.label, 'กฤต วอลล์คราฟท์');
     expect(accounts.single.avatarUrl, 'https://example.com/krit.webp');
   });
+
+  test('mapFriendlyErrorMessage translates web fetch, gateway, and credential errors', () {
+    expect(
+      LoginScreen.mapFriendlyErrorMessage('Invalid login credentials'),
+      'อีเมลหรือรหัสผ่านไม่ถูกต้อง',
+    );
+    expect(
+      LoginScreen.mapFriendlyErrorMessage(
+        'ClientException: Failed to fetch, uri=https://www.wallcraftthailand.com/api/v1/auth/login',
+      ),
+      'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบการเชื่อมต่อ',
+    );
+    expect(
+      LoginScreen.mapFriendlyErrorMessage('Server error 502 Bad Gateway'),
+      'เซิร์ฟเวอร์ขัดข้องชั่วคราว กรุณาลองใหม่ภายหลัง',
+    );
+    expect(
+      LoginScreen.mapFriendlyErrorMessage('TimeoutException after 0:00:20'),
+      'การเชื่อมต่อใช้เวลานานเกินไป กรุณาลองใหม่อีกครั้ง',
+    );
+  });
 }

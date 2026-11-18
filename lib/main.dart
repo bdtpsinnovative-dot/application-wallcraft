@@ -10,6 +10,7 @@ import 'package:firebase_core/firebase_core.dart'; // ✅ เพิ่มตั�
 import 'firebase_options.dart'; // ✅ เพิ่มตัวนี้ (ไฟล์ที่นายรัน flutterfire generate มา)
 import 'services/notification_service.dart'; // ✅ เพิ่มตัวนี้
 import 'services/auth_service.dart';
+import 'services/app_update_service.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'package:device_preview/device_preview.dart';
@@ -73,7 +74,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      unawaited(AuthService.ensureFreshSession());
+      unawaited(
+        AuthService.ensureFreshSession().then((_) {
+          return AppUpdateService.syncDeviceAndVersion();
+        }),
+      );
+      unawaited(AppUpdateService.checkForUpdate());
     }
   }
 
@@ -149,6 +155,7 @@ class _CheckAuthState extends State<CheckAuth> {
           token.isNotEmpty &&
           refreshResult != AuthRefreshResult.invalid;
       if (keepExistingSession) {
+        unawaited(AppUpdateService.syncDeviceAndVersion());
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(

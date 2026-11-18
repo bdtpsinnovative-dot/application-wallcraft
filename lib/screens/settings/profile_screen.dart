@@ -9,18 +9,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:ota_update/ota_update.dart';
 
 import '../../constants.dart';
 import '../auth/login_screen.dart';
 import '../orders/purchase_order_screen.dart';
 import '../../services/api_service.dart';
+import '../../services/app_update_service.dart';
 import '../../services/auth_service.dart';
 import 'custom_crop_screen.dart';
 import 'faq_screen.dart';
 import 'change_password_screen.dart';
 import '../teams/teams_screen.dart';
+import '../contacts/customer_directory_page.dart';
 
 // 🎨 Palette สีสไตล์ Monochrome Dark Luxury (เรียบเนียน เนื้อเดียวกัน)
 const Color kBgPureDark = Color(0xFF0C0C0E);
@@ -753,131 +753,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _checkAppUpdate() async {
-    try {
-      final response = await http
-          .get(Uri.parse('${AppConfig.baseUrl}/check-update'))
-          .timeout(const Duration(seconds: 10));
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final latestVersion = Platform.isIOS
-            ? (data['latest_version_ios'] ?? '1.0.0')
-            : (data['latest_version_android'] ?? '1.0.0');
-        final downloadUrl = Platform.isIOS
-            ? data['download_url_ios']
-            : data['download_url_android'];
-
-        if (_appVersion != latestVersion && downloadUrl != null) {
-          if (mounted) _showUpdateDialog(latestVersion, downloadUrl);
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  'คุณกำลังใช้งานเวอร์ชันล่าสุด (v$_appVersion) เรียบร้อยแล้ว',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                backgroundColor: kSurfaceDark,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            );
-          }
-        }
-      }
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('เวอร์ชันปัจจุบัน: v$_appVersion (เป็นเวอร์ชันล่าสุด)'),
-            backgroundColor: kSurfaceDark,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
-    }
-  }
-
-  void _showUpdateDialog(String latestVersion, String downloadUrl) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        String progress = '';
-        bool isDownloading = false;
-
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              backgroundColor: kSurfaceDark,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: const Text(
-                "มีอัปเดตเวอร์ชันใหม่!",
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              content: Text(
-                isDownloading
-                    ? "กำลังดาวน์โหลด... $progress%\nกรุณารอสักครู่"
-                    : "พบแอปเวอร์ชัน $latestVersion\nกรุณาอัปเดตเพื่อการใช้งานที่สมบูรณ์ที่สุดครับ",
-                style: const TextStyle(color: Colors.white70, height: 1.4),
-              ),
-              actions: [
-                if (!isDownloading)
-                  TextButton(
-                    child: const Text("ปิด", style: TextStyle(color: Colors.grey)),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDownloading ? Colors.grey : kLimeGreen,
-                    foregroundColor: Colors.black,
-                  ),
-                  onPressed: isDownloading
-                      ? null
-                      : () async {
-                          if (Platform.isIOS) {
-                            final Uri url = Uri.parse(downloadUrl);
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(url, mode: LaunchMode.externalApplication);
-                            }
-                            return;
-                          }
-                          setStateDialog(() {
-                            isDownloading = true;
-                            progress = '0';
-                          });
-                          try {
-                            OtaUpdate()
-                                .execute(
-                                  downloadUrl,
-                                  destinationFilename: 'wallcraft_update_$latestVersion.apk',
-                                )
-                                .listen((OtaEvent event) {
-                                  setStateDialog(() {
-                                    progress = event.value ?? '';
-                                  });
-                                  if (event.status == OtaStatus.INSTALLING && context.mounted) {
-                                    Navigator.of(context).pop();
-                                  }
-                                });
-                          } catch (_) {
-                            setStateDialog(() => isDownloading = false);
-                          }
-                        },
-                  child: Text(
-                    isDownloading ? "กำลังโหลด..." : "อัปเดตเลย",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
+  Future<void> _checkAppUpdate() => AppUpdateService.checkForUpdate(
+        context: context,
+        showNoUpdateToast: true,
+      );
 
   void _confirmLogout() {
     showDialog(
@@ -983,6 +862,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
                       // เมนูทั้งหมดรวมเป็นกล่องเดียวติดกัน (Single Seamless Block)
                       _buildGroupContainer([
+                        _buildSettingsRow(
+                          icon: Icons.contact_phone_rounded,
+                          title: "สมุดเบอร์ & โทรคุยลูกค้า",
+                          subtitle: "Caller ID, ค้นหาเบอร์ลูกค้า และประวัติโทร",
+                          onTap: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const CustomerDirectoryPage(),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildDivider(),
                         _buildSettingsRow(
                           icon: Icons.key_rounded,
                           title: "เปลี่ยนรหัสผ่าน",

@@ -1,6 +1,7 @@
 // lib/services/notification_service.dart
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -179,6 +180,7 @@ class NotificationService {
   }
 
   static Future<String?> getFcmToken() async {
+    if (kIsWeb) return null;
     if (Platform.isIOS) {
       String? apnsToken;
       for (var attempt = 0; attempt < 10; attempt++) {

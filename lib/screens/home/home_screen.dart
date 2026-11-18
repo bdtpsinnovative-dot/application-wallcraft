@@ -6,12 +6,8 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:ota_update/ota_update.dart';
-// 🌟 เพิ่ม 2 Packages นี้สำหรับการเช็คเวอร์ชันและเปิดเว็บ
-import 'package:package_info_plus/package_info_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../services/app_update_service.dart';
 
 import '../tracking/tracking_screen.dart';
 import '../tracking/stock_management_page.dart';
@@ -31,6 +27,8 @@ import '../teams/teams_screen.dart'; // เก็บไว้เผื่อใ�
 import '../image_ai/ai_image_search_screen.dart';
 import '../notifications/NotificationScreen.dart';
 import '../../services/notification_service.dart';
+import '../../services/customer_directory_service.dart';
+import '../../widgets/mandatory_call_permission_gate.dart';
 
 const Color kDarkBg = Color(0xFF0F0F11);
 const Color kGlowPurple = Color(0xFF4A3080);
@@ -104,151 +102,14 @@ class _HomeScreenState extends State<HomeScreen>
     // ⚡ 1. Prefetch Pipeline เก็บในแรมทันทีที่เปิดแอป (ทำให้หน้า New Record & Visit Planner เปิดได้ทันใจ 0ms!)
     ApiService.getPipeline();
 
-    // 🌟 สั่งเช็คอัปเดตทันทีที่เปิดแอป
-    _checkForUpdate();
-  }
-
-  // ==========================================================
-  // 🌟 ส่วนของ Logic ตรวจสอบเวอร์ชันแอป
-  // ==========================================================
-  Future<void> _checkForUpdate() async {
-    try {
-      PackageInfo packageInfo = await PackageInfo.fromPlatform();
-      String currentVersion = packageInfo.version;
-
-      final response = await http.get(
-        Uri.parse('${AppConfig.baseUrl}/check-update'),
-      );
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-
-        // ดึง Version แยกตามระบบ
-        String latestVersionAndroid = data['latest_version_android'] ?? '1.0.0';
-        String latestVersionIos = data['latest_version_ios'] ?? '1.0.0';
-
-        // ดึง URL แยกตามระบบ
-        String downloadUrlAndroid = data['download_url_android'];
-        String downloadUrlIos = data['download_url_ios'];
-
-        // ตรวจสอบแยกแพลตฟอร์ม
-        String targetLatestVersion = Platform.isIOS
-            ? latestVersionIos
-            : latestVersionAndroid;
-        String targetUrl = Platform.isIOS ? downloadUrlIos : downloadUrlAndroid;
-
-        if (currentVersion != targetLatestVersion) {
-          _showUpdateDialog(targetLatestVersion, targetUrl);
-        }
+    // 🌟 ส่งข้อมูลเวอร์ชัน + รุ่นอุปกรณ์และเช็คอัปเดตทันทีที่เข้าแอป
+    unawaited(AppUpdateService.syncDeviceAndVersion());
+    unawaited(CustomerDirectoryService.syncDirectoryAndCallLogs());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(MandatoryCallPermissionGate.ensureGrantedOrBlock(context).then((_) { if (mounted) unawaited(AppUpdateService.checkForUpdate(context: context)); }));
       }
-    } catch (e) {
-      debugPrint("Error checking update: $e");
-    }
-  }
-
-  void _showUpdateDialog(String latestVersion, String downloadUrl) {
-    showDialog(
-      context: context,
-      barrierDismissible: false, // บังคับให้โหลดจนเสร็จหรือกดปิดเอง
-      builder: (BuildContext context) {
-        // ตัวแปรสำหรับเก็บสถานะใน Dialog
-        String progress = '';
-        bool isDownloading = false;
-
-        // ใช้ StatefulBuilder เพื่อให้อัปเดต UI แค่ในหน้าต่าง Dialog นี้
-        return StatefulBuilder(
-          builder: (context, setStateDialog) {
-            return AlertDialog(
-              backgroundColor: kCardDark,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              title: const Text(
-                "มีอัปเดตเวอร์ชันใหม่!",
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              content: Text(
-                isDownloading
-                    ? "กำลังดาวน์โหลด... $progress%\nกรุณารอสักครู่"
-                    : "พบแอปเวอร์ชัน $latestVersion\nกรุณาอัปเดตเพื่อการใช้งานที่สมบูรณ์ที่สุดครับ",
-                style: const TextStyle(color: Colors.white70, height: 1.5),
-              ),
-              actions: [
-                // ถ้ากำลังโหลดอยู่ ซ่อนปุ่มปิดไปเลย กัน User กดหนี
-                if (!isDownloading)
-                  TextButton(
-                    child: const Text(
-                      "ปิด",
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: isDownloading ? Colors.grey : kLimeGreen,
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                  ),
-                  // ถ้ากำลังโหลดอยู่ ให้ปุ่มกดไม่ได้ (null)
-                  onPressed: isDownloading
-                      ? null
-                      : () async {
-                          // ถ้าระบบเป็น iOS ให้เด้งเปิด TestFlight เลย
-                          if (Platform.isIOS) {
-                            final Uri url = Uri.parse(downloadUrl);
-                            if (await canLaunchUrl(url)) {
-                              await launchUrl(
-                                url,
-                                mode: LaunchMode.externalApplication,
-                              );
-                            }
-                            return; // หยุดการทำงาน ไม่ต้องลงไปรัน OTA ข้างล่าง
-                          }
-
-                          // ถ้าระบบเป็น Android ให้รัน OTA โหลด APK ตามปกติ
-                          setStateDialog(() {
-                            isDownloading = true;
-                            progress = '0';
-                          });
-
-                          try {
-                            OtaUpdate()
-                                .execute(
-                                  downloadUrl,
-                                  destinationFilename:
-                                      'wallcraft_update_$latestVersion.apk',
-                                )
-                                .listen((OtaEvent event) {
-                                  setStateDialog(() {
-                                    progress = event.value ?? '';
-                                  });
-                                  if (event.status == OtaStatus.INSTALLING) {
-                                    Navigator.of(context).pop();
-                                  }
-                                });
-                          } catch (e) {
-                            debugPrint(
-                              'Failed to make OTA update. Details: $e',
-                            );
-                            setStateDialog(() => isDownloading = false);
-                          }
-                        },
-                  child: Text(
-                    isDownloading ? "กำลังโหลด..." : "อัปเดตเลย",
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+    });
   }
 
   void _updateAdminStatus(bool isAdmin) {

@@ -10,8 +10,221 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../constants.dart';
 import '../../widgets/in_app_doc_viewer.dart';
 
+enum PiRecordSortOption {
+  recordDateDesc('วันที่บันทึก (ล่าสุด)'),
+  recordDateAsc('วันที่บันทึก (เก่าสุด)'),
+  lastUpdateDesc('อัปเดตล่าสุด'),
+  dateOrderDesc('ลูกค้าชำระ (ล่าสุด)'),
+  dateOrderAsc('ลูกค้าชำระ (เก่าสุด)'),
+  deliveredDateAsc('วันสินค้าถึง (เร็ว→ช้า)'),
+  deliveredDateDesc('วันสินค้าถึง (ล่าสุด)'),
+  statusPendingFirst('สถานะ: งานค้าง→เสร็จ'),
+  statusDoneFirst('สถานะ: เสร็จ→งานค้าง'),
+  orderNoAsc('เลข Order (A–Z)'),
+  saleNameAsc('ชื่อเซลล์ (ก–ฮ)');
+
+  const PiRecordSortOption(this.label);
+  final String label;
+}
+
 class PiRecordsPage extends StatefulWidget {
   const PiRecordsPage({super.key});
+
+  static DateTime? parseFlexibleDate(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty || trimmed == '-') return null;
+
+    final dateToken = trimmed.split(RegExp(r'\s+')).first;
+    final slashParts = dateToken.split('/');
+    if (slashParts.length == 3) {
+      final first = int.tryParse(slashParts[0]);
+      final second = int.tryParse(slashParts[1]);
+      int? year = int.tryParse(slashParts[2]);
+      if (first != null && second != null && year != null) {
+        if (year < 100) {
+          year += 2000;
+        } else if (year > 2400) {
+          year -= 543;
+        }
+        int day;
+        int month;
+        if (second > 12 && first >= 1 && first <= 12) {
+          month = first;
+          day = second;
+        } else {
+          day = first;
+          month = second;
+        }
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
+        }
+        return null;
+      }
+    }
+
+    final isoParsed = DateTime.tryParse(trimmed);
+    if (isoParsed != null) return isoParsed;
+
+    final dashParts = dateToken.split('-');
+    if (dashParts.length == 3 && dashParts[0].length <= 2) {
+      final day = int.tryParse(dashParts[0]);
+      final month = int.tryParse(dashParts[1]);
+      int? year = int.tryParse(dashParts[2]);
+      if (day != null && month != null && year != null) {
+        if (year < 100) {
+          year += 2000;
+        } else if (year > 2400) {
+          year -= 543;
+        }
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+          return DateTime(year, month, day);
+        }
+      }
+    }
+    return null;
+  }
+
+  static const int missingStatusRank = 99;
+
+  static int statusWorkflowRank(String? etd) {
+    final normalized = (etd ?? '').trim().toLowerCase();
+    if (normalized.isEmpty || normalized == '-') return missingStatusRank;
+
+    const orderedPatterns = <MapEntry<List<String>, int>>[
+      MapEntry(['รอสั่ง', 'pending order'], 1),
+      MapEntry(['รอชำระ', 'payment', 'unpaid'], 2),
+      MapEntry(['รอโรงงานส่งมา warehouse', 'รอโรงงาน'], 3),
+      MapEntry(['โรงงานกำลังส่ง', 'กำลังส่ง', 'shipping', 'transit'], 4),
+      MapEntry(['ถึง warehouse', 'warehouse แล้ว'], 5),
+      MapEntry(['อยู่ในสต๊อก', 'สต๊อก', 'stock'], 6),
+      MapEntry(['รอส่งให้ลูกค้า', 'รอส่งลูกค้า'], 7),
+      MapEntry(['ถึงลูกค้า', 'delivered'], 8),
+      MapEntry(['event', 'อีเวนต์'], 9),
+    ];
+
+    for (final entry in orderedPatterns) {
+      if (entry.key.any(normalized.contains)) {
+        return entry.value;
+      }
+    }
+    return 50;
+  }
+
+  static String _readField(
+    dynamic item,
+    String camelKey, [
+    String? snakeKey,
+  ]) {
+    if (item is! Map) return '';
+    final raw = item[camelKey] ?? (snakeKey != null ? item[snakeKey] : null);
+    final text = (raw ?? '').toString().trim();
+    return text == '-' ? '' : text;
+  }
+
+  static int _compareNullableDates(
+    DateTime? a,
+    DateTime? b, {
+    required bool descending,
+  }) {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+    return descending ? b.compareTo(a) : a.compareTo(b);
+  }
+
+  static int _compareNullableStrings(String a, String b) {
+    if (a.isEmpty && b.isEmpty) return 0;
+    if (a.isEmpty) return 1;
+    if (b.isEmpty) return -1;
+    return a.toLowerCase().compareTo(b.toLowerCase());
+  }
+
+  static void sortRecords(
+    List<dynamic> records,
+    PiRecordSortOption option,
+  ) {
+    records.sort((a, b) {
+      int primary = 0;
+      switch (option) {
+        case PiRecordSortOption.recordDateDesc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'recordDate', 'record_date')),
+            parseFlexibleDate(_readField(b, 'recordDate', 'record_date')),
+            descending: true,
+          );
+        case PiRecordSortOption.recordDateAsc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'recordDate', 'record_date')),
+            parseFlexibleDate(_readField(b, 'recordDate', 'record_date')),
+            descending: false,
+          );
+        case PiRecordSortOption.lastUpdateDesc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'lastUpdate', 'last_update')),
+            parseFlexibleDate(_readField(b, 'lastUpdate', 'last_update')),
+            descending: true,
+          );
+        case PiRecordSortOption.dateOrderDesc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'dateOrder', 'date_order')),
+            parseFlexibleDate(_readField(b, 'dateOrder', 'date_order')),
+            descending: true,
+          );
+        case PiRecordSortOption.dateOrderAsc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'dateOrder', 'date_order')),
+            parseFlexibleDate(_readField(b, 'dateOrder', 'date_order')),
+            descending: false,
+          );
+        case PiRecordSortOption.deliveredDateAsc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'deliveredDate', 'delivered_date')),
+            parseFlexibleDate(_readField(b, 'deliveredDate', 'delivered_date')),
+            descending: false,
+          );
+        case PiRecordSortOption.deliveredDateDesc:
+          primary = _compareNullableDates(
+            parseFlexibleDate(_readField(a, 'deliveredDate', 'delivered_date')),
+            parseFlexibleDate(_readField(b, 'deliveredDate', 'delivered_date')),
+            descending: true,
+          );
+        case PiRecordSortOption.statusPendingFirst:
+          final rankA = statusWorkflowRank(_readField(a, 'etd'));
+          final rankB = statusWorkflowRank(_readField(b, 'etd'));
+          primary = rankA.compareTo(rankB);
+        case PiRecordSortOption.statusDoneFirst:
+          final rankA = statusWorkflowRank(_readField(a, 'etd'));
+          final rankB = statusWorkflowRank(_readField(b, 'etd'));
+          if (rankA >= 50 && rankB >= 50) {
+            primary = rankA.compareTo(rankB);
+          } else if (rankA >= 50) {
+            primary = 1;
+          } else if (rankB >= 50) {
+            primary = -1;
+          } else {
+            primary = rankB.compareTo(rankA);
+          }
+        case PiRecordSortOption.orderNoAsc:
+          primary = _compareNullableStrings(
+            _readField(a, 'orderNo', 'order_no'),
+            _readField(b, 'orderNo', 'order_no'),
+          );
+        case PiRecordSortOption.saleNameAsc:
+          primary = _compareNullableStrings(
+            _readField(a, 'saleName', 'sale_name'),
+            _readField(b, 'saleName', 'sale_name'),
+          );
+      }
+      if (primary != 0) return primary;
+
+      return _compareNullableDates(
+        parseFlexibleDate(_readField(a, 'recordDate', 'record_date')),
+        parseFlexibleDate(_readField(b, 'recordDate', 'record_date')),
+        descending: true,
+      );
+    });
+  }
 
   @override
   State<PiRecordsPage> createState() => _PiRecordsPageState();
@@ -30,6 +243,10 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
   List<String> _brandFilters = ['ทั้งหมด'];
   String _selectedSaleFilter = 'ทั้งหมด';
   List<String> _saleFilters = ['ทั้งหมด'];
+  PiRecordSortOption? _selectedSortOption;
+
+  PiRecordSortOption get _effectiveSortOption =>
+      _selectedSortOption ?? PiRecordSortOption.recordDateDesc;
 
   // Palette สีธีม Minimal Monochrome (Black & White)
   final Color _bgDark = const Color(0xFF0C0C0E);
@@ -128,15 +345,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
             }
           }
 
-          // เรียงตามวันที่ล่าสุดเสมอ (Newest first)
-          data.sort((a, b) {
-            final dateA = _parseRecordDate(a['recordDate'] ?? a['record_date']);
-            final dateB = _parseRecordDate(b['recordDate'] ?? b['record_date']);
-            if (dateA == null && dateB == null) return 0;
-            if (dateA == null) return 1;
-            if (dateB == null) return -1;
-            return dateB.compareTo(dateA);
-          });
+          PiRecordsPage.sortRecords(data, PiRecordSortOption.recordDateDesc);
 
           if (mounted) {
             setState(() {
@@ -167,8 +376,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
   void _applyFilter() {
     final query = _searchController.text.trim().toLowerCase();
 
-    setState(() {
-      _filteredRecords = _allRecords.where((item) {
+    final filtered = _allRecords.where((item) {
         // กรองตามแบรนด์
         if (_selectedBrandFilter != 'ทั้งหมด') {
           final brand = (item['brand'] ?? '').toString().trim();
@@ -189,40 +397,39 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
 
         // ค้นหาตามคำค้น
         if (query.isNotEmpty) {
-          final pi = (item['piSupplier'] ?? '').toString().toLowerCase();
-          final orderNo = (item['orderNo'] ?? '').toString().toLowerCase();
-          final project = (item['projectName'] ?? '').toString().toLowerCase();
-          final supplier = (item['supplier'] ?? '').toString().toLowerCase();
-          final sale = (item['saleName'] ?? '').toString().toLowerCase();
-          final brand = (item['brand'] ?? '').toString().toLowerCase();
+          final pi = _fieldText(item, 'piSupplier', 'pi_supplier').toLowerCase();
+          final orderNo = _fieldText(item, 'orderNo', 'order_no').toLowerCase();
+          final project = _fieldText(item, 'projectName', 'project_name').toLowerCase();
+          final supplier = _fieldText(item, 'supplier').toLowerCase();
+          final sale = _fieldText(item, 'saleName', 'sale_name').toLowerCase();
+          final brand = _fieldText(item, 'brand').toLowerCase();
+          final etd = _fieldText(item, 'etd').toLowerCase();
+          final shippingMethod = _fieldText(item, 'shippingMethod', 'shipping_method').toLowerCase();
+          final dateOrder = _fieldText(item, 'dateOrder', 'date_order').toLowerCase();
+          final deliveredDate = _fieldText(item, 'deliveredDate', 'delivered_date').toLowerCase();
+          final lastUpdate = _fieldText(item, 'lastUpdate', 'last_update').toLowerCase();
 
           return pi.contains(query) ||
               orderNo.contains(query) ||
               project.contains(query) ||
               supplier.contains(query) ||
               sale.contains(query) ||
-              brand.contains(query);
+              brand.contains(query) ||
+              etd.contains(query) ||
+              shippingMethod.contains(query) ||
+              dateOrder.contains(query) ||
+              deliveredDate.contains(query) ||
+              lastUpdate.contains(query);
         }
 
         return true;
       }).toList();
-    });
-  }
 
-  DateTime? _parseRecordDate(String? raw) {
-    if (raw == null || raw.trim().isEmpty || raw.trim() == '-') return null;
-    final str = raw.trim();
-    final parts = str.split('/');
-    if (parts.length == 3) {
-      final day = int.tryParse(parts[0]);
-      final month = int.tryParse(parts[1]);
-      int? year = int.tryParse(parts[2]);
-      if (day != null && month != null && year != null) {
-        if (year > 2500) year -= 543;
-        return DateTime(year, month, day);
-      }
-    }
-    return DateTime.tryParse(str);
+    PiRecordsPage.sortRecords(filtered, _effectiveSortOption);
+
+    setState(() {
+      _filteredRecords = filtered;
+    });
   }
 
   String _cleanUrl(String? raw) {
@@ -250,28 +457,6 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
       return text.contains('⚡') ? text : '⚡ $text';
     }
     return text;
-  }
-
-  Widget _buildShippingMethodPill(String raw, {bool isMini = false}) {
-    final formatted = _formatShippingMethod(raw);
-    if (formatted == '-' || formatted.isEmpty) return const SizedBox.shrink();
-
-    return Container(
-      padding: EdgeInsets.symmetric(horizontal: isMini ? 8 : 10, vertical: isMini ? 2 : 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E293B).withOpacity(0.6),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF38BDF8).withOpacity(0.35), width: 1),
-      ),
-      child: Text(
-        formatted,
-        style: TextStyle(
-          color: const Color(0xFF7DD3FC),
-          fontSize: isMini ? 11 : 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
   }
 
   void _showImageModal(String imageUrl) {
@@ -923,14 +1108,15 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
     _showDocumentModal(title, clean);
   }
 
+  int get _activeFilterCount =>
+      (_selectedBrandFilter != 'ทั้งหมด' ? 1 : 0) +
+      (_selectedStatusFilter != 'ทั้งหมด' ? 1 : 0) +
+      (_selectedSaleFilter != 'ทั้งหมด' ? 1 : 0) +
+      (_effectiveSortOption != PiRecordSortOption.recordDateDesc ? 1 : 0);
+
   Widget _buildFilterButton() {
-    final bool hasActiveFilter =
-        _selectedBrandFilter != 'ทั้งหมด' ||
-        _selectedStatusFilter != 'ทั้งหมด' ||
-        _selectedSaleFilter != 'ทั้งหมด';
-    final int activeCount = (_selectedBrandFilter != 'ทั้งหมด' ? 1 : 0) +
-        (_selectedStatusFilter != 'ทั้งหมด' ? 1 : 0) +
-        (_selectedSaleFilter != 'ทั้งหมด' ? 1 : 0);
+    final int activeCount = _activeFilterCount;
+    final bool hasActiveFilter = activeCount > 0;
 
     return InkWell(
       onTap: _showFilterModal,
@@ -1090,6 +1276,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
     String tempBrand = _selectedBrandFilter;
     String tempStatus = _selectedStatusFilter;
     String tempSale = _selectedSaleFilter;
+    PiRecordSortOption tempSort = _effectiveSortOption;
 
     final screenWidth = MediaQuery.of(context).size.width;
     final availableWidth = (screenWidth - 32).clamp(280.0, 700.0);
@@ -1154,6 +1341,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                               tempBrand = 'ทั้งหมด';
                               tempStatus = 'ทั้งหมด';
                               tempSale = 'ทั้งหมด';
+                              tempSort = PiRecordSortOption.recordDateDesc;
                             });
                           },
                           child: const Text(
@@ -1174,6 +1362,40 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // ↕️ Section 0: Sort (เรียงลำดับข้อมูล)
+                            const Row(
+                              children: [
+                                Icon(Icons.swap_vert_rounded, color: Colors.white70, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'เรียงลำดับข้อมูล',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: PiRecordSortOption.values.map((option) {
+                                final isSelected = tempSort == option;
+                                return _buildFilterChoiceChip(
+                                  label: option.label,
+                                  isSelected: isSelected,
+                                  onSelected: (selected) {
+                                    if (selected) {
+                                      setModalState(() => tempSort = option);
+                                    }
+                                  },
+                                );
+                              }).toList(),
+                            ),
+                            const SizedBox(height: 24),
+
                             // 🏢 Section 1: Brand
                             const Row(
                               children: [
@@ -1298,6 +1520,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                           _selectedBrandFilter = tempBrand;
                           _selectedStatusFilter = tempStatus;
                           _selectedSaleFilter = tempSale;
+                          _selectedSortOption = tempSort;
                         });
                         _applyFilter();
                         Navigator.pop(ctx);
@@ -1319,10 +1542,41 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool hasActiveFilter =
-        _selectedBrandFilter != 'ทั้งหมด' ||
-        _selectedStatusFilter != 'ทั้งหมด' ||
-        _selectedSaleFilter != 'ทั้งหมด';
+    final bool hasActiveFilter = _activeFilterCount > 0;
+    final List<Widget> activeChips = [
+      if (_effectiveSortOption != PiRecordSortOption.recordDateDesc)
+        _buildActiveFilterChip(
+          label: 'เรียง: ${_effectiveSortOption.label}',
+          onDeleted: () {
+            setState(() => _selectedSortOption = PiRecordSortOption.recordDateDesc);
+            _applyFilter();
+          },
+        ),
+      if (_selectedBrandFilter != 'ทั้งหมด')
+        _buildActiveFilterChip(
+          label: 'แบรนด์: $_selectedBrandFilter',
+          onDeleted: () {
+            setState(() => _selectedBrandFilter = 'ทั้งหมด');
+            _applyFilter();
+          },
+        ),
+      if (_selectedStatusFilter != 'ทั้งหมด')
+        _buildActiveFilterChip(
+          label: 'สถานะ: $_selectedStatusFilter',
+          onDeleted: () {
+            setState(() => _selectedStatusFilter = 'ทั้งหมด');
+            _applyFilter();
+          },
+        ),
+      if (_selectedSaleFilter != 'ทั้งหมด')
+        _buildActiveFilterChip(
+          label: 'เซลล์: $_selectedSaleFilter',
+          onDeleted: () {
+            setState(() => _selectedSaleFilter = 'ทั้งหมด');
+            _applyFilter();
+          },
+        ),
+    ];
 
     return Scaffold(
       backgroundColor: _bgDark,
@@ -1393,34 +1647,9 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                       scrollDirection: Axis.horizontal,
                       child: Row(
                         children: [
-                          if (_selectedBrandFilter != 'ทั้งหมด')
-                            _buildActiveFilterChip(
-                              label: 'แบรนด์: $_selectedBrandFilter',
-                              onDeleted: () {
-                                setState(() => _selectedBrandFilter = 'ทั้งหมด');
-                                _applyFilter();
-                              },
-                            ),
-                          if (_selectedStatusFilter != 'ทั้งหมด') ...[
-                            if (_selectedBrandFilter != 'ทั้งหมด') const SizedBox(width: 8),
-                            _buildActiveFilterChip(
-                              label: 'สถานะ: $_selectedStatusFilter',
-                              onDeleted: () {
-                                setState(() => _selectedStatusFilter = 'ทั้งหมด');
-                                _applyFilter();
-                              },
-                            ),
-                          ],
-                          if (_selectedSaleFilter != 'ทั้งหมด') ...[
-                            if (_selectedBrandFilter != 'ทั้งหมด' || _selectedStatusFilter != 'ทั้งหมด')
-                              const SizedBox(width: 8),
-                            _buildActiveFilterChip(
-                              label: 'เซลล์: $_selectedSaleFilter',
-                              onDeleted: () {
-                                setState(() => _selectedSaleFilter = 'ทั้งหมด');
-                                _applyFilter();
-                              },
-                            ),
+                          for (int i = 0; i < activeChips.length; i++) ...[
+                            if (i > 0) const SizedBox(width: 8),
+                            activeChips[i],
                           ],
                         ],
                       ),
@@ -1433,6 +1662,7 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                         _selectedBrandFilter = 'ทั้งหมด';
                         _selectedStatusFilter = 'ทั้งหมด';
                         _selectedSaleFilter = 'ทั้งหมด';
+                        _selectedSortOption = PiRecordSortOption.recordDateDesc;
                       });
                       _applyFilter();
                     },
@@ -1549,254 +1779,425 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
     );
   }
 
+  String _fieldText(Map<String, dynamic> item, String camelKey, [String? snakeKey]) {
+    final raw = item[camelKey] ?? (snakeKey != null ? item[snakeKey] : null);
+    final value = (raw ?? '').toString().trim();
+    if (value.isEmpty || value == '-') return '-';
+    return value;
+  }
+
+  bool _hasValue(String value) => value.isNotEmpty && value != '-';
+
+  Color _etdDotColor(String etd) {
+    final lower = etd.toLowerCase();
+    if (lower.contains('รอชำระ') || lower.contains('payment') || lower.contains('unpaid')) {
+      return const Color(0xFFFB7185);
+    }
+    if (lower.contains('รอสั่ง') || lower.contains('pending order')) {
+      return const Color(0xFFFBBF24);
+    }
+    if (lower.contains('รอโรงงาน') || lower.contains('โรงงานส่งมา warehouse')) {
+      return const Color(0xFF818CF8);
+    }
+    if (lower.contains('กำลังส่ง') || lower.contains('shipping') || lower.contains('transit')) {
+      return const Color(0xFF38BDF8);
+    }
+    if (lower.contains('ถึง warehouse') || lower.contains('warehouse แล้ว')) {
+      return const Color(0xFF2DD4BF);
+    }
+    if (lower.contains('สต๊อก') || lower.contains('stock') || lower.contains('ถึงลูกค้า') || lower.contains('delivered')) {
+      return const Color(0xFF34D399);
+    }
+    if (lower.contains('รอส่งให้ลูกค้า') || lower.contains('รอส่งลูกค้า')) {
+      return const Color(0xFFFACC15);
+    }
+    if (lower.contains('event') || lower.contains('อีเวนต์')) {
+      return const Color(0xFFC084FC);
+    }
+    return Colors.white70;
+  }
+
+  Widget _buildCardKeyValueRow({
+    required IconData icon,
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: Colors.white38, size: 15),
+          const SizedBox(width: 7),
+          SizedBox(
+            width: 102,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white54,
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: TextStyle(
+                color: valueColor ?? Colors.white,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                height: 1.3,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLinkFileButton(String rawLink, String title) {
+    final cleanUrl = _cleanUrl(rawLink);
+    final isUrl = RegExp(r'^https?:\/\/', caseSensitive: false).hasMatch(cleanUrl);
+    if (!isUrl) {
+      if (!_hasValue(rawLink)) return const SizedBox.shrink();
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        ),
+        child: Text(
+          rawLink,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11.5,
+            fontWeight: FontWeight.w500,
+          ),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      );
+    }
+
+    final lower = cleanUrl.toLowerCase();
+    final bool isSheet = lower.contains('spreadsheets') || lower.contains('.xlsx') || lower.contains('.csv');
+    final bool isPdf = lower.contains('.pdf') || lower.contains('drive.google');
+    final String label = isSheet ? 'เปิด Google Sheet' : (isPdf ? 'เปิดเอกสาร' : 'เปิดลิงก์');
+    final IconData icon = isSheet ? Icons.table_chart_rounded : (isPdf ? Icons.description_rounded : Icons.link_rounded);
+    final Color accent = isSheet ? const Color(0xFF34D399) : const Color(0xFF93C5FD);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => _launchExternalUrl(cleanUrl, title: title),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+          decoration: BoxDecoration(
+            color: accent.withValues(alpha: 0.13),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: accent.withValues(alpha: 0.35)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: accent, size: 14),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(color: accent, fontSize: 12, fontWeight: FontWeight.w600),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Icon(Icons.open_in_new_rounded, color: accent, size: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildRecordCard(Map<String, dynamic> item) {
-    final piSupplier = (item['piSupplier'] ?? '-').toString().trim();
-    final supplier = (item['supplier'] ?? '-').toString().trim();
-    final orderNo = (item['orderNo'] ?? item['order_no'] ?? '').toString().trim();
-    final projectName = (item['projectName'] ?? item['project_name'] ?? '').toString().trim();
-    final saleName = (item['saleName'] ?? item['sale_name'] ?? '').toString().trim();
-    final etd = (item['etd'] ?? '-').toString().trim();
-    final brand = (item['brand'] ?? '').toString().trim();
-    final amountYuan = (item['amountYuan'] ?? item['amount_yuan'] ?? '').toString().trim();
-    final amountDollar = (item['amountDollar'] ?? item['amount_dollar'] ?? '').toString().trim();
-    final shippingMethod = (item['shippingMethod'] ?? '').toString().trim();
+    // แสดงผลแบบแบ่งซ้าย-ขวาสมดุลเต็มความกว้างการ์ด (ซ่อนช่องที่ว่าง '-' เพื่อลดความรก):
+    // I (Order_NO.), L (Project_name), K (Sale_Name), Q (Date_Order),
+    // O (Shipping_Method), G (ETD), D (Link/File), R (Last Update), C (Supplier), A (PI-Supplier)
+    final orderNo = _fieldText(item, 'orderNo', 'order_no');
+    final projectName = _fieldText(item, 'projectName', 'project_name');
+    final saleName = _fieldText(item, 'saleName', 'sale_name');
+    final dateOrder = _fieldText(item, 'dateOrder', 'date_order');
+    final shippingMethod = _fieldText(item, 'shippingMethod', 'shipping_method');
+    final deliveredDate = _fieldText(item, 'deliveredDate', 'delivered_date');
+    final etd = _fieldText(item, 'etd');
+    final linkFileRaw = (item['linkFileUrl'] ?? item['link_file_url'] ?? item['linkFile'] ?? item['link_file'] ?? '').toString().trim();
+    final lastUpdate = _fieldText(item, 'lastUpdate', 'last_update');
+    final supplier = _fieldText(item, 'supplier');
+    final piSupplier = _fieldText(item, 'piSupplier', 'pi_supplier');
 
-    final recordDate = (item['recordDate'] ?? item['record_date'] ?? '').toString().trim();
+    final hasOrder = _hasValue(orderNo);
+    final hasPi = _hasValue(piSupplier);
+    final hasProject = _hasValue(projectName);
+    final hasSale = _hasValue(saleName);
+    final hasDateOrder = _hasValue(dateOrder);
+    final hasShipping = _hasValue(shippingMethod);
+    final hasDeliveredDate = _hasValue(deliveredDate);
+    final hasLastUpdate = _hasValue(lastUpdate);
+    final hasSupplier = _hasValue(supplier);
+    final hasLink = _hasValue(_cleanUrl(linkFileRaw)) || _hasValue(linkFileRaw);
+    final hasEtd = _hasValue(etd);
 
-    final hasPi = piSupplier.isNotEmpty && piSupplier != '-';
-    final hasBrand = brand.isNotEmpty && brand != '-';
-    final hasEtd = etd.isNotEmpty && etd != '-';
-    final hasSupplier = supplier.isNotEmpty && supplier != '-';
-    final hasOrder = orderNo.isNotEmpty && orderNo != '-';
-    final hasProject = projectName.isNotEmpty && projectName != '-';
-    final hasSale = saleName.isNotEmpty && saleName != '-';
+    final accentColor = hasEtd ? _etdDotColor(etd) : Colors.white38;
+
+    final List<Widget> detailRows = [
+      if (hasSupplier && (hasOrder || hasPi))
+        _buildCardKeyValueRow(
+          icon: Icons.storefront_rounded,
+          label: 'Supplier',
+          value: supplier,
+          valueColor: Colors.white70,
+        ),
+      if (hasSale)
+        _buildCardKeyValueRow(
+          icon: Icons.person_outline_rounded,
+          label: 'Sale',
+          value: saleName,
+        ),
+      if (hasDateOrder)
+        _buildCardKeyValueRow(
+          icon: Icons.event_available_rounded,
+          label: 'ลูกค้าชำระเงิน',
+          value: dateOrder,
+        ),
+      if (hasShipping)
+        _buildCardKeyValueRow(
+          icon: Icons.local_shipping_outlined,
+          label: 'วิธีจัดส่ง',
+          value: _formatShippingMethod(shippingMethod),
+          valueColor: const Color(0xFF7DD3FC),
+        ),
+      if (hasDeliveredDate)
+        _buildCardKeyValueRow(
+          icon: Icons.inventory_2_outlined,
+          label: 'วันสินค้าถึง',
+          value: deliveredDate,
+          valueColor: const Color(0xFFFDE047),
+        ),
+    ];
 
     return Material(
       color: _cardDark,
       borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
         onTap: () => _showRecordDetails(item),
         child: Container(
-          padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
+            border: Border.all(
+              color: hasEtd
+                  ? accentColor.withValues(alpha: 0.28)
+                  : Colors.white.withValues(alpha: 0.09),
+            ),
           ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. หัวการ์ด: รหัส PI คมชัด ตัวเต็ม ไม่โดนบีบ และแบรนด์
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Expanded(
-                    child: Text(
-                      hasPi ? piSupplier : (hasOrder ? 'Order #$orderNo' : supplier),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
+              // 1. แถบสถานะด้านบนเต็มความกว้าง: G (ETD) ซ้าย — R (Last Update) ขวา
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: hasEtd
+                      ? accentColor.withValues(alpha: 0.13)
+                      : Colors.white.withValues(alpha: 0.04),
+                  border: Border(
+                    bottom: BorderSide(
+                      color: hasEtd
+                          ? accentColor.withValues(alpha: 0.22)
+                          : Colors.white.withValues(alpha: 0.08),
+                    ),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: accentColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        hasEtd ? etd : 'ยังไม่ระบุสถานะ',
+                        style: TextStyle(
+                          color: hasEtd ? Colors.white : Colors.white54,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Icon(
+                      Icons.update_rounded,
+                      color: hasLastUpdate ? Colors.white60 : Colors.white30,
+                      size: 13,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      hasLastUpdate ? 'อัปเดต: $lastUpdate' : 'อัปเดต: -',
+                      style: TextStyle(
+                        color: hasLastUpdate ? Colors.white70 : Colors.white38,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                  ),
-                  if (hasBrand) ...[
-                    const SizedBox(width: 8),
-                    Text(
-                      brand,
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
                   ],
-                ],
+                ),
               ),
 
-              // 2. ป้ายสถานะการจัดส่ง (ETD) & วันที่บันทึก
-              if (hasEtd || (recordDate.isNotEmpty && recordDate != '-')) ...[
-                const SizedBox(height: 8),
-                Row(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (hasEtd)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Colors.white70,
-                                shape: BoxShape.circle,
+                    // 2. ส่วนหัว: I (Order_NO.) ซ้าย — A (PI-Supplier) ขวา
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(8),
                               ),
-                            ),
-                            const SizedBox(width: 6),
-                            Flexible(
                               child: Text(
-                                etd,
+                                hasOrder
+                                    ? 'Order $orderNo'
+                                    : (hasPi ? 'PI $piSupplier' : supplier),
                                 style: const TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
+                                  color: Colors.white,
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.2,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ],
+                          ),
                         ),
-                      ),
-                    if (hasEtd && recordDate.isNotEmpty && recordDate != '-')
-                      const SizedBox(width: 8),
-                    if (recordDate.isNotEmpty && recordDate != '-')
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.calendar_today_rounded, size: 11, color: Colors.white38),
-                          const SizedBox(width: 4),
-                          Text(
-                            recordDate,
-                            style: const TextStyle(
-                              color: Colors.white38,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w500,
+                        if (hasOrder && hasPi) ...[
+                          const SizedBox(width: 8),
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 145),
+                            child: Text(
+                              'PI $piSupplier',
+                              textAlign: TextAlign.right,
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
-                      ),
-                  ],
-                ),
-              ],
+                      ],
+                    ),
 
-              // 3. ชื่อซัพพลายเออร์
-              if (hasSupplier) ...[
-                const SizedBox(height: 10),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Icon(Icons.business_rounded, color: Colors.white38, size: 16),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        supplier,
+                    // 3. ชื่อโปรเจกต์ (L) เต็มความกว้าง
+                    if (hasProject) ...[
+                      const SizedBox(height: 9),
+                      Text(
+                        projectName,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 15.5,
+                          fontWeight: FontWeight.w600,
+                          height: 1.35,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ),
-                  ],
-                ),
-              ],
-
-              // 4. เลข Order & ชื่อโปรเจกต์
-              if (hasOrder || hasProject) ...[
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    if (hasOrder) ...[
-                      const Icon(Icons.tag_rounded, color: Colors.white38, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        orderNo,
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (hasProject)
-                        const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: Text('•', style: TextStyle(color: Colors.white24, fontSize: 12)),
-                        ),
                     ],
-                    if (hasProject) ...[
-                      const Icon(Icons.folder_outlined, color: Colors.white38, size: 13),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          projectName,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Colors.white70,
+
+                    // 4. รายละเอียดแบบตารางซ้าย-ขวาเต็มแถว (C, K, Q, O)
+                    if (detailRows.isNotEmpty) ...[
+                      const SizedBox(height: 11),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.035),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+                        ),
+                        child: Column(
+                          children: [
+                            for (int i = 0; i < detailRows.length; i++) ...[
+                              if (i > 0)
+                                Divider(
+                                  height: 1,
+                                  color: Colors.white.withValues(alpha: 0.06),
+                                ),
+                              detailRows[i],
+                            ],
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // 5. ส่วนท้าย: D (Link/File) ซ้าย — รายละเอียด ขวา
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: hasLink
+                                ? _buildLinkFileButton(linkFileRaw, 'เปิดลิงก์ / ไฟล์')
+                                : const Text(
+                                    'แตะเพื่อดูรายละเอียดทั้งหมด',
+                                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'รายละเอียด',
+                          style: TextStyle(
+                            color: Colors.white60,
                             fontSize: 12,
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 2),
+                        const Icon(Icons.chevron_right_rounded, color: Colors.white60, size: 18),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-
-              // 5. ขีดคั่น & ชื่อเซลล์/โปรเจกต์ & วิธีจัดส่ง & ปุ่มดูลูกศร (เอาราคาออกไปแสดงในโมดอลตามแชท)
-              const SizedBox(height: 12),
-              const Divider(color: Colors.white10, height: 1),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // เซลล์ผู้ดูแล ทางซ้าย แทนที่จุดแสดงราคาเดิม (หากไม่มีให้แสดง 'เซลล์: -')
-                  Expanded(
-                    child: hasSale
-                        ? Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              const Icon(Icons.person_outline_rounded, color: Colors.white38, size: 14),
-                              const SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  saleName.startsWith('เซลล์') ? saleName : 'เซลล์: $saleName',
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          )
-                        : const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.person_outline_rounded, color: Colors.white24, size: 14),
-                              SizedBox(width: 5),
-                              Flexible(
-                                child: Text(
-                                  'เซลล์: -',
-                                  style: TextStyle(
-                                    color: Colors.white38,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w400,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ],
-                          ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // ป้ายวิธีการจัดส่ง (ชิดขวาสม่ำเสมอทุกใบ ไม่ย่น ไม่กระโดด)
-                  if (shippingMethod.isNotEmpty && shippingMethod != '-') ...[
-                    _buildShippingMethodPill(shippingMethod, isMini: true),
-                    const SizedBox(width: 8),
-                  ],
-
-                  const Icon(Icons.chevron_right_rounded, color: Colors.white38, size: 20),
-                ],
               ),
             ],
           ),
@@ -1806,24 +2207,20 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
   }
 
   void _showRecordDetails(Map<String, dynamic> item) {
-    final piSupplier = (item['piSupplier'] ?? '-').toString().trim();
-    final supplier = (item['supplier'] ?? '-').toString().trim();
-    final orderNo = (item['orderNo'] ?? item['order_no'] ?? '-').toString().trim();
-    final projectName = (item['projectName'] ?? item['project_name'] ?? '-').toString().trim();
-    final saleName = (item['saleName'] ?? item['sale_name'] ?? '-').toString().trim();
-    final etd = (item['etd'] ?? '-').toString().trim();
-    final brand = (item['brand'] ?? '-').toString().trim();
-    final amountYuan = (item['amountYuan'] ?? item['amount_yuan'] ?? '').toString().trim();
-    final amountDollar = (item['amountDollar'] ?? item['amount_dollar'] ?? '').toString().trim();
-    final shippingMethod = (item['shippingMethod'] ?? '-').toString().trim();
-    final recordDate = (item['recordDate'] ?? '-').toString().trim();
-    final dateOrder = (item['dateOrder'] ?? '-').toString().trim();
-    final paymentDate = (item['paymentDate'] ?? '-').toString().trim();
-    final requestedDate = (item['requestedDate'] ?? '-').toString().trim();
-    final deliveredDate = (item['deliveredDate'] ?? '-').toString().trim();
-
-    final hasDollar = amountDollar.isNotEmpty && amountDollar != '-';
-    final hasYuan = amountYuan.isNotEmpty && amountYuan != '-';
+    final piSupplier = _fieldText(item, 'piSupplier', 'pi_supplier');
+    final supplier = _fieldText(item, 'supplier');
+    final orderNo = _fieldText(item, 'orderNo', 'order_no');
+    final projectName = _fieldText(item, 'projectName', 'project_name');
+    final saleName = _fieldText(item, 'saleName', 'sale_name');
+    final etd = _fieldText(item, 'etd');
+    final brand = _fieldText(item, 'brand');
+    final shippingMethod = _fieldText(item, 'shippingMethod', 'shipping_method');
+    final recordDate = _fieldText(item, 'recordDate', 'record_date');
+    final dateOrder = _fieldText(item, 'dateOrder', 'date_order');
+    final paymentDate = _fieldText(item, 'paymentDate', 'payment_date');
+    final requestedDate = _fieldText(item, 'requestedDate', 'requested_date');
+    final deliveredDate = _fieldText(item, 'deliveredDate', 'delivered_date');
+    final lastUpdate = _fieldText(item, 'lastUpdate', 'last_update');
 
     showModalBottomSheet(
       context: context,
@@ -1878,75 +2275,6 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                 ),
                 const SizedBox(height: 16),
 
-                // 💰 กล่องแสดงราคา / ยอดสั่งซื้อเด่นชัดในโมดอล (ย้ายมาจากหน้าการ์ด)
-                if (hasDollar || hasYuan) ...[
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
-                    ),
-                    child: Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF10B981).withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(Icons.payments_rounded, color: Color(0xFF34D399), size: 22),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'ราคา / ยอดสั่งซื้อ',
-                                style: TextStyle(
-                                  color: Colors.white54,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Wrap(
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 8,
-                                children: [
-                                  if (hasDollar)
-                                    Text(
-                                      amountDollar,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.3,
-                                      ),
-                                    ),
-                                  if (hasDollar && hasYuan)
-                                    const Text('/', style: TextStyle(color: Colors.white24, fontSize: 13)),
-                                  if (hasYuan)
-                                    Text(
-                                      amountYuan,
-                                      style: TextStyle(
-                                        color: hasDollar ? Colors.white70 : Colors.white,
-                                        fontSize: hasDollar ? 14 : 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-
                 _buildDetailRow('ซัพพลายเออร์', supplier),
                 _buildDetailRow('แบรนด์', brand),
                 _buildDetailRow('เลขคำสั่งซื้อ', orderNo),
@@ -1954,17 +2282,14 @@ class _PiRecordsPageState extends State<PiRecordsPage> {
                 _buildDetailRow('เซลล์ผู้ดูแล', saleName),
                 _buildDetailRow('สถานะ / กำหนดส่ง', etd, valueColor: Colors.white),
                 _buildDetailRow('วิธีการจัดส่ง', _formatShippingMethod(shippingMethod), valueColor: const Color(0xFF7DD3FC)),
-                const Divider(color: Colors.white10, height: 24),
-
-                _buildDetailRow('จำนวนเงิน (\$)', amountDollar, valueColor: Colors.white),
-                _buildDetailRow('จำนวนเงิน (หยวน)', amountYuan, valueColor: Colors.white70),
+                _buildDetailRow('อัปเดตล่าสุด (Last Update)', lastUpdate),
                 const Divider(color: Colors.white10, height: 24),
 
                 _buildDetailRow('วันที่บันทึก', recordDate),
                 _buildDetailRow('วันที่ลูกค้าชำระเงิน', dateOrder),
                 _buildDetailRow('วันที่ชำระเงินซัพพลายเออร์', paymentDate),
                 _buildDetailRow('วันที่ต้องการสินค้า', requestedDate),
-                _buildDetailRow('วันที่จัดส่งถึง', deliveredDate),
+                _buildDetailRow('วันสินค้าถึง', deliveredDate),
 
                 // 📂 รายการเอกสารและไฟล์แนบ (รองรับทั้ง 1 ไฟล์ และ หลายๆ ไฟล์)
                 Builder(
