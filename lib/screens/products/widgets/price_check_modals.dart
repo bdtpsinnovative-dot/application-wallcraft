@@ -281,7 +281,7 @@ void showCategoryFilterModal({
 }
 
 // 2. ฟังก์ชันแสดงรายละเอียดรุ่นย่อย
-void showVariantDetailsModal({
+Future<void> showVariantDetailsModal({
   required BuildContext context,
   required Map<String, dynamic> product,
   required String Function(dynamic) formatPrice,
@@ -301,7 +301,7 @@ void showVariantDetailsModal({
   List<String> filterOptions = uniqueFilms.toList();
   String selectedFilter = 'ทั้งหมด';
 
-  showModalBottomSheet(
+  return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
     isScrollControlled: true,

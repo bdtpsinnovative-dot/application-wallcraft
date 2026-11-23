@@ -433,6 +433,40 @@ class AuthService {
     return true;
   }
 
+  static Future<Map<String, String?>> getCurrentUserProfile() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('auth_token');
+    final userId = prefs.getString('user_id');
+    String? email;
+    String? displayName;
+
+    if (token != null && token.isNotEmpty) {
+      try {
+        final parts = token.split('.');
+        if (parts.length == 3) {
+          final payload = jsonDecode(
+            utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+          );
+          if (payload is Map) {
+            email = payload['email']?.toString();
+            final userMetadata = payload['user_metadata'];
+            if (userMetadata is Map) {
+              displayName = userMetadata['full_name']?.toString() ??
+                  userMetadata['name']?.toString() ??
+                  userMetadata['nickname']?.toString();
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return {
+      'userId': userId,
+      'email': email,
+      'displayName': displayName ?? (email != null && email.contains('@') ? email.split('@').first : 'พนักงานขาย'),
+    };
+  }
+
   static Future<List<_RememberedCredential>>
   _readRememberedCredentials() async {
     await _ensureVaultMigrated();

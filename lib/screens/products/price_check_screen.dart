@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../constants.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 
 // 🌟 Import ชิ้นส่วนที่เราหั่นออกไปเมื่อกี้เข้ามาใช้งาน
 import 'widgets/product_card.dart';
@@ -219,13 +220,30 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     });
   }
 
-  void _recordProductView(dynamic productId) {
+  Future<void> _recordProductEngagement({
+    required Map<String, dynamic> product,
+    required int durationSeconds,
+    required bool isIdle,
+  }) async {
+    final productId = product['id'];
     if (productId == null) return;
     try {
+      final profile = await AuthService.getCurrentUserProfile();
       final url = Uri.parse('${AppConfig.baseUrl}/products/view');
       ApiService.post(
         url,
-        body: jsonEncode({'productId': productId}),
+        body: jsonEncode({
+          'productId': productId,
+          'productName': product['name'] ?? 'ไม่มีชื่อสินค้า',
+          'collection': product['collection'] ?? 'ทั่วไป',
+          'viewerType': 'sales',
+          'userId': profile['userId'] ?? '',
+          'userEmail': profile['email'] ?? '',
+          'userName': profile['displayName'] ?? 'พนักงานขาย',
+          'durationSeconds': durationSeconds,
+          'isIdle': isIdle,
+          'device': Platform.isAndroid ? 'app_android' : 'app_ios',
+        }),
       ).ignore();
     } catch (_) {}
   }
@@ -372,12 +390,25 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                           return ProductCard(
                             product: _filteredProducts[index],
                             formatPrice: _formatPrice,
-                            onTap: () {
-                              _recordProductView(_filteredProducts[index]['id']);
-                              showVariantDetailsModal(
+                            onTap: () async {
+                              final product = _filteredProducts[index];
+                              final stopwatch = Stopwatch()..start();
+
+                              await showVariantDetailsModal(
                                 context: context,
-                                product: _filteredProducts[index],
+                                product: product,
                                 formatPrice: _formatPrice,
+                              );
+
+                              stopwatch.stop();
+                              final durationSec = stopwatch.elapsed.inSeconds;
+                              final isIdle = durationSec > 180;
+                              final effectiveDuration = isIdle ? 180 : (durationSec < 1 ? 1 : durationSec);
+
+                              _recordProductEngagement(
+                                product: product,
+                                durationSeconds: effectiveDuration,
+                                isIdle: isIdle,
                               );
                             },
                           );
