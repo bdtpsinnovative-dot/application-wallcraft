@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -230,6 +231,20 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     try {
       final profile = await AuthService.getCurrentUserProfile();
       final url = Uri.parse('${AppConfig.baseUrl}/products/view');
+
+      String device = 'app';
+      if (kIsWeb) {
+        device = 'web_flutter';
+      } else {
+        try {
+          if (Platform.isAndroid) {
+            device = 'app_android';
+          } else if (Platform.isIOS) {
+            device = 'app_ios';
+          }
+        } catch (_) {}
+      }
+
       ApiService.post(
         url,
         body: jsonEncode({
@@ -242,7 +257,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
           'userName': profile['displayName'] ?? 'พนักงานขาย',
           'durationSeconds': durationSeconds,
           'isIdle': isIdle,
-          'device': Platform.isAndroid ? 'app_android' : 'app_ios',
+          'device': device,
         }),
       ).ignore();
     } catch (_) {}
@@ -394,6 +409,13 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                               final product = _filteredProducts[index];
                               final stopwatch = Stopwatch()..start();
 
+                              // 1. บันทึกทันทีเมื่อกดเปิดสินค้า เพื่อให้แสดงผลสดบนแดชบอร์ดทันที
+                              _recordProductEngagement(
+                                product: product,
+                                durationSeconds: 1,
+                                isIdle: false,
+                              );
+
                               await showVariantDetailsModal(
                                 context: context,
                                 product: product,
@@ -405,11 +427,14 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                               final isIdle = durationSec > 180;
                               final effectiveDuration = isIdle ? 180 : (durationSec < 1 ? 1 : durationSec);
 
-                              _recordProductEngagement(
-                                product: product,
-                                durationSeconds: effectiveDuration,
-                                isIdle: isIdle,
-                              );
+                              // 2. บันทึกระยะเวลาที่ดูจริงหลังปิด Modal
+                              if (effectiveDuration > 1) {
+                                _recordProductEngagement(
+                                  product: product,
+                                  durationSeconds: effectiveDuration,
+                                  isIdle: isIdle,
+                                );
+                              }
                             },
                           );
                         },
