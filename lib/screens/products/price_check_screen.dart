@@ -136,10 +136,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
               
               if (isRefresh) {
                 var listData = List<Map<String, dynamic>>.from(rawData);
-                // สับเปลี่ยนลำดับเฉพาะตอนโหลดหน้าแรกแบบไม่มีเงื่อนไขค้นหา
-                if (keyword.isEmpty && _selectedCategory == 'ทั้งหมด') {
-                  listData.shuffle();
-                }
                 _filteredProducts = listData;
                 // Save to SharedPreferences if it's a clean initial fetch
                 if (keyword.isEmpty && _selectedCategory == 'ทั้งหมด' && customLimit == null) {
@@ -180,7 +176,6 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
       if (cachedData != null && cachedData.isNotEmpty) {
         final List<dynamic> decoded = jsonDecode(cachedData);
         var listData = List<Map<String, dynamic>>.from(decoded);
-        listData.shuffle(); // สลับตำแหน่งข้อมูลในแคชให้ดูใหม่ทุกครั้งที่เปิด
         if (mounted) {
           setState(() {
             _filteredProducts = listData;
@@ -222,6 +217,17 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
     _debounce = Timer(const Duration(milliseconds: 500), () {
       _fetchProducts(query, isRefresh: true); 
     });
+  }
+
+  void _recordProductView(dynamic productId) {
+    if (productId == null) return;
+    try {
+      final url = Uri.parse('${AppConfig.baseUrl}/products/view');
+      ApiService.post(
+        url,
+        body: jsonEncode({'productId': productId}),
+      ).ignore();
+    } catch (_) {}
   }
 
   @override
@@ -367,6 +373,7 @@ class _PriceCheckScreenState extends State<PriceCheckScreen> {
                             product: _filteredProducts[index],
                             formatPrice: _formatPrice,
                             onTap: () {
+                              _recordProductView(_filteredProducts[index]['id']);
                               showVariantDetailsModal(
                                 context: context,
                                 product: _filteredProducts[index],
